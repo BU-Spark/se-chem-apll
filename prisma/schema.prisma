@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Users & Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  name               String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  enrollments        Enrollment[]
+  lessonProgress     LessonProgress[]
+  lessonNodeAttempts NodeAttempt[]
+  nodeResponses      NodeResponse[]
+  avatar             AvatarSetting?
+  analytics          StudentAnalytics?
+  surveyResponses    SurveyResponse[]
+  badgeProgress      StudentBadge[]
+
+  @@map("Student")
+}
+
+model AvatarSetting {
+  id        String           @id @default(cuid())
+  studentId String           @unique
+  base      AvatarBase
+  face      AvatarFace
+  accessory AvatarAccessory?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  student User @relation(fields: [studentId], references: [id])
+}
+
+enum AvatarBase {
+  RUBY
+  EMERALD
+  SAPPHIRE
+  AMETHYST
+}
+
+enum AvatarFace {
+  SMILE
+  SURPRISED
+  MISCHIEF
+}
+
+enum AvatarAccessory {
+  LEAF
+  FEDORA
+  PROPELLER
+  NONE
+}
+
+// ---------------------------------------------------------------------------
+// Courses & Enrollment
+// ---------------------------------------------------------------------------
+
+model Course {
+  id          String          @id @default(cuid())
+  code        String
+  section     String?
+  title       String
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  enrollments Enrollment[]
+  lessons     Lesson[]
+  contacts    CourseContact[]
+
+  @@unique([code, section])
+}
+
+model CourseContact {
+  id        String            @id @default(cuid())
+  courseId  String
+  type      CourseContactType
+  name      String
+  email     String
+  avatarUrl String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id])
+}
+
+enum CourseContactType {
+  INSTRUCTOR
+  CHECKER
+}
+
+model Enrollment {
+  id        String     @id @default(cuid())
+  studentId String
+  courseId  String
+  role      CourseRole @default(STUDENT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  student User   @relation(fields: [studentId], references: [id])
+  course  Course @relation(fields: [courseId], references: [id])
+
+  @@unique([studentId, courseId])
+}
+
+enum CourseRole {
+  STUDENT
+  INSTRUCTOR
+  CHECKER
+}
+
+// ---------------------------------------------------------------------------
+// Lessons
+// ---------------------------------------------------------------------------
+
+model Lesson {
+  id               String         @id @default(cuid())
+  courseId         String
+  slug             String         @unique
+  title            String
+  summary          String
+  description      String?
+  thumbnailUrl     String?
+  estimatedMinutes Int?
+  dueDate          DateTime?
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  course           Course         @relation(fields: [courseId], references: [id])
+  lessonNodes      LessonNode[]
+  progress         LessonProgress[]
+  surveys          SurveyPrompt[]
+  badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
+}
+
+// ---------------------------------------------------------------------------
+// Nodes (reusable master templates)
+// ---------------------------------------------------------------------------
+
+model Node {
+  id                   String         @id @default(cuid())
+  title                String
+  summary              String?
+  videoUrl             String?
+  muxPlaybackId        String?
+  thumbnailUrl         String?
+  estimatedMinutes     Int?
+  defaultPassingPercent Int            @default(70)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  questions            NodeQuestion[]
+  lessonNodes          LessonNode[]
+}
+
+model NodeQuestion {
+  id           String   @id @default(cuid())
+  nodeId       String
+  sortOrder    Int
+  prompt       String
+  // For multiple-choice: JSON array of strings, e.g. ["Option A", "Option B"]
+  // For short answer:    JSON object, e.g. { type: "shortAnswer", expectedAnswer: 42, tolerancePercent: 5 }
+  options      Json
+  correctIndex Int?
+  isPreLecture Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  node      Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  responses NodeResponse[]
+
+  @@unique([nodeId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// LessonNode (per-lesson instance of a Node, with overrideable settings)
+// ---------------------------------------------------------------------------
+
+model LessonNode {
+  id                    String   @id @default(cuid())
+  lessonId              String
+  nodeId                String
+  sortOrder             Int
+  // null = use Node.defaultPassingPercent
+  passingPercentOverride Int?
+  isRequired            Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  lesson   Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  node     Node          @relation(fields: [nodeId], references: [id])
+  attempts NodeAttempt[]
+
+  @@unique([lessonId, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Progress & Attempts
+// ---------------------------------------------------------------------------
+
+model LessonProgress {
+  id               String       @id @default(cuid())
+  studentId        String
+  lessonId         String
+  status           LessonStatus @default(NOT_STARTED)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  percentComplete  Int          @default(0)
+  lastGradePercent Float?
+  lastGradePassed  Boolean?
+  lastGradedAt     DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  student User   @relation(fields: [studentId], references: [id])
+  lesson  Lesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([studentId, lessonId])
+}
+
+enum LessonStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model NodeAttempt {
+  id           String    @id @default(cuid())
+  lessonNodeId String
+  userId       String
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  isPassing    Boolean?
+  score        Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lessonNode LessonNode     @relation(fields: [lessonNodeId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+  responses  NodeResponse[]
+}
+
+model NodeResponse {
+  id             String   @id @default(cuid())
+  attemptId      String
+  questionId     String
+  studentId      String
+  selectedIndex  Int?
+  rawAnswer      String?
+  isCorrect      Boolean?
+  createdAt      DateTime @default(now())
+
+  attempt  NodeAttempt  @relation(fields: [attemptId], references: [id])
+  question NodeQuestion @relation(fields: [questionId], references: [id])
+  student  User         @relation(fields: [studentId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Badges
+// ---------------------------------------------------------------------------
+
+model Badge {
+  id              String             @id @default(cuid())
+  slug            String             @unique
+  name            String
+  description     String?
+  category        BadgeCategory?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  requirements    BadgeRequirement[]
+  studentProgress StudentBadge[]
+  surveys         SurveyPrompt[]
+}
+
+enum BadgeCategory {
+  SAFETY
+  EQUIPMENT
+  WASTE
+  OTHER
+}
+
+model BadgeRequirement {
+  id        String   @id @default(cuid())
+  badgeId   String
+  lessonId  String?
+  summary   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  badge  Badge   @relation(fields: [badgeId], references: [id])
+  lesson Lesson? @relation("BadgeLessonRequirement", fields: [lessonId], references: [id])
+}
+
+model StudentBadge {
+  id        String      @id @default(cuid())
+  studentId String
+  badgeId   String
+  status    BadgeStatus @default(LEARNING)
+  awardedAt DateTime?
+  score     Int?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  student User  @relation(fields: [studentId], references: [id])
+  badge   Badge @relation(fields: [badgeId], references: [id])
+
+  @@unique([studentId, badgeId])
+}
+
+enum BadgeStatus {
+  LEARNING
+  READY_FOR_ASSESSMENT
+  READY_FOR_FINALIZATION
+  COMPLETED
+}
+
+// ---------------------------------------------------------------------------
+// Analytics & Surveys
+// ---------------------------------------------------------------------------
+
+model StudentAnalytics {
+  id                     String   @id @default(cuid())
+  studentId              String   @unique
+  hoursLearning          Int      @default(0)
+  badgesCompleted        Int      @default(0)
+  questionsAnswered      Int      @default(0)
+  averageAssessmentScore Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  student User @relation(fields: [studentId], references: [id])
+}
+
+model SurveyPrompt {
+  id        String        @id @default(cuid())
+  context   SurveyContext
+  lessonId  String?
+  badgeId   String?
+  question  String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  lesson    Lesson?          @relation(fields: [lessonId], references: [id])
+  badge     Badge?           @relation(fields: [badgeId], references: [id])
+  responses SurveyResponse[]
+}
+
+model SurveyResponse {
+  id          String   @id @default(cuid())
+  promptId    String
+  studentId   String
+  rating      Int
+  comment     String?
+  submittedAt DateTime @default(now())
+
+  prompt  SurveyPrompt @relation(fields: [promptId], references: [id])
+  student User         @relation(fields: [studentId], references: [id])
+}
+
+enum SurveyContext {
+  LESSON
+  BADGE
+}
