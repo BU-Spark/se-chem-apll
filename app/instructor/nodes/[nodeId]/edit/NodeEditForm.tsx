@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Node, NodeQuestion } from '@prisma/client';
+import { generateClientId } from '@/lib/generateClientId';
 import styles from '../../new/page.module.css';
 
 type QuestionType = 'multipleChoice' | 'shortAnswer';
@@ -37,7 +38,7 @@ function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
 
 function makeQuestion(isPreLecture = false): LocalQuestion {
   return {
-    id: crypto.randomUUID(),
+    id: generateClientId('question'),
     dbId: null,
     prompt: '',
     questionType: 'multipleChoice',

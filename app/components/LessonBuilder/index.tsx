@@ -2,6 +2,7 @@
 
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { generateClientId } from '@/lib/generateClientId';
 import NodePalette, { PaletteNode } from './NodePalette';
 import NodeCard, { LessonNodeEntry } from './NodeCard';
 import styles from './LessonBuilder.module.css';
@@ -28,7 +29,7 @@ export default function LessonBuilder({ availableNodes, entries, onChange }: Pro
     onChange([
       ...entries,
       {
-        instanceId: crypto.randomUUID(),
+        instanceId: generateClientId('lesson-node'),
         nodeId: node.id,
         title: node.title,
         defaultPassingPercent: node.defaultPassingPercent,

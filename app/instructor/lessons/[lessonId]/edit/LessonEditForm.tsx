@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Lesson, LessonNode, Node, Course } from '@prisma/client';
+import { generateClientId } from '@/lib/generateClientId';
 import LessonBuilder from '@/app/components/LessonBuilder';
 import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
 import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
@@ -47,7 +48,10 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   // Initialize lesson nodes from existing data
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(
     lesson.lessonNodes.map((ln) => ({
+      instanceId: ln.id ?? generateClientId('lesson-node'),
       nodeId: ln.nodeId,
+      title: ln.node.title,
+      defaultPassingPercent: ln.node.defaultPassingPercent,
       passingPercentOverride: ln.passingPercentOverride?.toString() || '',
       isRequired: ln.isRequired,
     }))

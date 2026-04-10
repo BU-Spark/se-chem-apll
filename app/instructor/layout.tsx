@@ -29,6 +29,20 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
             </Link>
           </li>
         </ul>
+
+        <div style={{ marginTop: 'auto', padding: '1rem', borderTop: '1px solid #e5e7eb' }}>
+          <Link
+            href="/debug-role"
+            style={{
+              fontSize: '0.75rem',
+              color: '#9ca3af',
+              textDecoration: 'none',
+              display: 'block',
+            }}
+          >
+            🔧 Debug Role
+          </Link>
+        </div>
       </nav>
 
       <main className={styles.main}>{children}</main>

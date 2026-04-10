@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { generateClientId } from '@/lib/generateClientId';
 import styles from './page.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ interface Question {
 
 function makeQuestion(isPreLecture = false): Question {
   return {
-    id: crypto.randomUUID(),
+    id: generateClientId('question'),
     prompt: '',
     questionType: 'multipleChoice',
     isPreLecture,
