@@ -5,24 +5,30 @@ import { useRouter } from 'next/navigation';
 import type { Lesson, LessonNode, Node, Course } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
 import LessonBuilder from '@/app/components/LessonBuilder';
+import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
 import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
 import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
+import type { LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
   lesson: Lesson & {
     course: Course;
     lessonNodes: (LessonNode & { node: Node })[];
+    lessonNodeEdges: { id: string; sourceId: string; targetId: string }[];
   };
   availableNodes: PaletteNode[];
   courses: Course[];
 }
+
+type TabId = 'builder' | 'roadmap';
 
 export default function LessonEditForm({ lesson, availableNodes, courses }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>('builder');
 
   // Metadata
   const [title, setTitle] = useState(lesson.title);
@@ -57,6 +63,21 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
     }))
   );
 
+  // instanceId === LessonNode.id for persisted nodes, matching edge sourceId/targetId from DB
+  const [edges, setEdges] = useState<LessonEdgeEntry[]>(
+    (lesson.lessonNodeEdges ?? []).map((e) => ({
+      edgeId: e.id,
+      sourceInstanceId: e.sourceId,
+      targetInstanceId: e.targetId,
+    }))
+  );
+
+  function handleLessonNodesChange(updated: LessonNodeEntry[]) {
+    const validIds = new Set(updated.map((e) => e.instanceId));
+    setEdges((prev) => prev.filter((e) => validIds.has(e.sourceInstanceId) && validIds.has(e.targetInstanceId)));
+    setLessonNodes(updated);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -65,6 +86,17 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       setError('Add at least one node to the lesson before saving.');
       return;
     }
+
+    const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
+    const serialisedEdges = edges
+      .map((e) => ({
+        sourceSortOrder: instanceToSortOrder.get(e.sourceInstanceId),
+        targetSortOrder: instanceToSortOrder.get(e.targetInstanceId),
+      }))
+      .filter(
+        (e): e is { sourceSortOrder: number; targetSortOrder: number } =>
+          e.sourceSortOrder !== undefined && e.targetSortOrder !== undefined
+      );
 
     setSaving(true);
     try {
@@ -84,6 +116,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
             passingPercentOverride: entry.passingPercentOverride ? Number(entry.passingPercentOverride) : null,
             isRequired: entry.isRequired,
           })),
+          edges: serialisedEdges,
         }),
       });
 
@@ -213,15 +246,46 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           </label>
         </section>
 
-        {/* ── Builder ── */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Build lesson</h2>
-          <p className={styles.sectionNote}>
-            Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
-            override it here.
-          </p>
-          <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={setLessonNodes} />
-        </section>
+        {/* ── Tabs ── */}
+        <div className={styles.tabs}>
+          <button
+            type="button"
+            className={activeTab === 'builder' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('builder')}
+          >
+            Build lesson
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'roadmap' ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab('roadmap')}
+          >
+            Roadmap
+          </button>
+        </div>
+
+        {/* ── Builder tab ── */}
+        {activeTab === 'builder' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Build lesson</h2>
+            <p className={styles.sectionNote}>
+              Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
+              override it here.
+            </p>
+            <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={handleLessonNodesChange} />
+          </section>
+        )}
+
+        {/* ── Roadmap tab ── */}
+        {activeTab === 'roadmap' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Learning roadmap</h2>
+            <p className={styles.sectionNote}>
+              Draw prerequisite paths between nodes. Connections must form a directed acyclic graph — no cycles allowed.
+            </p>
+            <LessonRoadmapBuilder lessonNodes={lessonNodes} edges={edges} onEdgesChange={setEdges} />
+          </section>
+        )}
 
         {error && <p className={styles.error}>{error}</p>}
 

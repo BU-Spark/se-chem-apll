@@ -20,6 +20,10 @@ export default async function EditLessonPage({ params }: Props) {
           include: { node: true },
           orderBy: { sortOrder: 'asc' },
         },
+        lessonNodeEdges: {
+          select: { id: true, sourceId: true, targetId: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     }),
     prisma.node.findMany({

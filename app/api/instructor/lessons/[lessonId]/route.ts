@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { isAcyclic } from '@/app/utils/dagValidation';
 
 interface RouteContext {
   params: Promise<{ lessonId: string }>;
@@ -19,6 +20,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       lessonNodes: {
         include: { node: { include: { questions: { orderBy: { sortOrder: 'asc' } } } } },
         orderBy: { sortOrder: 'asc' },
+      },
+      lessonNodeEdges: {
+        select: { id: true, sourceId: true, targetId: true },
+        orderBy: { createdAt: 'asc' },
       },
     },
   });
@@ -39,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, dueDate, lessonNodes } = body as {
+  const { title, slug, summary, description, estimatedMinutes, dueDate, lessonNodes, edges } = body as {
     title?: string;
     slug?: string;
     summary?: string;
@@ -52,14 +57,27 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       passingPercentOverride?: number | null;
       isRequired?: boolean;
     }>;
+    edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
   };
+
+  // Server-side DAG validation before touching the DB
+  if (edges && edges.length > 0) {
+    const edgesForValidation = edges.map((e) => ({
+      sourceId: String(e.sourceSortOrder),
+      targetId: String(e.targetSortOrder),
+    }));
+    if (!isAcyclic(edgesForValidation)) {
+      return NextResponse.json({ error: 'Edge set contains a cycle' }, { status: 422 });
+    }
+  }
 
   const lesson = await prisma.$transaction(async (tx) => {
     if (lessonNodes !== undefined) {
+      // Cascade on LessonNode deletes LessonNodeEdge rows automatically
       await tx.lessonNode.deleteMany({ where: { lessonId } });
     }
 
-    return tx.lesson.update({
+    const updated = await tx.lesson.update({
       where: { id: lessonId },
       data: {
         ...(title !== undefined && { title: title.trim() }),
@@ -83,9 +101,37 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
       },
     });
+
+    if (edges && edges.length > 0) {
+      const sortToId = new Map(updated.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
+      const edgeRows = edges
+        .map(({ sourceSortOrder, targetSortOrder }) => ({
+          lessonId,
+          sourceId: sortToId.get(sourceSortOrder)!,
+          targetId: sortToId.get(targetSortOrder)!,
+        }))
+        .filter((e) => e.sourceId && e.targetId);
+
+      if (edgeRows.length > 0) {
+        await tx.lessonNodeEdge.createMany({ data: edgeRows });
+      }
+    }
+
+    return updated;
   });
 
-  return NextResponse.json(lesson);
+  const fullLesson = await prisma.lesson.findUnique({
+    where: { id: lesson.id },
+    include: {
+      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+      lessonNodeEdges: {
+        select: { id: true, sourceId: true, targetId: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  return NextResponse.json(fullLesson);
 }
 
 // DELETE /api/instructor/lessons/[lessonId]

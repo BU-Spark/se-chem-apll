@@ -137,6 +137,7 @@ model Lesson {
   updatedAt        DateTime       @updatedAt
   course           Course         @relation(fields: [courseId], references: [id])
   lessonNodes      LessonNode[]
+  lessonNodeEdges  LessonNodeEdge[]
   progress         LessonProgress[]
   surveys          SurveyPrompt[]
   badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
@@ -195,11 +196,30 @@ model LessonNode {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  lesson   Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  node     Node          @relation(fields: [nodeId], references: [id])
-  attempts NodeAttempt[]
+  lesson        Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  node          Node             @relation(fields: [nodeId], references: [id])
+  attempts      NodeAttempt[]
+  edgesAsSource LessonNodeEdge[] @relation("EdgeSource")
+  edgesAsTarget LessonNodeEdge[] @relation("EdgeTarget")
 
   @@unique([lessonId, sortOrder])
+}
+
+// Directed edges between LessonNode instances within a lesson, forming a DAG roadmap
+model LessonNodeEdge {
+  id        String   @id @default(cuid())
+  lessonId  String
+  sourceId  String
+  targetId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  source LessonNode @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target LessonNode @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId])
+  @@index([lessonId])
 }
 
 // ---------------------------------------------------------------------------

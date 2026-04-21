@@ -172,3 +172,34 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: -1rem;
+}
+
+.tab,
+.tabActive {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tabActive {
+  color: #1f5fab;
+  border-bottom-color: #1f5fab;
+  font-weight: 600;
+}
+
+.tab:hover {
+  color: #374151;
+}
