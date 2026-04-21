@@ -49,7 +49,7 @@ describe('Home Page', () => {
     expect(redirect).toHaveBeenCalledWith('/instructor');
   });
 
-  it('redirects to /instructor when user role is student (no student UI yet)', async () => {
+  it('redirects to /student when user role is student', async () => {
     (auth as jest.Mock).mockResolvedValue({ userId: 'user_123' });
     (currentUser as jest.Mock).mockResolvedValue({
       unsafeMetadata: { role: 'student' },
@@ -57,6 +57,6 @@ describe('Home Page', () => {
 
     await HomePage();
 
-    expect(redirect).toHaveBeenCalledWith('/instructor');
+    expect(redirect).toHaveBeenCalledWith('/student');
   });
 });

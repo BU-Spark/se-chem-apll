@@ -75,6 +75,24 @@
   color: #6b7280;
 }
 
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.studentsLink {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.studentsLink:hover {
+  text-decoration: underline;
+}
+
 .editLink {
   flex-shrink: 0;
   font-size: 0.875rem;

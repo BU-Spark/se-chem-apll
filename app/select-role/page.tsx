@@ -29,9 +29,7 @@ export default function SelectRolePage() {
       if (role === 'instructor') {
         router.push('/instructor');
       } else {
-        // For now, redirect students to instructor since there's no student UI yet
-        // TODO: Create student interface
-        router.push('/instructor');
+        router.push('/student');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set role');

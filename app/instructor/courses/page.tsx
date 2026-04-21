@@ -39,9 +39,14 @@ export default async function CoursesPage() {
                   {course.enrollments.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <Link href={`/instructor/courses/${course.id}/edit`} className={styles.editLink}>
-                Edit
-              </Link>
+              <div className={styles.cardActions}>
+                <Link href={`/instructor/courses/${course.id}/students`} className={styles.studentsLink}>
+                  Students
+                </Link>
+                <Link href={`/instructor/courses/${course.id}/edit`} className={styles.editLink}>
+                  Edit
+                </Link>
+              </div>
             </li>
           ))}
         </ul>

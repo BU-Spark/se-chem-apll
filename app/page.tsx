@@ -21,8 +21,6 @@ export default async function HomePage() {
   if (userRole === 'instructor') {
     redirect('/instructor');
   } else {
-    // For now, students also go to instructor since there's no student UI
-    // TODO: Create student interface and redirect to /student
-    redirect('/instructor');
+    redirect('/student');
   }
 }

@@ -1,0 +1,122 @@
+import { auth, currentUser } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+import { prisma } from '@/lib/prisma';
+import styles from './page.module.css';
+
+export const dynamic = 'force-dynamic';
+
+export default async function StudentHomePage() {
+  const { userId } = await auth();
+  if (!userId) redirect('/sign-in');
+
+  const clerkUser = await currentUser();
+  const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
+  if (!email) redirect('/sign-in');
+
+  const normalizedEmail = email.toLowerCase();
+
+  // Find or create the student's User record
+  let student = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (!student) {
+    student = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        name: clerkUser.fullName ?? clerkUser.firstName ?? undefined,
+      },
+    });
+  } else if (!student.name && (clerkUser.fullName || clerkUser.firstName)) {
+    // Backfill name if missing
+    student = await prisma.user.update({
+      where: { id: student.id },
+      data: { name: clerkUser.fullName ?? clerkUser.firstName ?? undefined },
+    });
+  }
+
+  // Fetch enrolled courses with their lessons and nodes
+  const enrollments = await prisma.enrollment.findMany({
+    where: { studentId: student.id },
+    include: {
+      course: {
+        include: {
+          lessons: {
+            include: {
+              lessonNodes: {
+                include: { node: true },
+                orderBy: { sortOrder: 'asc' },
+              },
+            },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return (
+    <div className={styles.page}>
+      <h1 className={styles.title}>My Courses</h1>
+
+      {enrollments.length === 0 ? (
+        <div className={styles.emptyState}>
+          <p className={styles.emptyTitle}>No courses yet</p>
+          <p className={styles.emptyDesc}>
+            You are not enrolled in any courses. Contact your instructor to get started.
+          </p>
+        </div>
+      ) : (
+        <div className={styles.courseList}>
+          {enrollments.map(({ course }) => (
+            <div key={course.id} className={styles.courseCard}>
+              <div className={styles.courseHeader}>
+                <div>
+                  <h2 className={styles.courseTitle}>{course.title}</h2>
+                  <span className={styles.courseCode}>
+                    {course.code}
+                    {course.section ? ` · Section ${course.section}` : ''}
+                  </span>
+                </div>
+                <span className={styles.courseBadge}>
+                  {course.lessons.length} lesson{course.lessons.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {course.description && <p className={styles.courseDesc}>{course.description}</p>}
+
+              {course.lessons.length === 0 ? (
+                <p className={styles.noLessons}>No lessons assigned yet.</p>
+              ) : (
+                <ul className={styles.lessonList}>
+                  {course.lessons.map((lesson) => (
+                    <li key={lesson.id} className={styles.lessonCard}>
+                      <div className={styles.lessonBody}>
+                        <p className={styles.lessonTitle}>{lesson.title}</p>
+                        <p className={styles.lessonMeta}>
+                          {lesson.lessonNodes.length} node
+                          {lesson.lessonNodes.length !== 1 ? 's' : ''}
+                          {lesson.estimatedMinutes ? ` · ~${lesson.estimatedMinutes} min` : ''}
+                          {lesson.dueDate ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}` : ''}
+                        </p>
+                        {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
+                      </div>
+
+                      {lesson.lessonNodes.length > 0 && (
+                        <ul className={styles.nodeList}>
+                          {lesson.lessonNodes.map((ln) => (
+                            <li key={ln.id} className={styles.nodeChip}>
+                              {ln.node.title}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
