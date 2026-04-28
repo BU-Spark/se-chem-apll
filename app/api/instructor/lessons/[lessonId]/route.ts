@@ -44,12 +44,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, dueDate, lessonNodes, edges } = body as {
+  const { title, slug, summary, description, estimatedMinutes, openDate, dueDate, lessonNodes, edges } = body as {
     title?: string;
     slug?: string;
     summary?: string;
     description?: string | null;
     estimatedMinutes?: number | null;
+    openDate?: string | null;
     dueDate?: string | null;
     lessonNodes?: Array<{
       nodeId: string;
@@ -59,6 +60,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
   };
+
+  if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
+    return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
+  }
 
   // Server-side DAG validation before touching the DB
   if (edges && edges.length > 0) {
@@ -71,57 +76,54 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
-  const lesson = await prisma.$transaction(async (tx) => {
-    if (lessonNodes !== undefined) {
-      // Cascade on LessonNode deletes LessonNodeEdge rows automatically
-      await tx.lessonNode.deleteMany({ where: { lessonId } });
-    }
-
-    const updated = await tx.lesson.update({
-      where: { id: lessonId },
-      data: {
-        ...(title !== undefined && { title: title.trim() }),
-        ...(slug !== undefined && { slug: slug.trim() }),
-        ...(summary !== undefined && { summary: summary.trim() }),
-        ...(description !== undefined && { description: description ?? null }),
-        ...(estimatedMinutes !== undefined && { estimatedMinutes: estimatedMinutes ?? null }),
-        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-        ...(lessonNodes !== undefined && {
-          lessonNodes: {
-            create: lessonNodes.map((ln) => ({
-              nodeId: ln.nodeId,
-              sortOrder: ln.sortOrder,
-              passingPercentOverride: ln.passingPercentOverride ?? null,
-              isRequired: ln.isRequired ?? true,
-            })),
-          },
-        }),
-      },
-      include: {
-        lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
-      },
-    });
-
-    if (edges && edges.length > 0) {
-      const sortToId = new Map(updated.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
-      const edgeRows = edges
-        .map(({ sourceSortOrder, targetSortOrder }) => ({
-          lessonId,
-          sourceId: sortToId.get(sourceSortOrder)!,
-          targetId: sortToId.get(targetSortOrder)!,
-        }))
-        .filter((e) => e.sourceId && e.targetId);
-
-      if (edgeRows.length > 0) {
-        await tx.lessonNodeEdge.createMany({ data: edgeRows });
-      }
-    }
-
-    return updated;
+  // Use nested write instead of $transaction — pgBouncer (transaction pooling mode)
+  // doesn't support Prisma's interactive transaction callback form reliably.
+  // deleteMany + create on the nested relation is atomic at the Prisma level;
+  // cascade deletes on LessonNodeEdge handle edge cleanup automatically.
+  const updated = await prisma.lesson.update({
+    where: { id: lessonId },
+    data: {
+      ...(title !== undefined && { title: title.trim() }),
+      ...(slug !== undefined && { slug: slug.trim() }),
+      ...(summary !== undefined && { summary: summary.trim() }),
+      ...(description !== undefined && { description: description ?? null }),
+      ...(estimatedMinutes !== undefined && { estimatedMinutes: estimatedMinutes ?? null }),
+      ...(openDate !== undefined && { openDate: openDate ? new Date(openDate) : null }),
+      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+      ...(lessonNodes !== undefined && {
+        lessonNodes: {
+          deleteMany: {},
+          create: lessonNodes.map((ln) => ({
+            nodeId: ln.nodeId,
+            sortOrder: ln.sortOrder,
+            passingPercentOverride: ln.passingPercentOverride ?? null,
+            isRequired: ln.isRequired ?? true,
+          })),
+        },
+      }),
+    },
+    include: {
+      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+    },
   });
 
+  if (edges && edges.length > 0) {
+    const sortToId = new Map(updated.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
+    const edgeRows = edges
+      .map(({ sourceSortOrder, targetSortOrder }) => ({
+        lessonId,
+        sourceId: sortToId.get(sourceSortOrder)!,
+        targetId: sortToId.get(targetSortOrder)!,
+      }))
+      .filter((e) => e.sourceId && e.targetId);
+
+    if (edgeRows.length > 0) {
+      await prisma.lessonNodeEdge.createMany({ data: edgeRows });
+    }
+  }
+
   const fullLesson = await prisma.lesson.findUnique({
-    where: { id: lesson.id },
+    where: { id: updated.id },
     include: {
       lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
       lessonNodeEdges: {

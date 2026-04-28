@@ -27,7 +27,10 @@ export default async function EditLessonPage({ params }: Props) {
       },
     }),
     prisma.node.findMany({
-      include: { _count: { select: { questions: true } } },
+      include: {
+        _count: { select: { questions: true } },
+        questions: { where: { isPreLecture: true }, select: { id: true } },
+      },
       orderBy: { title: 'asc' },
     }),
     prisma.course.findMany({ orderBy: { code: 'asc' } }),
@@ -43,6 +46,7 @@ export default async function EditLessonPage({ params }: Props) {
     summary: n.summary,
     defaultPassingPercent: n.defaultPassingPercent,
     questionCount: n._count.questions,
+    preLectureCount: n.questions.length,
   }));
 
   return <LessonEditForm lesson={lesson} availableNodes={paletteNodes} courses={courses} />;

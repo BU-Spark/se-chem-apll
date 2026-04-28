@@ -9,6 +9,7 @@ export interface PaletteNode {
   summary: string | null;
   defaultPassingPercent: number;
   questionCount: number;
+  preLectureCount: number;
 }
 
 interface Props {
@@ -39,7 +40,10 @@ export default function NodePalette({ nodes, onAdd }: Props) {
         {filtered.map((node) => (
           <li key={node.id} className={styles.paletteItem}>
             <div className={styles.paletteItemBody}>
-              <span className={styles.paletteItemTitle}>{node.title}</span>
+              <div className={styles.paletteItemTitleRow}>
+                <span className={styles.paletteItemTitle}>{node.title}</span>
+                {node.preLectureCount > 0 && <span className={styles.preQuizBadge}>Pre-quiz</span>}
+              </div>
               {node.summary && <span className={styles.paletteItemMeta}>{node.summary}</span>}
               <span className={styles.paletteItemMeta}>
                 {node.questionCount} question{node.questionCount !== 1 ? 's' : ''} &middot; pass{' '}

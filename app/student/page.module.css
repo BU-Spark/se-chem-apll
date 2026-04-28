@@ -115,10 +115,28 @@
   background: #fafafa;
 }
 
+.lessonCardUnavailable {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fafafa;
+  opacity: 0.6;
+}
+
 .lessonBody {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.lessonTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .lessonTitle {
@@ -126,6 +144,25 @@
   font-weight: 600;
   color: #111827;
   margin: 0;
+}
+
+.lessonStatus {
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
+.lessonStatusUpcoming {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.lessonStatusClosed {
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
 }
 
 .lessonMeta {

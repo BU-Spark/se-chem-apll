@@ -37,6 +37,9 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   const [description, setDescription] = useState(lesson.description || '');
   const [courseId, setCourseId] = useState(lesson.courseId);
   const [estimatedMinutes, setEstimatedMinutes] = useState(lesson.estimatedMinutes?.toString() || '');
+  const [openDate, setOpenDate] = useState(
+    lesson.openDate ? new Date(lesson.openDate).toISOString().split('T')[0] : ''
+  );
   const [dueDate, setDueDate] = useState(lesson.dueDate ? new Date(lesson.dueDate).toISOString().split('T')[0] : '');
 
   // Auto-generate slug from title
@@ -52,16 +55,18 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   }
 
   // Initialize lesson nodes from existing data
-  const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(
-    lesson.lessonNodes.map((ln) => ({
+  const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(() => {
+    const preLectureMap = new Map(availableNodes.map((n) => [n.id, n.preLectureCount]));
+    return lesson.lessonNodes.map((ln) => ({
       instanceId: ln.id ?? generateClientId('lesson-node'),
       nodeId: ln.nodeId,
       title: ln.node.title,
       defaultPassingPercent: ln.node.defaultPassingPercent,
       passingPercentOverride: ln.passingPercentOverride?.toString() || '',
       isRequired: ln.isRequired,
-    }))
-  );
+      preLectureCount: preLectureMap.get(ln.nodeId) ?? 0,
+    }));
+  });
 
   // instanceId === LessonNode.id for persisted nodes, matching edge sourceId/targetId from DB
   const [edges, setEdges] = useState<LessonEdgeEntry[]>(
@@ -87,6 +92,11 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       return;
     }
 
+    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
+      setError('Open date must be before due date.');
+      return;
+    }
+
     const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
     const serialisedEdges = edges
       .map((e) => ({
@@ -109,6 +119,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           summary,
           description: description || null,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+          openDate: openDate || null,
           dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
@@ -173,7 +184,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow3}>
+          <div className={styles.fieldRow2}>
             <label className={styles.field}>
               Course <span className={styles.required}>*</span>
               <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
@@ -195,6 +206,13 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
                 onChange={(e) => setEstimatedMinutes(e.target.value)}
                 placeholder="30"
               />
+            </label>
+          </div>
+
+          <div className={styles.fieldRow2}>
+            <label className={styles.field}>
+              Open date
+              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
             </label>
             <label className={styles.field}>
               Due date

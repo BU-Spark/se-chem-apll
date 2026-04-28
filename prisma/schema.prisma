@@ -91,7 +91,7 @@ model CourseContact {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  course Course @relation(fields: [courseId], references: [id])
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 enum CourseContactType {
@@ -108,7 +108,7 @@ model Enrollment {
   updatedAt DateTime   @updatedAt
 
   student User   @relation(fields: [studentId], references: [id])
-  course  Course @relation(fields: [courseId], references: [id])
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
 }
@@ -132,11 +132,12 @@ model Lesson {
   description      String?
   thumbnailUrl     String?
   estimatedMinutes Int?
+  openDate         DateTime?
   dueDate          DateTime?
   sortOrder        Int            @default(0)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
-  course           Course         @relation(fields: [courseId], references: [id])
+  course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lessonNodes      LessonNode[]
   lessonNodeEdges  LessonNodeEdge[]
   progress         LessonProgress[]
@@ -242,7 +243,7 @@ model LessonProgress {
   updatedAt        DateTime     @updatedAt
 
   student User   @relation(fields: [studentId], references: [id])
-  lesson  Lesson @relation(fields: [lessonId], references: [id])
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, lessonId])
 }
@@ -264,7 +265,7 @@ model NodeAttempt {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  lessonNode LessonNode     @relation(fields: [lessonNodeId], references: [id])
+  lessonNode LessonNode     @relation(fields: [lessonNodeId], references: [id], onDelete: Cascade)
   user       User           @relation(fields: [userId], references: [id])
   responses  NodeResponse[]
 }
@@ -279,7 +280,7 @@ model NodeResponse {
   isCorrect      Boolean?
   createdAt      DateTime @default(now())
 
-  attempt  NodeAttempt  @relation(fields: [attemptId], references: [id])
+  attempt  NodeAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question NodeQuestion @relation(fields: [questionId], references: [id])
   student  User         @relation(fields: [studentId], references: [id])
 }

@@ -74,6 +74,13 @@
   min-width: 0;
 }
 
+.paletteItemTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .paletteItemTitle {
   font-size: 0.875rem;
   font-weight: 600;
@@ -234,6 +241,18 @@
 .nodeCardField input:focus {
   outline: none;
   border-color: #1f5fab;
+}
+
+/* ── Pre-quiz badge (shared by NodeCard and NodePalette) ──── */
+.preQuizBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 9999px;
+  padding: 0.1rem 0.45rem;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .nodeCardCheckbox {

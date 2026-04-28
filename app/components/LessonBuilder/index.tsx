@@ -35,6 +35,7 @@ export default function LessonBuilder({ availableNodes, entries, onChange }: Pro
         defaultPassingPercent: node.defaultPassingPercent,
         passingPercentOverride: '',
         isRequired: true,
+        preLectureCount: node.preLectureCount,
       },
     ]);
   }

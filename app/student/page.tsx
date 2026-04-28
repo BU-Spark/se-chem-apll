@@ -87,30 +87,55 @@ export default async function StudentHomePage() {
                 <p className={styles.noLessons}>No lessons assigned yet.</p>
               ) : (
                 <ul className={styles.lessonList}>
-                  {course.lessons.map((lesson) => (
-                    <li key={lesson.id} className={styles.lessonCard}>
-                      <div className={styles.lessonBody}>
-                        <p className={styles.lessonTitle}>{lesson.title}</p>
-                        <p className={styles.lessonMeta}>
-                          {lesson.lessonNodes.length} node
-                          {lesson.lessonNodes.length !== 1 ? 's' : ''}
-                          {lesson.estimatedMinutes ? ` · ~${lesson.estimatedMinutes} min` : ''}
-                          {lesson.dueDate ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}` : ''}
-                        </p>
-                        {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
-                      </div>
+                  {course.lessons.map((lesson) => {
+                    const now = new Date();
+                    const isUpcoming = lesson.openDate !== null && now < lesson.openDate;
+                    const isClosed = lesson.dueDate !== null && now > lesson.dueDate;
+                    const cardClass = isUpcoming || isClosed ? styles.lessonCardUnavailable : styles.lessonCard;
 
-                      {lesson.lessonNodes.length > 0 && (
-                        <ul className={styles.nodeList}>
-                          {lesson.lessonNodes.map((ln) => (
-                            <li key={ln.id} className={styles.nodeChip}>
-                              {ln.node.title}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
+                    return (
+                      <li key={lesson.id} className={cardClass}>
+                        <div className={styles.lessonBody}>
+                          <div className={styles.lessonTitleRow}>
+                            <p className={styles.lessonTitle}>{lesson.title}</p>
+                            {isUpcoming && (
+                              <span className={`${styles.lessonStatus} ${styles.lessonStatusUpcoming}`}>
+                                Opens {new Date(lesson.openDate!).toLocaleDateString()}
+                              </span>
+                            )}
+                            {isClosed && (
+                              <span className={`${styles.lessonStatus} ${styles.lessonStatusClosed}`}>Closed</span>
+                            )}
+                          </div>
+                          <p className={styles.lessonMeta}>
+                            {lesson.lessonNodes.length} node
+                            {lesson.lessonNodes.length !== 1 ? 's' : ''}
+                            {lesson.estimatedMinutes ? ` · ~${lesson.estimatedMinutes} min` : ''}
+                            {lesson.openDate && !isUpcoming
+                              ? ` · Opened ${new Date(lesson.openDate).toLocaleDateString()}`
+                              : ''}
+                            {lesson.dueDate && !isClosed
+                              ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`
+                              : ''}
+                            {isClosed && lesson.dueDate
+                              ? ` · Was due ${new Date(lesson.dueDate).toLocaleDateString()}`
+                              : ''}
+                          </p>
+                          {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
+                        </div>
+
+                        {lesson.lessonNodes.length > 0 && (
+                          <ul className={styles.nodeList}>
+                            {lesson.lessonNodes.map((ln) => (
+                              <li key={ln.id} className={styles.nodeChip}>
+                                {ln.node.title}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

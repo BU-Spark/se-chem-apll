@@ -25,6 +25,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
   const [description, setDescription] = useState('');
   const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [openDate, setOpenDate] = useState('');
   const [dueDate, setDueDate] = useState('');
 
   // Auto-generate slug from title
@@ -51,6 +52,11 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
       return;
     }
 
+    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
+      setError('Open date must be before due date.');
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch('/api/instructor/lessons', {
@@ -63,6 +69,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           description: description || null,
           courseId,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+          openDate: openDate || null,
           dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
@@ -100,7 +107,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow3}>
+          <div className={styles.fieldRow2}>
             <label className={styles.field}>
               Course <span className={styles.required}>*</span>
               <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
@@ -122,6 +129,13 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
                 onChange={(e) => setEstimatedMinutes(e.target.value)}
                 placeholder="30"
               />
+            </label>
+          </div>
+
+          <div className={styles.fieldRow2}>
+            <label className={styles.field}>
+              Open date
+              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
             </label>
             <label className={styles.field}>
               Due date

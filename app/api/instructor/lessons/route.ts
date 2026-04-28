@@ -32,13 +32,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, courseId, estimatedMinutes, dueDate, lessonNodes } = body as {
+  const { title, slug, summary, description, courseId, estimatedMinutes, openDate, dueDate, lessonNodes } = body as {
     title?: string;
     slug?: string;
     summary?: string;
     description?: string | null;
     courseId?: string;
     estimatedMinutes?: number | null;
+    openDate?: string | null;
     dueDate?: string | null;
     lessonNodes?: Array<{
       nodeId: string;
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
       isRequired?: boolean;
     }>;
   };
+
+  if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
+    return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
+  }
 
   if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
   if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
@@ -66,6 +71,7 @@ export async function POST(req: NextRequest) {
       description: description ?? null,
       courseId,
       estimatedMinutes: estimatedMinutes ?? null,
+      openDate: openDate ? new Date(openDate) : null,
       dueDate: dueDate ? new Date(dueDate) : null,
       lessonNodes: {
         create: (lessonNodes ?? []).map((ln) => ({

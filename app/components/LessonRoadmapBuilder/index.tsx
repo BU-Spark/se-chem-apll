@@ -6,6 +6,8 @@ import {
   Background,
   Controls,
   MiniMap,
+  Handle,
+  Position,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -28,11 +30,32 @@ interface Props {
   onEdgesChange: (edges: LessonEdgeEntry[]) => void;
 }
 
+interface RoadmapNodeData {
+  label: string;
+  preLectureCount: number;
+  [key: string]: unknown;
+}
+
+function RoadmapNode({ data }: { data: RoadmapNodeData }) {
+  return (
+    <div className={styles.graphNode}>
+      <Handle type="target" position={Position.Top} />
+      <span className={styles.graphNodeLabel}>{data.label}</span>
+      {data.preLectureCount > 0 && <span className={styles.preQuizBadge}>Pre-quiz</span>}
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
+// Defined outside component so ReactFlow doesn't re-register on every render
+const nodeTypes = { roadmapNode: RoadmapNode };
+
 function toXYNodes(nodes: LessonNodeEntry[]): XYNode[] {
   return nodes.map((n, i) => ({
     id: n.instanceId,
-    position: { x: 220 * (i % 4), y: 120 * Math.floor(i / 4) },
-    data: { label: n.title },
+    type: 'roadmapNode',
+    position: { x: 220 * (i % 4), y: 130 * Math.floor(i / 4) },
+    data: { label: n.title, preLectureCount: n.preLectureCount } as RoadmapNodeData,
   }));
 }
 
@@ -115,6 +138,7 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
         <ReactFlow
           nodes={xyNodes}
           edges={xyEdges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}

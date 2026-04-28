@@ -11,6 +11,7 @@ export interface LessonNodeEntry {
   defaultPassingPercent: number;
   passingPercentOverride: string; // empty string = use default
   isRequired: boolean;
+  preLectureCount: number;
 }
 
 interface Props {
@@ -42,6 +43,7 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
         <div className={styles.nodeCardHeader}>
           <span className={styles.nodeCardIndex}>{index + 1}</span>
           <span className={styles.nodeCardTitle}>{entry.title}</span>
+          {entry.preLectureCount > 0 && <span className={styles.preQuizBadge}>Pre-quiz</span>}
           <button type="button" className={styles.nodeCardRemove} onClick={onRemove}>
             ×
           </button>

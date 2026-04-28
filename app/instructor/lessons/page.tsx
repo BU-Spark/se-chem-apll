@@ -33,6 +33,7 @@ export default async function LessonsPage() {
                 <p className={styles.cardMeta}>
                   {lesson.course.code} &middot; {lesson.lessonNodes.length} node
                   {lesson.lessonNodes.length !== 1 ? 's' : ''}
+                  {lesson.openDate && ` · Opens ${new Date(lesson.openDate).toLocaleDateString()}`}
                   {lesson.dueDate && ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`}
                 </p>
                 <p className={styles.cardSlug}>/lessons/{lesson.slug}</p>

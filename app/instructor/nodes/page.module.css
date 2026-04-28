@@ -58,10 +58,28 @@
   min-width: 0;
 }
 
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .cardTitle {
   font-size: 1rem;
   font-weight: 600;
   color: #111827;
+  margin: 0;
+}
+
+.preQuizBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 9999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .cardSummary {
