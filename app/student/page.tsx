@@ -232,6 +232,7 @@ export default async function StudentHomePage() {
                                     preQuestionCount={ln.node.questions.filter((q) => q.isPreLecture).length}
                                     regularQuestionCount={ln.node.questions.filter((q) => !q.isPreLecture).length}
                                     attempts={ln.attempts}
+                                    lessonNodeId={ln.id}
                                   />
                                 </li>
                               )

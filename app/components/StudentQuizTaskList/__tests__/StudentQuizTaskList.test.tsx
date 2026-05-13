@@ -52,12 +52,13 @@ describe('buildQuizTasks', () => {
 
 describe('StudentQuizTaskList', () => {
   it('renders pre-quiz before quiz with status badges', () => {
-    render(<StudentQuizTaskList preQuestionCount={1} regularQuestionCount={1} attempts={[]} />);
+    render(<StudentQuizTaskList preQuestionCount={1} regularQuestionCount={1} attempts={[]} lessonNodeId="ln-1" />);
 
     const preQuiz = screen.getByText('Pre-quiz');
     const quiz = screen.getByText('Quiz');
     expect(preQuiz.compareDocumentPosition(quiz) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('Available')).toBeInTheDocument();
     expect(screen.getByText('Locked')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Start pre-quiz' })).toHaveAttribute('href', '/student/pre-quiz/ln-1');
   });
 });

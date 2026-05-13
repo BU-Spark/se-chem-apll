@@ -1,4 +1,5 @@
 import styles from './StudentQuizTaskList.module.css';
+import Link from 'next/link';
 
 type Attempt = {
   id: string;
@@ -100,7 +101,12 @@ function statusClass(status: QuizTaskStatus) {
   return styles.statusAvailable;
 }
 
-export default function StudentQuizTaskList({ preQuestionCount, regularQuestionCount, attempts }: BuildQuizTasksInput) {
+export default function StudentQuizTaskList({
+  preQuestionCount,
+  regularQuestionCount,
+  attempts,
+  lessonNodeId,
+}: BuildQuizTasksInput & { lessonNodeId: string }) {
   const tasks = buildQuizTasks({ preQuestionCount, regularQuestionCount, attempts });
   if (tasks.length === 0) return null;
 
@@ -114,9 +120,15 @@ export default function StudentQuizTaskList({ preQuestionCount, regularQuestionC
               <span className={styles.taskName}>{task.label}</span>
               <span className={`${styles.statusPill} ${statusClass(task.status)}`}>{statusLabel(task.status)}</span>
             </div>
-            <button type="button" className={styles.actionBtn} disabled>
-              {task.actionLabel} (coming soon)
-            </button>
+            {task.key === 'pre' && task.status === 'available' ? (
+              <Link href={`/student/pre-quiz/${lessonNodeId}`} className={styles.actionLink}>
+                {task.actionLabel}
+              </Link>
+            ) : (
+              <button type="button" className={styles.actionBtn} disabled>
+                {task.actionLabel} (coming soon)
+              </button>
+            )}
           </li>
         ))}
       </ul>

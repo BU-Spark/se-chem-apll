@@ -85,16 +85,17 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { nodeId } = await params;
+  const existing = await prisma.node.findUnique({ where: { id: nodeId }, select: { id: true } });
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Guard: refuse if node is currently used in any lesson
-  const usageCount = await prisma.lessonNode.count({ where: { nodeId } });
-  if (usageCount > 0) {
-    return NextResponse.json(
-      { error: `Node is used in ${usageCount} lesson(s). Remove it from those lessons before deleting.` },
-      { status: 409 }
-    );
-  }
+  await prisma.$transaction(async (tx) => {
+    // Remove every lesson-instance of this node. LessonNodeEdge rows linked to those
+    // instances are automatically removed via cascade on source/target.
+    await tx.lessonNode.deleteMany({ where: { nodeId } });
 
-  await prisma.node.delete({ where: { id: nodeId } });
+    // Delete the master node after all lesson references are gone.
+    await tx.node.delete({ where: { id: nodeId } });
+  });
+
   return new NextResponse(null, { status: 204 });
 }
