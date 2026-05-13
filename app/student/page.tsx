@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
 import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
 import NodePreview from '@/app/components/NodePreview/NodePreview';
+import StudentQuizTaskList from '@/app/components/StudentQuizTaskList/StudentQuizTaskList';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,34 @@ export default async function StudentHomePage() {
           lessons: {
             include: {
               lessonNodes: {
-                include: { node: true },
+                include: {
+                  node: {
+                    include: {
+                      questions: {
+                        select: {
+                          id: true,
+                          isPreLecture: true,
+                        },
+                      },
+                    },
+                  },
+                  attempts: {
+                    where: { userId: student.id },
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                      responses: {
+                        include: {
+                          question: {
+                            select: {
+                              id: true,
+                              isPreLecture: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
                 orderBy: { sortOrder: 'asc' },
               },
               progress: {
@@ -181,13 +209,30 @@ export default async function StudentHomePage() {
                                   title: string;
                                   videoUrl?: string | null;
                                   muxPlaybackId?: string | null;
+                                  questions: { id: string; isPreLecture: boolean }[];
                                 };
+                                attempts: {
+                                  id: string;
+                                  isPassing: boolean | null;
+                                  completedAt: Date | null;
+                                  responses: {
+                                    question: {
+                                      id: string;
+                                      isPreLecture: boolean;
+                                    };
+                                  }[];
+                                }[];
                               }) => (
                                 <li key={ln.id} className={styles.nodeChip}>
                                   <div className={styles.nodePreviewWrapper}>
                                     {/* Render inline preview when available */}
                                     <NodePreview node={ln.node} />
                                   </div>
+                                  <StudentQuizTaskList
+                                    preQuestionCount={ln.node.questions.filter((q) => q.isPreLecture).length}
+                                    regularQuestionCount={ln.node.questions.filter((q) => !q.isPreLecture).length}
+                                    attempts={ln.attempts}
+                                  />
                                 </li>
                               )
                             )}
