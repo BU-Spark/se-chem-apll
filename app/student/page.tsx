@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
 import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
+import NodePreview from '@/app/components/NodePreview/NodePreview';
 
 export const dynamic = 'force-dynamic';
 
@@ -172,11 +173,24 @@ export default async function StudentHomePage() {
 
                         {lesson.lessonNodes.length > 0 && (
                           <ul className={styles.nodeList}>
-                            {lesson.lessonNodes.map((ln) => (
-                              <li key={ln.id} className={styles.nodeChip}>
-                                {ln.node.title}
-                              </li>
-                            ))}
+                            {lesson.lessonNodes.map(
+                              (ln: {
+                                id: string;
+                                node: {
+                                  id: string;
+                                  title: string;
+                                  videoUrl?: string | null;
+                                  muxPlaybackId?: string | null;
+                                };
+                              }) => (
+                                <li key={ln.id} className={styles.nodeChip}>
+                                  <div className={styles.nodePreviewWrapper}>
+                                    {/* Render inline preview when available */}
+                                    <NodePreview node={ln.node} />
+                                  </div>
+                                </li>
+                              )
+                            )}
                           </ul>
                         )}
                       </li>

@@ -195,4 +195,9 @@
   border: 1px solid #e5e7eb;
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+.nodePreviewWrapper { display: inline-block; margin-right: 0.5rem; vertical-align: middle; }
