@@ -55,7 +55,11 @@ export default function NodePreview({ node }: { node: Node }) {
   }, [mux]);
 
   if (!url && !mux) {
-    return <span className={styles.title}>{node.title}</span>;
+    return (
+      <div className={styles.nodeCard}>
+        <p className={styles.title}>{node.title}</p>
+      </div>
+    );
   }
 
   // Prefer explicit videoUrl embeds
@@ -63,7 +67,8 @@ export default function NodePreview({ node }: { node: Node }) {
     const youtube = youtubeEmbedUrl(url);
     if (youtube) {
       return (
-        <div className={styles.preview}>
+        <div className={styles.nodeCard}>
+          <p className={styles.title}>{node.title}</p>
           <iframe
             title={`${node.title} (YouTube preview)`}
             src={youtube}
@@ -79,7 +84,8 @@ export default function NodePreview({ node }: { node: Node }) {
     const vimeo = vimeoEmbedUrl(url);
     if (vimeo) {
       return (
-        <div className={styles.preview}>
+        <div className={styles.nodeCard}>
+          <p className={styles.title}>{node.title}</p>
           <iframe
             title={`${node.title} (Vimeo preview)`}
             src={vimeo}
@@ -95,7 +101,8 @@ export default function NodePreview({ node }: { node: Node }) {
     // MP4 or direct file
     if (url.endsWith('.mp4') || url.includes('.m3u8') || url.includes('blob:')) {
       return (
-        <div className={styles.preview}>
+        <div className={styles.nodeCard}>
+          <p className={styles.title}>{node.title}</p>
           <video ref={videoRef} controls className={styles.video} playsInline>
             <source src={url} />
             Your browser does not support the video tag.
@@ -106,7 +113,8 @@ export default function NodePreview({ node }: { node: Node }) {
 
     // Fallback: iframe the url
     return (
-      <div className={styles.preview}>
+      <div className={styles.nodeCard}>
+        <p className={styles.title}>{node.title}</p>
         <iframe title={`${node.title} (Preview)`} src={url} frameBorder="0" className={styles.iframe} />
       </div>
     );
@@ -115,7 +123,8 @@ export default function NodePreview({ node }: { node: Node }) {
   // Mux fallback: HLS handled in useEffect; render video element for attachment
   if (mux) {
     return (
-      <div className={styles.preview}>
+      <div className={styles.nodeCard}>
+        <p className={styles.title}>{node.title}</p>
         <video ref={videoRef} controls className={styles.video} playsInline>
           <source />
           Your browser does not support HLS playback natively.
@@ -124,5 +133,9 @@ export default function NodePreview({ node }: { node: Node }) {
     );
   }
 
-  return <span className={styles.title}>{node.title}</span>;
+  return (
+    <div className={styles.nodeCard}>
+      <p className={styles.title}>{node.title}</p>
+    </div>
+  );
 }
