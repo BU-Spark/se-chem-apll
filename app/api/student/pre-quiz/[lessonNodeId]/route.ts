@@ -9,6 +9,7 @@ interface RouteContext {
 type AnswerInput = {
   questionId: string;
   selectedIndex?: number;
+  rawAnswer?: string;
 };
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
@@ -70,9 +71,50 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const answerByQuestionId = new Map(answers.map((a) => [a.questionId, a]));
+
+  function parseQuestionFormat(
+    options: unknown
+  ):
+    | { type: 'multipleChoice'; choices: string[] }
+    | { type: 'shortAnswer'; expectedAnswer: number; tolerancePercent: number }
+    | null {
+    if (Array.isArray(options) && options.every((v) => typeof v === 'string')) {
+      return { type: 'multipleChoice', choices: options };
+    }
+    if (options && typeof options === 'object') {
+      const opt = options as {
+        type?: string;
+        choices?: unknown;
+        expectedAnswer?: unknown;
+        tolerancePercent?: unknown;
+      };
+      if (opt.type === 'multipleChoice' && Array.isArray(opt.choices)) {
+        return { type: 'multipleChoice', choices: opt.choices.map((c) => String(c)) };
+      }
+      if (opt.type === 'shortAnswer') {
+        return {
+          type: 'shortAnswer',
+          expectedAnswer: Number(opt.expectedAnswer),
+          tolerancePercent: Number(opt.tolerancePercent ?? 0),
+        };
+      }
+    }
+    return null;
+  }
+
   for (const q of preQuestions) {
     const answer = answerByQuestionId.get(q.id);
-    if (!answer || answer.selectedIndex === undefined) {
+    const format = parseQuestionFormat(q.options);
+    if (!format) {
+      return NextResponse.json({ error: `Unsupported question format: ${q.id}` }, { status: 422 });
+    }
+    if (!answer) {
+      return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
+    }
+    if (format.type === 'multipleChoice' && answer.selectedIndex === undefined) {
+      return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
+    }
+    if (format.type === 'shortAnswer' && String(answer.rawAnswer ?? '').trim().length === 0) {
       return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
     }
   }
@@ -95,8 +137,24 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     let correctCount = 0;
     for (const q of preQuestions) {
       const answer = answerByQuestionId.get(q.id);
+      const format = parseQuestionFormat(q.options);
+      if (!format) {
+        throw new Error(`Unsupported question format: ${q.id}`);
+      }
       const selectedIndex = answer?.selectedIndex ?? null;
-      const isCorrect = selectedIndex !== null && q.correctIndex !== null ? selectedIndex === q.correctIndex : null;
+      const rawAnswer = answer?.rawAnswer ?? null;
+      let isCorrect: boolean | null = null;
+
+      if (format.type === 'multipleChoice') {
+        isCorrect = selectedIndex !== null && q.correctIndex !== null ? selectedIndex === q.correctIndex : null;
+      } else {
+        const submitted = Number(rawAnswer);
+        if (!Number.isNaN(submitted) && Number.isFinite(submitted)) {
+          const expected = format.expectedAnswer;
+          const tolerance = Math.abs(expected) * (format.tolerancePercent / 100);
+          isCorrect = Math.abs(submitted - expected) <= tolerance;
+        }
+      }
 
       if (isCorrect === true) correctCount += 1;
 
@@ -106,6 +164,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           questionId: q.id,
           studentId: student.id,
           selectedIndex,
+          rawAnswer,
           isCorrect,
         },
       });

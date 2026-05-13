@@ -10,6 +10,10 @@ type Question = {
   options: unknown;
 };
 
+type ParsedQuestionFormat =
+  | { type: 'multipleChoice'; choices: string[] }
+  | { type: 'shortAnswer'; expectedAnswer: number; tolerancePercent: number };
+
 type Props = {
   lessonNodeId: string;
   lessonTitle: string;
@@ -27,16 +31,44 @@ type SubmitResponse = {
 export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, questions }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Record<string, number>>({});
+  const [shortAnswers, setShortAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResponse | null>(null);
 
+  function parseQuestionFormat(options: unknown): ParsedQuestionFormat | null {
+    if (Array.isArray(options) && options.every((v) => typeof v === 'string')) {
+      return { type: 'multipleChoice', choices: options };
+    }
+    if (options && typeof options === 'object') {
+      const opt = options as {
+        type?: string;
+        choices?: unknown;
+        expectedAnswer?: unknown;
+        tolerancePercent?: unknown;
+      };
+      if (opt.type === 'multipleChoice' && Array.isArray(opt.choices)) {
+        return { type: 'multipleChoice', choices: opt.choices.map((c) => String(c)) };
+      }
+      if (opt.type === 'shortAnswer') {
+        return {
+          type: 'shortAnswer',
+          expectedAnswer: Number(opt.expectedAnswer),
+          tolerancePercent: Number(opt.tolerancePercent ?? 0),
+        };
+      }
+    }
+    return null;
+  }
+
   const isComplete = useMemo(() => {
     return questions.every((q) => {
-      if (!Array.isArray(q.options)) return true;
-      return selected[q.id] !== undefined;
+      const format = parseQuestionFormat(q.options);
+      if (!format) return false;
+      if (format.type === 'multipleChoice') return selected[q.id] !== undefined;
+      return shortAnswers[q.id] !== undefined && String(shortAnswers[q.id]).trim().length > 0;
     });
-  }, [questions, selected]);
+  }, [questions, selected, shortAnswers]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,12 +76,11 @@ export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, ques
     setError(null);
 
     try {
-      const answers = questions
-        .filter((q) => Array.isArray(q.options))
-        .map((q) => ({
-          questionId: q.id,
-          selectedIndex: selected[q.id],
-        }));
+      const answers = questions.map((q) => ({
+        questionId: q.id,
+        selectedIndex: selected[q.id],
+        rawAnswer: shortAnswers[q.id],
+      }));
 
       const res = await fetch(`/api/student/pre-quiz/${lessonNodeId}`, {
         method: 'POST',
@@ -85,17 +116,17 @@ export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, ques
       ) : (
         <form onSubmit={handleSubmit} className={styles.form}>
           {questions.map((q, idx) => {
-            const options = Array.isArray(q.options) ? (q.options as string[]) : [];
+            const format = parseQuestionFormat(q.options);
             return (
               <fieldset key={q.id} className={styles.question}>
                 <legend className={styles.prompt}>
                   {idx + 1}. {q.prompt}
                 </legend>
-                {options.length === 0 ? (
+                {!format ? (
                   <p className={styles.info}>Unsupported question format for this MVP.</p>
-                ) : (
+                ) : format.type === 'multipleChoice' ? (
                   <div className={styles.options}>
-                    {options.map((option, optionIdx) => (
+                    {format.choices.map((option, optionIdx) => (
                       <label key={`${q.id}-${optionIdx}`} className={styles.optionLabel}>
                         <input
                           type="radio"
@@ -113,6 +144,21 @@ export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, ques
                       </label>
                     ))}
                   </div>
+                ) : (
+                  <label className={styles.optionLabel}>
+                    <span className={styles.shortAnswerLabel}>Numeric answer</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={shortAnswers[q.id] ?? ''}
+                      onChange={(e) =>
+                        setShortAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
                 )}
               </fieldset>
             );
