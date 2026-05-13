@@ -1,3 +1,7 @@
+'use client';
+
+import { useRef, useEffect } from 'react';
+import Hls from 'hls.js';
 import styles from './NodePreview.module.css';
 
 type Node = {
@@ -22,6 +26,33 @@ function vimeoEmbedUrl(url: string) {
 export default function NodePreview({ node }: { node: Node }) {
   const url = node.videoUrl ?? null;
   const mux = node.muxPlaybackId ?? null;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!mux) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const hlsUrl = `https://stream.mux.com/${mux}.m3u8`;
+
+    // If the browser can play HLS natively (Safari), set src directly
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = hlsUrl;
+      return;
+    }
+
+    // Otherwise use hls.js when supported
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+      return () => {
+        hls.destroy();
+      };
+    }
+
+    // Fallback: set src, may not work in all browsers
+    video.src = hlsUrl;
+  }, [mux]);
 
   if (!url && !mux) {
     return <span className={styles.title}>{node.title}</span>;
@@ -65,7 +96,7 @@ export default function NodePreview({ node }: { node: Node }) {
     if (url.endsWith('.mp4') || url.includes('.m3u8') || url.includes('blob:')) {
       return (
         <div className={styles.preview}>
-          <video controls className={styles.video}>
+          <video ref={videoRef} controls className={styles.video} playsInline>
             <source src={url} />
             Your browser does not support the video tag.
           </video>
@@ -81,13 +112,12 @@ export default function NodePreview({ node }: { node: Node }) {
     );
   }
 
-  // Mux fallback: try HLS stream URL -- works on Safari; other browsers may require hls.js
+  // Mux fallback: HLS handled in useEffect; render video element for attachment
   if (mux) {
-    const hls = `https://stream.mux.com/${mux}.m3u8`;
     return (
       <div className={styles.preview}>
-        <video controls className={styles.video}>
-          <source src={hls} />
+        <video ref={videoRef} controls className={styles.video} playsInline>
+          <source />
           Your browser does not support HLS playback natively.
         </video>
       </div>
