@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
+import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export default async function StudentHomePage() {
     });
   }
 
-  // Fetch enrolled courses with their lessons and nodes
+  // Fetch enrolled courses with their lessons, nodes and student progress
   const enrollments = await prisma.enrollment.findMany({
     where: { studentId: student.id },
     include: {
@@ -44,6 +45,9 @@ export default async function StudentHomePage() {
                 include: { node: true },
                 orderBy: { sortOrder: 'asc' },
               },
+              progress: {
+                where: { studentId: student.id },
+              },
             },
             orderBy: { sortOrder: 'asc' },
           },
@@ -53,9 +57,51 @@ export default async function StudentHomePage() {
     orderBy: { createdAt: 'asc' },
   });
 
+  // Build a lightweight "today" shape for the StudentDailyTimeline component
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const dailyEnrollments = enrollments
+    .map(({ course }) => {
+      const lessonsToday = course.lessons.filter(
+        (lesson: {
+          openDate?: string | null;
+          dueDate?: string | null;
+          progress?: { startedAt?: string | null; completedAt?: string | null }[];
+        }) => {
+          const open = lesson.openDate ? new Date(lesson.openDate) : null;
+          const due = lesson.dueDate ? new Date(lesson.dueDate) : null;
+          const progress = (lesson.progress && lesson.progress[0]) ?? null;
+          const startedAt = progress?.startedAt ? new Date(progress.startedAt) : null;
+          const completedAt = progress?.completedAt ? new Date(progress.completedAt) : null;
+
+          const overlaps =
+            (open && open <= todayEnd && (!due || due >= todayStart)) ||
+            (startedAt && startedAt >= todayStart && startedAt <= todayEnd) ||
+            (completedAt && completedAt >= todayStart && completedAt <= todayEnd);
+
+          return overlaps;
+        }
+      );
+
+      return {
+        courseId: course.id,
+        title: course.title,
+        code: course.code,
+        section: course.section,
+        lessons: lessonsToday,
+      };
+    })
+    .filter((e) => e.lessons.length > 0);
+
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>My Courses</h1>
+
+      {/* Today's timeline (if any) */}
+      {dailyEnrollments.length > 0 && <StudentDailyTimeline data={dailyEnrollments} />}
 
       {enrollments.length === 0 ? (
         <div className={styles.emptyState}>
