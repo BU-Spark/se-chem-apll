@@ -1,0 +1,31 @@
+.container {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--card-bg, #fff);
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+}
+.title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.125rem;
+}
+.course {
+  border-top: 1px solid rgba(0,0,0,0.04);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+.courseHeader { }
+.courseTitle {
+  font-size: 1rem;
+  margin: 0;
+}
+.code {
+  display: inline-block;
+  margin-left: 0.5rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+.lessons { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
+.lesson { padding: 0.5rem 0; border-bottom: 1px dashed rgba(0,0,0,0.03); }
+.lessonTitle { margin: 0; font-weight: 600; }
+.lessonMeta { margin: 0.25rem 0 0 0; color: #6b7280; font-size: 0.875rem; }

@@ -1,0 +1,201 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* ── Empty state ──────────────────────────── */
+.emptyState {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.emptyTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.emptyDesc {
+  font-size: 0.9rem;
+  color: #6b7280;
+  max-width: 360px;
+}
+
+/* ── Course list ─────────────────────────── */
+.courseList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.courseCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.courseHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.courseTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.courseCode {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.2rem;
+  display: block;
+}
+
+.courseBadge {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #047857;
+  background: #d1fae5;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.courseDesc {
+  font-size: 0.9rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+.noLessons {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+/* ── Lesson list ─────────────────────────── */
+.lessonList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lessonCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fafafa;
+}
+
+.lessonCardUnavailable {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fafafa;
+  opacity: 0.6;
+}
+
+.lessonBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.lessonTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lessonTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.lessonStatus {
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
+.lessonStatusUpcoming {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.lessonStatusClosed {
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.lessonMeta {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.lessonSummary {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+/* ── Node chips ──────────────────────────── */
+.nodeList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.65rem;
+}
+
+.nodeChip {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 0.55rem;
+  border-radius: 0.7rem;
+  display: block;
+  min-width: 0;
+}
+
+.nodePreviewWrapper {
+  width: 100%;
+}

@@ -1,0 +1,95 @@
+.container {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.5rem;
+}
+
+.heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.taskMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.taskName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.statusPill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 0.1rem 0.4rem;
+}
+
+.statusAvailable {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.statusCompleted {
+  color: #065f46;
+  background: #d1fae5;
+}
+
+.statusNeedsRetry {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.statusLocked {
+  color: #6b7280;
+  background: #e5e7eb;
+}
+
+.actionBtn {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #6b7280;
+  border-radius: 0.45rem;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.actionLink {
+  border: 1px solid #16a34a;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 0.45rem;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.actionLink:hover {
+  background: #bbf7d0;
+}

@@ -1,0 +1,66 @@
+.canvas {
+  width: 100%;
+  height: 560px;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.empty {
+  border: 2px dashed #d1d5db;
+  border-radius: 0.875rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 0.5rem;
+}
+
+/* ── Custom roadmap node ─────────────────────────────────── */
+.graphNode {
+  background: #fff;
+  border: 1px solid #9ca3af;
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  min-width: 110px;
+  max-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.graphNodeLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.preQuizBadge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 9999px;
+  padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+}
+
+.error {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 0.5rem;
+  color: #dc2626;
+  font-size: 0.82rem;
+}

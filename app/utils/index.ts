@@ -9,6 +9,7 @@
  */
 
 export * from './formatters.utils'; // Exports capitalizeFirstLetter, formatDateYYYYMMDD, etc.
+export * from './dagValidation';
 // Add other utility files here as they are created, e.g.:
 // export * from './validation.utils';
 // export * from './array.utils';

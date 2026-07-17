@@ -1,0 +1,95 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* ── Sidebar ─────────────────────────────── */
+.sidebar {
+  width: 220px;
+  flex: 0 0 220px;
+  background: #1f5fab;
+  color: #f8fbff;
+  padding: 2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-left: 0.25rem;
+}
+
+.brandMark {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brandSub {
+  font-size: 0.78rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.navItem {
+  display: block;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.6rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: background 0.15s ease;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Main ────────────────────────────────── */
+.main {
+  flex: 1;
+  padding: 2.5rem 2.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    gap: 1.5rem;
+  }
+
+  .navList {
+    flex-direction: row;
+    gap: 0.25rem;
+  }
+}

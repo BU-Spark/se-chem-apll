@@ -1,0 +1,23 @@
+.nodeCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.iframe,
+.video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 0.55rem;
+  background: #111827;
+}
