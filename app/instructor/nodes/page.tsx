@@ -34,8 +34,8 @@ export default async function NodesPage() {
                   </div>
                   {node.summary && <p className={styles.cardSummary}>{node.summary}</p>}
                   <p className={styles.cardMeta}>
-                    {node.questions.length} question{node.questions.length !== 1 ? 's' : ''} &middot; Pass:{' '}
-                    {node.defaultPassingPercent}%{node.videoUrl && ' · Video attached'}
+                    {node.questions.length} question{node.questions.length !== 1 ? 's' : ''}
+                    {node.videoUrl && ' · Video attached'}
                   </p>
                 </div>
                 <Link href={`/instructor/nodes/${node.id}/edit`} className={styles.editLink}>

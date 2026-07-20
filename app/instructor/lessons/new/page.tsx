@@ -19,7 +19,6 @@ export default async function NewLessonPage() {
     id: n.id,
     title: n.title,
     summary: n.summary,
-    defaultPassingPercent: n.defaultPassingPercent,
     questionCount: n._count.questions,
     preLectureCount: n.questions.length,
   }));

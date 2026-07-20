@@ -61,8 +61,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       instanceId: ln.id ?? generateClientId('lesson-node'),
       nodeId: ln.nodeId,
       title: ln.node.title,
-      defaultPassingPercent: ln.node.defaultPassingPercent,
-      passingPercentOverride: ln.passingPercentOverride?.toString() || '',
+      passingPercent: ln.passingPercent.toString(),
       isRequired: ln.isRequired,
       preLectureCount: preLectureMap.get(ln.nodeId) ?? 0,
     }));
@@ -89,6 +88,19 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
 
     if (lessonNodes.length === 0) {
       setError('Add at least one node to the lesson before saving.');
+      return;
+    }
+
+    if (
+      lessonNodes.some(
+        (entry) =>
+          entry.passingPercent === '' ||
+          !Number.isInteger(Number(entry.passingPercent)) ||
+          Number(entry.passingPercent) < 0 ||
+          Number(entry.passingPercent) > 100
+      )
+    ) {
+      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
       return;
     }
 
@@ -124,7 +136,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
-            passingPercentOverride: entry.passingPercentOverride ? Number(entry.passingPercentOverride) : null,
+            passingPercent: Number(entry.passingPercent),
             isRequired: entry.isRequired,
           })),
           edges: serialisedEdges,
@@ -287,8 +299,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           <section className={styles.section}>
             <h2 className={styles.sectionTitle}>Build lesson</h2>
             <p className={styles.sectionNote}>
-              Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
-              override it here.
+              Add nodes from the library, choose a pass threshold for each one, and drag to reorder.
             </p>
             <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={handleLessonNodesChange} />
           </section>

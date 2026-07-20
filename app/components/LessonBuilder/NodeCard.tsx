@@ -8,8 +8,7 @@ export interface LessonNodeEntry {
   instanceId: string; // unique per drop (not the DB nodeId)
   nodeId: string;
   title: string;
-  defaultPassingPercent: number;
-  passingPercentOverride: string; // empty string = use default
+  passingPercent: string;
   isRequired: boolean;
   preLectureCount: number;
 }
@@ -56,9 +55,10 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
               type="number"
               min={0}
               max={100}
-              placeholder={`Default (${entry.defaultPassingPercent}%)`}
-              value={entry.passingPercentOverride}
-              onChange={(e) => onChange({ passingPercentOverride: e.target.value })}
+              required
+              placeholder="e.g. 70"
+              value={entry.passingPercent}
+              onChange={(e) => onChange({ passingPercent: e.target.value })}
             />
           </label>
           <label className={styles.nodeCardCheckbox}>

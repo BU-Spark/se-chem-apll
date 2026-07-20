@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { isAcyclic } from '@/app/utils/dagValidation';
+import { isValidPassingPercent } from '@/app/utils/passingPercent';
 
 interface RouteContext {
   params: Promise<{ lessonId: string }>;
@@ -55,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     lessonNodes?: Array<{
       nodeId: string;
       sortOrder: number;
-      passingPercentOverride?: number | null;
+      passingPercent?: number;
       isRequired?: boolean;
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
@@ -63,6 +64,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
     return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
+  }
+
+  if (lessonNodes?.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
+    return NextResponse.json(
+      { error: 'Each lesson node must have a passingPercent between 0 and 100' },
+      { status: 422 }
+    );
   }
 
   // Server-side DAG validation before touching the DB
@@ -96,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
           create: lessonNodes.map((ln) => ({
             nodeId: ln.nodeId,
             sortOrder: ln.sortOrder,
-            passingPercentOverride: ln.passingPercentOverride ?? null,
+            passingPercent: ln.passingPercent!,
             isRequired: ln.isRequired ?? true,
           })),
         },

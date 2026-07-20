@@ -27,7 +27,6 @@ async function createDemoNode(index) {
       summary: '[seed-demo] Example learning node',
       videoUrl: pickRandomYoutube(),
       estimatedMinutes: 8 + index,
-      defaultPassingPercent: 70,
       questions: {
         create: [
           {
@@ -66,6 +65,7 @@ async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) 
         create: nodes.map((node, idx) => ({
           nodeId: node.id,
           sortOrder: idx,
+          passingPercent: 70,
           isRequired: true,
         })),
       },

@@ -7,7 +7,6 @@ export interface PaletteNode {
   id: string;
   title: string;
   summary: string | null;
-  defaultPassingPercent: number;
   questionCount: number;
   preLectureCount: number;
 }
@@ -46,8 +45,7 @@ export default function NodePalette({ nodes, onAdd }: Props) {
               </div>
               {node.summary && <span className={styles.paletteItemMeta}>{node.summary}</span>}
               <span className={styles.paletteItemMeta}>
-                {node.questionCount} question{node.questionCount !== 1 ? 's' : ''} &middot; pass{' '}
-                {node.defaultPassingPercent}%
+                {node.questionCount} question{node.questionCount !== 1 ? 's' : ''}
               </span>
             </div>
             <button type="button" className={styles.paletteAddBtn} onClick={() => onAdd(node)} title="Add to lesson">
