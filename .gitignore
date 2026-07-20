@@ -116,3 +116,6 @@ tmp/
 temp/
 *.tmp
 .cache/
+
+# clerk configuration (can include secrets)
+/.clerk/

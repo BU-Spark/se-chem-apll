@@ -56,9 +56,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     // Only check for duplicates if code or section actually changed
     if (newCode !== currentCourse.code || newSection !== currentCourse.section) {
-      const existing = await prisma.course.findUnique({
+      const existing = await prisma.course.findFirst({
         where: {
-          code_section: { code: newCode, section: newSection },
+          code: newCode,
+          section: newSection,
         },
       });
 
