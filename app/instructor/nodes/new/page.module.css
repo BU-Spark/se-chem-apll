@@ -90,6 +90,12 @@
   color: #374151;
 }
 
+.fieldLabel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
 .field input,
 .field textarea,
 .field select {

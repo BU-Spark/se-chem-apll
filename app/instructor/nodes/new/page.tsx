@@ -68,7 +68,6 @@ export default function NewNodePage() {
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
-  const [defaultPassingPercent, setDefaultPassingPercent] = useState('70');
 
   // Pre-lecture quiz
   const [hasPreLecture, setHasPreLecture] = useState(false);
@@ -151,7 +150,6 @@ export default function NewNodePage() {
           title,
           summary,
           videoUrl: videoUrl || null,
-          defaultPassingPercent: Number(defaultPassingPercent),
           questions: allQuestions,
         }),
       });
@@ -186,7 +184,9 @@ export default function NewNodePage() {
           <h2 className={styles.sectionTitle}>Basic info</h2>
           <div className={styles.fieldRow}>
             <label className={styles.field}>
-              Title <span className={styles.required}>*</span>
+              <span className={styles.fieldLabel}>
+                Title <span className={styles.required}>*</span>
+              </span>
               <input
                 required
                 value={title}
@@ -203,28 +203,15 @@ export default function NewNodePage() {
               />
             </label>
           </div>
-          <div className={styles.fieldRow}>
-            <label className={styles.field}>
-              Video URL
-              <input
-                type="url"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=…"
-              />
-            </label>
-            <label className={styles.field}>
-              Default pass threshold (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                required
-                value={defaultPassingPercent}
-                onChange={(e) => setDefaultPassingPercent(e.target.value)}
-              />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Video URL
+            <input
+              type="url"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+            />
+          </label>
         </section>
 
         {/* ── Pre-lecture quiz ── */}
@@ -353,7 +340,9 @@ function QuestionEditor({
       </div>
 
       <label className={styles.field}>
-        Question prompt <span className={styles.required}>*</span>
+        <span className={styles.fieldLabel}>
+          Question prompt <span className={styles.required}>*</span>
+        </span>
         <textarea
           required
           rows={2}

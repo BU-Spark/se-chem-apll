@@ -13,11 +13,11 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                 String             @id @default(cuid())
-  email              String             @unique
+  id                 String            @id @default(cuid())
+  email              String            @unique
   name               String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   enrollments        Enrollment[]
   lessonProgress     LessonProgress[]
   lessonNodeAttempts NodeAttempt[]
@@ -124,24 +124,24 @@ enum CourseRole {
 // ---------------------------------------------------------------------------
 
 model Lesson {
-  id               String         @id @default(cuid())
-  courseId         String
-  slug             String         @unique
-  title            String
-  summary          String
-  description      String?
-  thumbnailUrl     String?
-  estimatedMinutes Int?
-  openDate         DateTime?
-  dueDate          DateTime?
-  sortOrder        Int            @default(0)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  course           Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessonNodes      LessonNode[]
-  lessonNodeEdges  LessonNodeEdge[]
-  progress         LessonProgress[]
-  surveys          SurveyPrompt[]
+  id                String             @id @default(cuid())
+  courseId          String
+  slug              String             @unique
+  title             String
+  summary           String
+  description       String?
+  thumbnailUrl      String?
+  estimatedMinutes  Int?
+  openDate          DateTime?
+  dueDate           DateTime?
+  sortOrder         Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonNodes       LessonNode[]
+  lessonNodeEdges   LessonNodeEdge[]
+  progress          LessonProgress[]
+  surveys           SurveyPrompt[]
   badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
 }
 
@@ -150,18 +150,17 @@ model Lesson {
 // ---------------------------------------------------------------------------
 
 model Node {
-  id                   String         @id @default(cuid())
-  title                String
-  summary              String?
-  videoUrl             String?
-  muxPlaybackId        String?
-  thumbnailUrl         String?
-  estimatedMinutes     Int?
-  defaultPassingPercent Int            @default(70)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  questions            NodeQuestion[]
-  lessonNodes          LessonNode[]
+  id               String         @id @default(cuid())
+  title            String
+  summary          String?
+  videoUrl         String?
+  muxPlaybackId    String?
+  thumbnailUrl     String?
+  estimatedMinutes Int?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  questions        NodeQuestion[]
+  lessonNodes      LessonNode[]
 }
 
 model NodeQuestion {
@@ -188,15 +187,14 @@ model NodeQuestion {
 // ---------------------------------------------------------------------------
 
 model LessonNode {
-  id                    String   @id @default(cuid())
-  lessonId              String
-  nodeId                String
-  sortOrder             Int
-  // null = use Node.defaultPassingPercent
-  passingPercentOverride Int?
-  isRequired            Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id             String   @id @default(cuid())
+  lessonId       String
+  nodeId         String
+  sortOrder      Int
+  passingPercent Int
+  isRequired     Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lesson        Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   node          Node             @relation(fields: [nodeId], references: [id])
@@ -271,14 +269,14 @@ model NodeAttempt {
 }
 
 model NodeResponse {
-  id             String   @id @default(cuid())
-  attemptId      String
-  questionId     String
-  studentId      String
-  selectedIndex  Int?
-  rawAnswer      String?
-  isCorrect      Boolean?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  attemptId     String
+  questionId    String
+  studentId     String
+  selectedIndex Int?
+  rawAnswer     String?
+  isCorrect     Boolean?
+  createdAt     DateTime @default(now())
 
   attempt  NodeAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question NodeQuestion @relation(fields: [questionId], references: [id])

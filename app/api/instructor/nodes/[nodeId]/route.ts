@@ -33,11 +33,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, defaultPassingPercent, questions } = body as {
+  const { title, summary, videoUrl, questions } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
-    defaultPassingPercent?: number;
     questions?: Array<{
       sortOrder: number;
       prompt: string;
@@ -59,7 +58,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         ...(title !== undefined && { title: title.trim() }),
         ...(summary !== undefined && { summary: summary.trim() || null }),
         ...(videoUrl !== undefined && { videoUrl: videoUrl || null }),
-        ...(defaultPassingPercent !== undefined && { defaultPassingPercent }),
         ...(questions !== undefined && {
           questions: {
             create: questions.map((q) => ({

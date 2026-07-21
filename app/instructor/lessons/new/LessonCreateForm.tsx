@@ -52,6 +52,19 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
       return;
     }
 
+    if (
+      lessonNodes.some(
+        (entry) =>
+          entry.passingPercent === '' ||
+          !Number.isInteger(Number(entry.passingPercent)) ||
+          Number(entry.passingPercent) < 0 ||
+          Number(entry.passingPercent) > 100
+      )
+    ) {
+      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+      return;
+    }
+
     if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
       setError('Open date must be before due date.');
       return;
@@ -74,7 +87,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
-            passingPercentOverride: entry.passingPercentOverride ? Number(entry.passingPercentOverride) : null,
+            passingPercent: Number(entry.passingPercent),
             isRequired: entry.isRequired,
           })),
         }),
@@ -191,8 +204,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Build lesson</h2>
           <p className={styles.sectionNote}>
-            Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
-            override it here.
+            Add nodes from the library, choose a pass threshold for each one, and drag to reorder.
           </p>
           <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={setLessonNodes} />
         </section>

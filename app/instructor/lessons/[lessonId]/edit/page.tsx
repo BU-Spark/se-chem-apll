@@ -44,7 +44,6 @@ export default async function EditLessonPage({ params }: Props) {
     id: n.id,
     title: n.title,
     summary: n.summary,
-    defaultPassingPercent: n.defaultPassingPercent,
     questionCount: n._count.questions,
     preLectureCount: n.questions.length,
   }));

@@ -119,10 +119,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     }
   }
 
-  const passingPercent =
-    lessonNode.passingPercentOverride !== null
-      ? lessonNode.passingPercentOverride
-      : lessonNode.node.defaultPassingPercent;
+  const passingPercent = lessonNode.passingPercent;
 
   const result = await prisma.$transaction(async (tx) => {
     const attempt = await tx.nodeAttempt.create({

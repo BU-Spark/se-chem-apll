@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { isValidPassingPercent } from '@/app/utils/passingPercent';
 
 // GET /api/instructor/lessons
 export async function GET() {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     lessonNodes?: Array<{
       nodeId: string;
       sortOrder: number;
-      passingPercentOverride?: number | null;
+      passingPercent?: number;
       isRequired?: boolean;
     }>;
   };
@@ -57,6 +58,13 @@ export async function POST(req: NextRequest) {
   if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
   if (!summary?.trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
   if (!courseId) return NextResponse.json({ error: 'courseId is required' }, { status: 422 });
+
+  if ((lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
+    return NextResponse.json(
+      { error: 'Each lesson node must have a passingPercent between 0 and 100' },
+      { status: 422 }
+    );
+  }
 
   // Validate slug format
   if (!/^[a-z0-9-]+$/.test(slug)) {
@@ -77,7 +85,7 @@ export async function POST(req: NextRequest) {
         create: (lessonNodes ?? []).map((ln) => ({
           nodeId: ln.nodeId,
           sortOrder: ln.sortOrder,
-          passingPercentOverride: ln.passingPercentOverride ?? null,
+          passingPercent: ln.passingPercent!,
           isRequired: ln.isRequired ?? true,
         })),
       },

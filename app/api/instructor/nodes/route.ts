@@ -29,11 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, defaultPassingPercent, questions } = body as {
+  const { title, summary, videoUrl, questions } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
-    defaultPassingPercent?: number;
     questions?: Array<{
       sortOrder: number;
       prompt: string;
@@ -52,7 +51,6 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       summary: summary?.trim() ?? null,
       videoUrl: videoUrl ?? null,
-      defaultPassingPercent: defaultPassingPercent ?? 70,
       questions: {
         create: (questions ?? []).map((q) => ({
           sortOrder: q.sortOrder,

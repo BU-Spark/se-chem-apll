@@ -73,7 +73,6 @@ export default function NodeEditForm({ node }: Props) {
   const [title, setTitle] = useState(node.title);
   const [summary, setSummary] = useState(node.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(node.videoUrl ?? '');
-  const [defaultPassingPercent, setDefaultPassingPercent] = useState(String(node.defaultPassingPercent));
 
   const existingPre = node.questions.filter((q) => q.isPreLecture).map(dbQuestionToLocal);
   const existingCheckpoint = node.questions.filter((q) => !q.isPreLecture).map(dbQuestionToLocal);
@@ -156,7 +155,6 @@ export default function NodeEditForm({ node }: Props) {
           title,
           summary,
           videoUrl: videoUrl || null,
-          defaultPassingPercent: Number(defaultPassingPercent),
           questions: allQuestions,
         }),
       });
@@ -195,7 +193,9 @@ export default function NodeEditForm({ node }: Props) {
           <h2 className={styles.sectionTitle}>Basic info</h2>
           <div className={styles.fieldRow}>
             <label className={styles.field}>
-              Title <span className={styles.required}>*</span>
+              <span className={styles.fieldLabel}>
+                Title <span className={styles.required}>*</span>
+              </span>
               <input required value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
             <label className={styles.field}>
@@ -203,23 +203,10 @@ export default function NodeEditForm({ node }: Props) {
               <input value={summary} onChange={(e) => setSummary(e.target.value)} />
             </label>
           </div>
-          <div className={styles.fieldRow}>
-            <label className={styles.field}>
-              Video URL
-              <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              Default pass threshold (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                required
-                value={defaultPassingPercent}
-                onChange={(e) => setDefaultPassingPercent(e.target.value)}
-              />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Video URL
+            <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+          </label>
         </section>
 
         <section className={styles.section}>
@@ -350,7 +337,9 @@ function QuestionEditor({
         </div>
       </div>
       <label className={styles.field}>
-        Question prompt <span className={styles.required}>*</span>
+        <span className={styles.fieldLabel}>
+          Question prompt <span className={styles.required}>*</span>
+        </span>
         <textarea required rows={2} value={q.prompt} onChange={(e) => onUpdate({ prompt: e.target.value })} />
       </label>
       {q.questionType === 'multipleChoice' ? (
