@@ -46,12 +46,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Check for duplicate code+section combination
-  const existing = await prisma.course.findUnique({
+  const existing = await prisma.course.findFirst({
     where: {
-      code_section: {
-        code: code.trim().toUpperCase(),
-        section: section?.trim() || null,
-      },
+      code: code.trim().toUpperCase(),
+      section: section?.trim() || null,
     },
   });
 

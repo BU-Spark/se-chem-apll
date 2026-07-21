@@ -96,9 +96,9 @@ export default async function StudentHomePage() {
     .map(({ course }) => {
       const lessonsToday = course.lessons.filter(
         (lesson: {
-          openDate?: string | null;
-          dueDate?: string | null;
-          progress?: { startedAt?: string | null; completedAt?: string | null }[];
+          openDate?: Date | null;
+          dueDate?: Date | null;
+          progress?: { startedAt?: Date | null; completedAt?: Date | null }[];
         }) => {
           const open = lesson.openDate ? new Date(lesson.openDate) : null;
           const due = lesson.dueDate ? new Date(lesson.dueDate) : null;

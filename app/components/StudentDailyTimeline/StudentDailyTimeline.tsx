@@ -3,8 +3,8 @@ import styles from './StudentDailyTimeline.module.css';
 type Lesson = {
   id: string;
   title: string;
-  openDate?: string | null;
-  dueDate?: string | null;
+  openDate?: Date | null;
+  dueDate?: Date | null;
 };
 
 type DailyCourse = {
