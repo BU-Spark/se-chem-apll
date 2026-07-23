@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
 
 interface RouteContext {
   params: Promise<{ nodeId: string }>;
@@ -43,8 +44,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       options: unknown;
       correctIndex?: number | null;
       isPreLecture?: boolean;
+      timeOffsetSeconds?: number | null;
     }>;
   };
+
+  const timestampError = questions ? validateQuestionTimestamps(questions) : null;
+  if (timestampError) {
+    return NextResponse.json({ error: timestampError }, { status: 422 });
+  }
 
   const node = await prisma.$transaction(async (tx) => {
     // Replace all questions
@@ -66,6 +73,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
               options: q.options as object,
               correctIndex: q.correctIndex ?? null,
               isPreLecture: q.isPreLecture ?? false,
+              timeOffsetSeconds: q.isPreLecture ? null : (q.timeOffsetSeconds ?? null),
             })),
           },
         }),

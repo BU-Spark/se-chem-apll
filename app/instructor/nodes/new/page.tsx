@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateClientId } from '@/lib/generateClientId';
+import { combineTimestampParts, validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
 import styles from './page.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -31,6 +32,10 @@ interface Question {
   // short answer
   expectedAnswer: string;
   tolerancePercent: string;
+
+  // Checkpoint timestamp inputs; pre-lecture questions leave these blank.
+  timestampMinutes: string;
+  timestampSeconds: string;
 }
 
 function makeQuestion(isPreLecture = false): Question {
@@ -43,6 +48,8 @@ function makeQuestion(isPreLecture = false): Question {
     correctIndex: null,
     expectedAnswer: '',
     tolerancePercent: '5',
+    timestampMinutes: '',
+    timestampSeconds: '',
   };
 }
 
@@ -132,7 +139,6 @@ export default function NewNodePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSaving(true);
 
     const allQuestions = [...(hasPreLecture ? preLectureQuestions : []), ...checkpointQuestions].map((q, idx) => ({
       sortOrder: idx,
@@ -140,7 +146,16 @@ export default function NewNodePage() {
       options: serializeOptions(q),
       correctIndex: q.questionType === 'multipleChoice' ? q.correctIndex : null,
       isPreLecture: q.isPreLecture,
+      timeOffsetSeconds: q.isPreLecture ? null : combineTimestampParts(q.timestampMinutes, q.timestampSeconds),
     }));
+
+    const timestampError = validateQuestionTimestamps(allQuestions);
+    if (timestampError) {
+      setError(timestampError);
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const res = await fetch('/api/instructor/nodes', {
@@ -338,6 +353,39 @@ function QuestionEditor({
           )}
         </div>
       </div>
+
+      {!q.isPreLecture && (
+        <div className={styles.timestampFields}>
+          <span className={styles.timestampLabel}>
+            Video timestamp <span className={styles.required}>*</span>
+          </span>
+          <label className={styles.field}>
+            Minutes
+            <input
+              type="number"
+              min={0}
+              step={1}
+              required
+              value={q.timestampMinutes}
+              onChange={(e) => onUpdate({ timestampMinutes: e.target.value })}
+              placeholder="0"
+            />
+          </label>
+          <label className={styles.field}>
+            Seconds
+            <input
+              type="number"
+              min={0}
+              max={59}
+              step={1}
+              required
+              value={q.timestampSeconds}
+              onChange={(e) => onUpdate({ timestampSeconds: e.target.value })}
+              placeholder="00"
+            />
+          </label>
+        </div>
+      )}
 
       <label className={styles.field}>
         <span className={styles.fieldLabel}>

@@ -75,9 +75,31 @@
   gap: 1rem;
 }
 
+.timestampFields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 7rem) minmax(0, 7rem);
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.timestampLabel {
+  align-self: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
 @media (max-width: 600px) {
   .fieldRow {
     grid-template-columns: 1fr;
+  }
+
+  .timestampFields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .timestampLabel {
+    grid-column: 1 / -1;
   }
 }
 

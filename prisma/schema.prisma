@@ -164,17 +164,18 @@ model Node {
 }
 
 model NodeQuestion {
-  id           String   @id @default(cuid())
-  nodeId       String
-  sortOrder    Int
-  prompt       String
+  id                String   @id @default(cuid())
+  nodeId            String
+  sortOrder         Int
+  prompt            String
   // For multiple-choice: JSON array of strings, e.g. ["Option A", "Option B"]
   // For short answer:    JSON object, e.g. { type: "shortAnswer", expectedAnswer: 42, tolerancePercent: 5 }
-  options      Json
-  correctIndex Int?
-  isPreLecture Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  options           Json
+  correctIndex      Int?
+  isPreLecture      Boolean  @default(false)
+  timeOffsetSeconds Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   node      Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   responses NodeResponse[]

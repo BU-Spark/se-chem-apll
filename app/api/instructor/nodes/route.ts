@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
 
 // GET /api/instructor/nodes — list all nodes
 export async function GET() {
@@ -39,11 +40,17 @@ export async function POST(req: NextRequest) {
       options: unknown;
       correctIndex?: number | null;
       isPreLecture?: boolean;
+      timeOffsetSeconds?: number | null;
     }>;
   };
 
   if (!title?.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
+  }
+
+  const timestampError = validateQuestionTimestamps(questions ?? []);
+  if (timestampError) {
+    return NextResponse.json({ error: timestampError }, { status: 422 });
   }
 
   const node = await prisma.node.create({
@@ -58,6 +65,7 @@ export async function POST(req: NextRequest) {
           options: q.options as object,
           correctIndex: q.correctIndex ?? null,
           isPreLecture: q.isPreLecture ?? false,
+          timeOffsetSeconds: q.isPreLecture ? null : (q.timeOffsetSeconds ?? null),
         })),
       },
     },

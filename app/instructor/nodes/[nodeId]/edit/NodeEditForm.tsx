@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Node, NodeQuestion } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
+import {
+  combineTimestampParts,
+  splitTimeOffsetSeconds,
+  validateQuestionTimestamps,
+} from '@/app/utils/questionTimestamps';
 import styles from '../../new/page.module.css';
 
 type QuestionType = 'multipleChoice' | 'shortAnswer';
@@ -18,11 +23,14 @@ interface LocalQuestion {
   correctIndex: number | null;
   expectedAnswer: string;
   tolerancePercent: string;
+  timestampMinutes: string;
+  timestampSeconds: string;
 }
 
 function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
   const opts = q.options as Record<string, unknown>;
   const isShortAnswer = opts.type === 'shortAnswer';
+  const timestamp = splitTimeOffsetSeconds(q.timeOffsetSeconds);
   return {
     id: q.id,
     dbId: q.id,
@@ -33,6 +41,8 @@ function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
     correctIndex: q.correctIndex ?? null,
     expectedAnswer: isShortAnswer ? String(opts.expectedAnswer ?? '') : '',
     tolerancePercent: isShortAnswer ? String(opts.tolerancePercent ?? '5') : '5',
+    timestampMinutes: timestamp.minutes,
+    timestampSeconds: timestamp.seconds,
   };
 }
 
@@ -47,6 +57,8 @@ function makeQuestion(isPreLecture = false): LocalQuestion {
     correctIndex: null,
     expectedAnswer: '',
     tolerancePercent: '5',
+    timestampMinutes: '',
+    timestampSeconds: '',
   };
 }
 
@@ -137,7 +149,6 @@ export default function NodeEditForm({ node }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSaving(true);
 
     const allQuestions = [...(hasPreLecture ? preLectureQuestions : []), ...checkpointQuestions].map((q, idx) => ({
       sortOrder: idx,
@@ -145,7 +156,16 @@ export default function NodeEditForm({ node }: Props) {
       options: serializeOptions(q),
       correctIndex: q.questionType === 'multipleChoice' ? q.correctIndex : null,
       isPreLecture: q.isPreLecture,
+      timeOffsetSeconds: q.isPreLecture ? null : combineTimestampParts(q.timestampMinutes, q.timestampSeconds),
     }));
+
+    const timestampError = validateQuestionTimestamps(allQuestions);
+    if (timestampError) {
+      setError(timestampError);
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const res = await fetch(`/api/instructor/nodes/${node.id}`, {
@@ -336,6 +356,38 @@ function QuestionEditor({
           )}
         </div>
       </div>
+      {!q.isPreLecture && (
+        <div className={styles.timestampFields}>
+          <span className={styles.timestampLabel}>
+            Video timestamp <span className={styles.required}>*</span>
+          </span>
+          <label className={styles.field}>
+            Minutes
+            <input
+              type="number"
+              min={0}
+              step={1}
+              required
+              value={q.timestampMinutes}
+              onChange={(e) => onUpdate({ timestampMinutes: e.target.value })}
+              placeholder="0"
+            />
+          </label>
+          <label className={styles.field}>
+            Seconds
+            <input
+              type="number"
+              min={0}
+              max={59}
+              step={1}
+              required
+              value={q.timestampSeconds}
+              onChange={(e) => onUpdate({ timestampSeconds: e.target.value })}
+              placeholder="00"
+            />
+          </label>
+        </div>
+      )}
       <label className={styles.field}>
         <span className={styles.fieldLabel}>
           Question prompt <span className={styles.required}>*</span>

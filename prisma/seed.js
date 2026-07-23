@@ -42,6 +42,7 @@ async function createDemoNode(index) {
             options: ['True', 'False'],
             correctIndex: 0,
             isPreLecture: false,
+            timeOffsetSeconds: 90,
           },
         ],
       },
