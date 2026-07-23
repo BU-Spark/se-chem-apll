@@ -79,7 +79,6 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   });
 
   it.each([
-    ['missing', undefined],
     ['negative', -1],
     ['fractional', 1.5],
   ])('returns 422 for a %s checkpoint timestamp', async (_label, timeOffsetSeconds) => {
@@ -94,20 +93,26 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
-  it('returns 422 for duplicate checkpoint timestamps', async () => {
+  it('persists missing, null, and duplicate checkpoint timestamps', async () => {
     const response = await PATCH(
       patchRequest({
         questions: [
           { sortOrder: 0, prompt: 'First', options: [], timeOffsetSeconds: 30 },
           { sortOrder: 1, prompt: 'Second', options: [], timeOffsetSeconds: 30 },
+          { sortOrder: 2, prompt: 'Third', options: [], timeOffsetSeconds: null },
+          { sortOrder: 3, prompt: 'Fourth', options: [] },
         ],
       }) as never,
       context
     );
 
-    expect(response.status).toBe(422);
-    await expect(response.json()).resolves.toEqual({ error: 'Checkpoint timestamps must be unique.' });
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].data.questions.create).toEqual([
+      expect.objectContaining({ prompt: 'First', timeOffsetSeconds: 30 }),
+      expect.objectContaining({ prompt: 'Second', timeOffsetSeconds: 30 }),
+      expect.objectContaining({ prompt: 'Third', timeOffsetSeconds: null }),
+      expect.objectContaining({ prompt: 'Fourth', timeOffsetSeconds: null }),
+    ]);
   });
 
   it('normalizes pre-lecture timestamps to null', async () => {

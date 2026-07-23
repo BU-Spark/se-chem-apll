@@ -37,7 +37,7 @@ describe('NewNodePage checkpoint timestamps', () => {
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
 
-  it('blocks duplicate checkpoint timestamps', async () => {
+  it('allows duplicate checkpoint timestamps', async () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
 
@@ -55,7 +55,39 @@ describe('NewNodePage checkpoint timestamps', () => {
     await user.type(seconds[1], '45');
     await user.click(screen.getByRole('button', { name: 'Create node' }));
 
-    expect(await screen.findByText('Checkpoint timestamps must be unique.')).toBeInTheDocument();
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const body = JSON.parse(request.body);
+    expect(body.questions.map((question: { timeOffsetSeconds: number }) => question.timeOffsetSeconds)).toEqual([
+      45, 45,
+    ]);
+  });
+
+  it('submits a blank timestamp as null', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    expect(screen.getByText('Leave blank to show this question after the video.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Question prompt/), 'Question after the video');
+    await user.click(screen.getByRole('button', { name: 'Create node' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const body = JSON.parse(request.body);
+    expect(body.questions[0].timeOffsetSeconds).toBeNull();
+  });
+
+  it('blocks a partially entered timestamp', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Question prompt/), 'Checkpoint');
+    await user.type(screen.getByLabelText('Minutes'), '1');
+    await user.click(screen.getByRole('button', { name: 'Create node' }));
+
+    expect(await screen.findByText('Enter both minutes and seconds, or leave both blank.')).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

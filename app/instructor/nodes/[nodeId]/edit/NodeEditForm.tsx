@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Node, NodeQuestion } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
@@ -8,6 +8,7 @@ import {
   combineTimestampParts,
   splitTimeOffsetSeconds,
   validateQuestionTimestamps,
+  validateTimestampParts,
 } from '@/app/utils/questionTimestamps';
 import styles from '../../new/page.module.css';
 
@@ -46,9 +47,9 @@ function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
   };
 }
 
-function makeQuestion(isPreLecture = false): LocalQuestion {
+function makeQuestion(isPreLecture = false, id = generateClientId('question')): LocalQuestion {
   return {
-    id: generateClientId('question'),
+    id,
     dbId: null,
     prompt: '',
     questionType: 'multipleChoice',
@@ -79,6 +80,8 @@ interface Props {
 
 export default function NodeEditForm({ node }: Props) {
   const router = useRouter();
+  const initialPreLectureQuestionId = useId();
+  const initialCheckpointQuestionId = useId();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,10 +94,10 @@ export default function NodeEditForm({ node }: Props) {
 
   const [hasPreLecture, setHasPreLecture] = useState(existingPre.length > 0);
   const [preLectureQuestions, setPreLectureQuestions] = useState<LocalQuestion[]>(
-    existingPre.length > 0 ? existingPre : [makeQuestion(true)]
+    existingPre.length > 0 ? existingPre : [makeQuestion(true, initialPreLectureQuestionId)]
   );
   const [checkpointQuestions, setCheckpointQuestions] = useState<LocalQuestion[]>(
-    existingCheckpoint.length > 0 ? existingCheckpoint : [makeQuestion(false)]
+    existingCheckpoint.length > 0 ? existingCheckpoint : [makeQuestion(false, initialCheckpointQuestionId)]
   );
 
   function updateQ(
@@ -149,6 +152,15 @@ export default function NodeEditForm({ node }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const timestampPartsError =
+      checkpointQuestions
+        .map((q) => validateTimestampParts(q.timestampMinutes, q.timestampSeconds))
+        .find((timestampError) => timestampError !== null) ?? null;
+    if (timestampPartsError) {
+      setError(timestampPartsError);
+      return;
+    }
 
     const allQuestions = [...(hasPreLecture ? preLectureQuestions : []), ...checkpointQuestions].map((q, idx) => ({
       sortOrder: idx,
@@ -358,16 +370,13 @@ function QuestionEditor({
       </div>
       {!q.isPreLecture && (
         <div className={styles.timestampFields}>
-          <span className={styles.timestampLabel}>
-            Video timestamp <span className={styles.required}>*</span>
-          </span>
+          <span className={styles.timestampLabel}>Video timestamp (optional)</span>
           <label className={styles.field}>
             Minutes
             <input
               type="number"
               min={0}
               step={1}
-              required
               value={q.timestampMinutes}
               onChange={(e) => onUpdate({ timestampMinutes: e.target.value })}
               placeholder="0"
@@ -380,12 +389,12 @@ function QuestionEditor({
               min={0}
               max={59}
               step={1}
-              required
               value={q.timestampSeconds}
               onChange={(e) => onUpdate({ timestampSeconds: e.target.value })}
               placeholder="00"
             />
           </label>
+          <span className={styles.timestampHelp}>Leave blank to show this question after the video.</span>
         </div>
       )}
       <label className={styles.field}>

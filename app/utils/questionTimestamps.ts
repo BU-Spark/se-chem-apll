@@ -8,11 +8,17 @@ export interface TimestampParts {
   seconds: string;
 }
 
-export function combineTimestampParts(minutes: string, seconds: string): number | null {
-  if (minutes.trim() === '' || seconds.trim() === '') return null;
+export function validateTimestampParts(minutes: string, seconds: string): string | null {
+  const trimmedMinutes = minutes.trim();
+  const trimmedSeconds = seconds.trim();
 
-  const minuteValue = Number(minutes);
-  const secondValue = Number(seconds);
+  if (trimmedMinutes === '' && trimmedSeconds === '') return null;
+  if (trimmedMinutes === '' || trimmedSeconds === '') {
+    return 'Enter both minutes and seconds, or leave both blank.';
+  }
+
+  const minuteValue = Number(trimmedMinutes);
+  const secondValue = Number(trimmedSeconds);
   if (
     !Number.isInteger(minuteValue) ||
     !Number.isInteger(secondValue) ||
@@ -20,9 +26,18 @@ export function combineTimestampParts(minutes: string, seconds: string): number 
     secondValue < 0 ||
     secondValue > 59
   ) {
-    return null;
+    return 'Timestamp minutes must be non-negative whole numbers and seconds must be between 0 and 59.';
   }
 
+  return null;
+}
+
+export function combineTimestampParts(minutes: string, seconds: string): number | null {
+  if (validateTimestampParts(minutes, seconds)) return null;
+  if (minutes.trim() === '' && seconds.trim() === '') return null;
+
+  const minuteValue = Number(minutes);
+  const secondValue = Number(seconds);
   return minuteValue * 60 + secondValue;
 }
 
@@ -38,23 +53,14 @@ export function splitTimeOffsetSeconds(timeOffsetSeconds: number | null | undefi
 }
 
 export function validateQuestionTimestamps(questions: TimestampedQuestionInput[]): string | null {
-  const seenTimestamps = new Set<number>();
-
   for (const question of questions) {
     if (question.isPreLecture) continue;
 
     const timestamp = question.timeOffsetSeconds;
-    if (timestamp == null) {
-      return 'Each checkpoint question must have a timestamp.';
-    }
+    if (timestamp == null) continue;
     if (typeof timestamp !== 'number' || !Number.isInteger(timestamp) || timestamp < 0) {
       return 'Checkpoint timestamps must be non-negative whole seconds.';
     }
-    if (seenTimestamps.has(timestamp)) {
-      return 'Checkpoint timestamps must be unique.';
-    }
-
-    seenTimestamps.add(timestamp);
   }
 
   return null;

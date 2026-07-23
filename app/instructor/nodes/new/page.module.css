@@ -89,6 +89,12 @@
   color: #374151;
 }
 
+.timestampHelp {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
 @media (max-width: 600px) {
   .fieldRow {
     grid-template-columns: 1fr;

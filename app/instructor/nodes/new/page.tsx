@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateClientId } from '@/lib/generateClientId';
-import { combineTimestampParts, validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
+import {
+  combineTimestampParts,
+  validateQuestionTimestamps,
+  validateTimestampParts,
+} from '@/app/utils/questionTimestamps';
 import styles from './page.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -38,9 +42,9 @@ interface Question {
   timestampSeconds: string;
 }
 
-function makeQuestion(isPreLecture = false): Question {
+function makeQuestion(isPreLecture = false, id = generateClientId('question')): Question {
   return {
-    id: generateClientId('question'),
+    id,
     prompt: '',
     questionType: 'multipleChoice',
     isPreLecture,
@@ -68,6 +72,8 @@ function serializeOptions(q: Question): McOptions | ShortAnswerOptions {
 
 export default function NewNodePage() {
   const router = useRouter();
+  const initialPreLectureQuestionId = useId();
+  const initialCheckpointQuestionId = useId();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,10 +84,14 @@ export default function NewNodePage() {
 
   // Pre-lecture quiz
   const [hasPreLecture, setHasPreLecture] = useState(false);
-  const [preLectureQuestions, setPreLectureQuestions] = useState<Question[]>([makeQuestion(true)]);
+  const [preLectureQuestions, setPreLectureQuestions] = useState<Question[]>(() => [
+    makeQuestion(true, initialPreLectureQuestionId),
+  ]);
 
   // Checkpoint questions
-  const [checkpointQuestions, setCheckpointQuestions] = useState<Question[]>([makeQuestion(false)]);
+  const [checkpointQuestions, setCheckpointQuestions] = useState<Question[]>(() => [
+    makeQuestion(false, initialCheckpointQuestionId),
+  ]);
 
   // ── Question helpers ──────────────────────────────────────────────────────
 
@@ -139,6 +149,15 @@ export default function NewNodePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const timestampPartsError =
+      checkpointQuestions
+        .map((q) => validateTimestampParts(q.timestampMinutes, q.timestampSeconds))
+        .find((timestampError) => timestampError !== null) ?? null;
+    if (timestampPartsError) {
+      setError(timestampPartsError);
+      return;
+    }
 
     const allQuestions = [...(hasPreLecture ? preLectureQuestions : []), ...checkpointQuestions].map((q, idx) => ({
       sortOrder: idx,
@@ -356,16 +375,13 @@ function QuestionEditor({
 
       {!q.isPreLecture && (
         <div className={styles.timestampFields}>
-          <span className={styles.timestampLabel}>
-            Video timestamp <span className={styles.required}>*</span>
-          </span>
+          <span className={styles.timestampLabel}>Video timestamp (optional)</span>
           <label className={styles.field}>
             Minutes
             <input
               type="number"
               min={0}
               step={1}
-              required
               value={q.timestampMinutes}
               onChange={(e) => onUpdate({ timestampMinutes: e.target.value })}
               placeholder="0"
@@ -378,12 +394,12 @@ function QuestionEditor({
               min={0}
               max={59}
               step={1}
-              required
               value={q.timestampSeconds}
               onChange={(e) => onUpdate({ timestampSeconds: e.target.value })}
               placeholder="00"
             />
           </label>
+          <span className={styles.timestampHelp}>Leave blank to show this question after the video.</span>
         </div>
       )}
 
