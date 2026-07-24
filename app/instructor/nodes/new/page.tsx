@@ -8,22 +8,23 @@ import {
   validateQuestionTimestamps,
   validateTimestampParts,
 } from '@/app/utils/questionTimestamps';
+import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
+import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import styles from './page.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type QuestionType = 'multipleChoice' | 'shortAnswer';
+type ShortAnswerMode = 'exact' | 'range';
 
 interface McOptions {
   type: 'multipleChoice';
   choices: string[];
 }
 
-interface ShortAnswerOptions {
-  type: 'shortAnswer';
-  expectedAnswer: number;
-  tolerancePercent: number;
-}
+type ShortAnswerOptions =
+  | { type: 'shortAnswer'; answerMode: 'exact'; expectedAnswer: number }
+  | { type: 'shortAnswer'; answerMode: 'range'; minimumAnswer: number; maximumAnswer: number };
 
 interface Question {
   id: string;
@@ -32,10 +33,12 @@ interface Question {
   isPreLecture: boolean;
   // multiple choice
   choices: string[];
-  correctIndex: number | null;
+  correctIndices: number[];
   // short answer
+  answerMode: ShortAnswerMode;
   expectedAnswer: string;
-  tolerancePercent: string;
+  minimumAnswer: string;
+  maximumAnswer: string;
 
   // Checkpoint timestamp inputs; pre-lecture questions leave these blank.
   timestampMinutes: string;
@@ -49,9 +52,11 @@ function makeQuestion(isPreLecture = false, id = generateClientId('question')): 
     questionType: 'multipleChoice',
     isPreLecture,
     choices: ['', ''],
-    correctIndex: null,
+    correctIndices: [],
+    answerMode: 'exact',
     expectedAnswer: '',
-    tolerancePercent: '5',
+    minimumAnswer: '',
+    maximumAnswer: '',
     timestampMinutes: '',
     timestampSeconds: '',
   };
@@ -61,10 +66,18 @@ function serializeOptions(q: Question): McOptions | ShortAnswerOptions {
   if (q.questionType === 'multipleChoice') {
     return { type: 'multipleChoice', choices: q.choices };
   }
+  if (q.answerMode === 'exact') {
+    return {
+      type: 'shortAnswer',
+      answerMode: 'exact',
+      expectedAnswer: q.expectedAnswer.trim() === '' ? Number.NaN : Number(q.expectedAnswer),
+    };
+  }
   return {
     type: 'shortAnswer',
-    expectedAnswer: Number(q.expectedAnswer),
-    tolerancePercent: Number(q.tolerancePercent),
+    answerMode: 'range',
+    minimumAnswer: q.minimumAnswer.trim() === '' ? Number.NaN : Number(q.minimumAnswer),
+    maximumAnswer: q.maximumAnswer.trim() === '' ? Number.NaN : Number(q.maximumAnswer),
   };
 }
 
@@ -133,13 +146,10 @@ export default function NewNodePage() {
       list.map((q) => {
         if (q.id !== qId) return q;
         const choices = q.choices.filter((_, i) => i !== choiceIdx);
-        const correctIndex =
-          q.correctIndex === choiceIdx
-            ? null
-            : q.correctIndex !== null && q.correctIndex > choiceIdx
-              ? q.correctIndex - 1
-              : q.correctIndex;
-        return { ...q, choices, correctIndex };
+        const correctIndices = q.correctIndices
+          .filter((index) => index !== choiceIdx)
+          .map((index) => (index > choiceIdx ? index - 1 : index));
+        return { ...q, choices, correctIndices };
       })
     );
   }
@@ -163,7 +173,7 @@ export default function NewNodePage() {
       sortOrder: idx,
       prompt: q.prompt,
       options: serializeOptions(q),
-      correctIndex: q.questionType === 'multipleChoice' ? q.correctIndex : null,
+      correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
       isPreLecture: q.isPreLecture,
       timeOffsetSeconds: q.isPreLecture ? null : combineTimestampParts(q.timestampMinutes, q.timestampSeconds),
     }));
@@ -171,6 +181,18 @@ export default function NewNodePage() {
     const timestampError = validateQuestionTimestamps(allQuestions);
     if (timestampError) {
       setError(timestampError);
+      return;
+    }
+
+    const correctAnswersError = validateMultipleChoiceAnswers(allQuestions);
+    if (correctAnswersError) {
+      setError(correctAnswersError);
+      return;
+    }
+
+    const shortAnswerError = validateShortAnswerOptions(allQuestions);
+    if (shortAnswerError) {
+      setError(shortAnswerError);
       return;
     }
 
@@ -359,7 +381,7 @@ function QuestionEditor({
             Type:
             <select
               value={q.questionType}
-              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndex: null })}
+              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndices: [] })}
             >
               <option value="multipleChoice">Multiple choice</option>
               <option value="shortAnswer">Numeric short answer</option>
@@ -418,14 +440,19 @@ function QuestionEditor({
 
       {q.questionType === 'multipleChoice' ? (
         <div className={styles.choiceList}>
-          <p className={styles.choiceLabel}>Answer choices (select the correct one)</p>
+          <p className={styles.choiceLabel}>Answer choices (select all correct answers)</p>
           {q.choices.map((choice, ci) => (
             <div key={ci} className={styles.choiceRow}>
               <input
-                type="radio"
-                name={`correct-${q.id}`}
-                checked={q.correctIndex === ci}
-                onChange={() => onUpdate({ correctIndex: ci })}
+                type="checkbox"
+                checked={q.correctIndices.includes(ci)}
+                onChange={() =>
+                  onUpdate({
+                    correctIndices: q.correctIndices.includes(ci)
+                      ? q.correctIndices.filter((index) => index !== ci)
+                      : [...q.correctIndices, ci].sort((a, b) => a - b),
+                  })
+                }
                 title="Mark as correct"
               />
               <input
@@ -441,38 +468,70 @@ function QuestionEditor({
               )}
             </div>
           ))}
-          {q.choices.length < 6 && (
+          {q.choices.length < 8 && (
             <button type="button" className={styles.addChoiceBtn} onClick={onAddChoice}>
               + Add choice
             </button>
           )}
         </div>
       ) : (
-        <div className={styles.fieldRow}>
+        <>
           <label className={styles.field}>
-            Expected answer
-            <input
-              type="number"
-              step="any"
-              required
-              value={q.expectedAnswer}
-              onChange={(e) => onUpdate({ expectedAnswer: e.target.value })}
-              placeholder="42"
-            />
+            Answer mode
+            <select
+              value={q.answerMode}
+              onChange={(e) =>
+                onUpdate({
+                  answerMode: e.target.value as ShortAnswerMode,
+                  expectedAnswer: '',
+                  minimumAnswer: '',
+                  maximumAnswer: '',
+                })
+              }
+            >
+              <option value="exact">Exact answer</option>
+              <option value="range">Answer range</option>
+            </select>
           </label>
-          <label className={styles.field}>
-            Tolerance (%)
-            <input
-              type="number"
-              min={0}
-              max={100}
-              required
-              value={q.tolerancePercent}
-              onChange={(e) => onUpdate({ tolerancePercent: e.target.value })}
-              placeholder="5"
-            />
-          </label>
-        </div>
+          {q.answerMode === 'exact' ? (
+            <label className={styles.field}>
+              Expected answer
+              <input
+                type="number"
+                step="any"
+                required
+                value={q.expectedAnswer}
+                onChange={(e) => onUpdate({ expectedAnswer: e.target.value })}
+                placeholder="42"
+              />
+            </label>
+          ) : (
+            <div className={styles.fieldRow}>
+              <label className={styles.field}>
+                Minimum answer
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  value={q.minimumAnswer}
+                  onChange={(e) => onUpdate({ minimumAnswer: e.target.value })}
+                  placeholder="40"
+                />
+              </label>
+              <label className={styles.field}>
+                Maximum answer
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  value={q.maximumAnswer}
+                  onChange={(e) => onUpdate({ maximumAnswer: e.target.value })}
+                  placeholder="45"
+                />
+              </label>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

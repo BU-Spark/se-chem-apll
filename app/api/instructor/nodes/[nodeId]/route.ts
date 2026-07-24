@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
+import { getMultipleChoiceChoices, validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
+import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 
 interface RouteContext {
   params: Promise<{ nodeId: string }>;
@@ -42,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       sortOrder: number;
       prompt: string;
       options: unknown;
-      correctIndex?: number | null;
+      correctIndices?: unknown;
       isPreLecture?: boolean;
       timeOffsetSeconds?: number | null;
     }>;
@@ -51,6 +53,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const timestampError = questions ? validateQuestionTimestamps(questions) : null;
   if (timestampError) {
     return NextResponse.json({ error: timestampError }, { status: 422 });
+  }
+
+  const correctAnswersError = questions ? validateMultipleChoiceAnswers(questions) : null;
+  if (correctAnswersError) {
+    return NextResponse.json({ error: correctAnswersError }, { status: 422 });
+  }
+
+  const shortAnswerError = questions ? validateShortAnswerOptions(questions) : null;
+  if (shortAnswerError) {
+    return NextResponse.json({ error: shortAnswerError }, { status: 422 });
   }
 
   const node = await prisma.$transaction(async (tx) => {
@@ -71,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
               sortOrder: q.sortOrder,
               prompt: q.prompt,
               options: q.options as object,
-              correctIndex: q.correctIndex ?? null,
+              correctIndices: getMultipleChoiceChoices(q.options) ? (q.correctIndices as number[]) : [],
               isPreLecture: q.isPreLecture ?? false,
               timeOffsetSeconds: q.isPreLecture ? null : (q.timeOffsetSeconds ?? null),
             })),

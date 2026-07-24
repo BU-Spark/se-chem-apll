@@ -10,9 +10,12 @@ import {
   validateQuestionTimestamps,
   validateTimestampParts,
 } from '@/app/utils/questionTimestamps';
+import { getMultipleChoiceChoices, validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
+import { parseShortAnswerOptions, validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import styles from '../../new/page.module.css';
 
 type QuestionType = 'multipleChoice' | 'shortAnswer';
+type ShortAnswerMode = 'exact' | 'range';
 
 interface LocalQuestion {
   id: string;
@@ -21,16 +24,18 @@ interface LocalQuestion {
   questionType: QuestionType;
   isPreLecture: boolean;
   choices: string[];
-  correctIndex: number | null;
+  correctIndices: number[];
+  answerMode: ShortAnswerMode;
   expectedAnswer: string;
-  tolerancePercent: string;
+  minimumAnswer: string;
+  maximumAnswer: string;
   timestampMinutes: string;
   timestampSeconds: string;
 }
 
 function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
-  const opts = q.options as Record<string, unknown>;
-  const isShortAnswer = opts.type === 'shortAnswer';
+  const shortAnswer = parseShortAnswerOptions(q.options);
+  const isShortAnswer = shortAnswer !== null;
   const timestamp = splitTimeOffsetSeconds(q.timeOffsetSeconds);
   return {
     id: q.id,
@@ -38,10 +43,12 @@ function dbQuestionToLocal(q: NodeQuestion): LocalQuestion {
     prompt: q.prompt,
     questionType: isShortAnswer ? 'shortAnswer' : 'multipleChoice',
     isPreLecture: q.isPreLecture,
-    choices: isShortAnswer ? [] : ((opts.choices as string[]) ?? []),
-    correctIndex: q.correctIndex ?? null,
-    expectedAnswer: isShortAnswer ? String(opts.expectedAnswer ?? '') : '',
-    tolerancePercent: isShortAnswer ? String(opts.tolerancePercent ?? '5') : '5',
+    choices: isShortAnswer ? [] : (getMultipleChoiceChoices(q.options) ?? []),
+    correctIndices: q.correctIndices,
+    answerMode: shortAnswer?.answerMode ?? 'exact',
+    expectedAnswer: shortAnswer?.answerMode === 'exact' ? String(shortAnswer.expectedAnswer) : '',
+    minimumAnswer: shortAnswer?.answerMode === 'range' ? String(shortAnswer.minimumAnswer) : '',
+    maximumAnswer: shortAnswer?.answerMode === 'range' ? String(shortAnswer.maximumAnswer) : '',
     timestampMinutes: timestamp.minutes,
     timestampSeconds: timestamp.seconds,
   };
@@ -55,9 +62,11 @@ function makeQuestion(isPreLecture = false, id = generateClientId('question')): 
     questionType: 'multipleChoice',
     isPreLecture,
     choices: ['', ''],
-    correctIndex: null,
+    correctIndices: [],
+    answerMode: 'exact',
     expectedAnswer: '',
-    tolerancePercent: '5',
+    minimumAnswer: '',
+    maximumAnswer: '',
     timestampMinutes: '',
     timestampSeconds: '',
   };
@@ -67,10 +76,18 @@ function serializeOptions(q: LocalQuestion) {
   if (q.questionType === 'multipleChoice') {
     return { type: 'multipleChoice', choices: q.choices };
   }
+  if (q.answerMode === 'exact') {
+    return {
+      type: 'shortAnswer',
+      answerMode: 'exact',
+      expectedAnswer: q.expectedAnswer.trim() === '' ? Number.NaN : Number(q.expectedAnswer),
+    };
+  }
   return {
     type: 'shortAnswer',
-    expectedAnswer: Number(q.expectedAnswer),
-    tolerancePercent: Number(q.tolerancePercent),
+    answerMode: 'range',
+    minimumAnswer: q.minimumAnswer.trim() === '' ? Number.NaN : Number(q.minimumAnswer),
+    maximumAnswer: q.maximumAnswer.trim() === '' ? Number.NaN : Number(q.maximumAnswer),
   };
 }
 
@@ -138,13 +155,10 @@ export default function NodeEditForm({ node }: Props) {
       list.map((q) => {
         if (q.id !== qId) return q;
         const choices = q.choices.filter((_, i) => i !== ci);
-        const correctIndex =
-          q.correctIndex === ci
-            ? null
-            : q.correctIndex !== null && q.correctIndex > ci
-              ? q.correctIndex - 1
-              : q.correctIndex;
-        return { ...q, choices, correctIndex };
+        const correctIndices = q.correctIndices
+          .filter((index) => index !== ci)
+          .map((index) => (index > ci ? index - 1 : index));
+        return { ...q, choices, correctIndices };
       })
     );
   }
@@ -166,7 +180,7 @@ export default function NodeEditForm({ node }: Props) {
       sortOrder: idx,
       prompt: q.prompt,
       options: serializeOptions(q),
-      correctIndex: q.questionType === 'multipleChoice' ? q.correctIndex : null,
+      correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
       isPreLecture: q.isPreLecture,
       timeOffsetSeconds: q.isPreLecture ? null : combineTimestampParts(q.timestampMinutes, q.timestampSeconds),
     }));
@@ -174,6 +188,18 @@ export default function NodeEditForm({ node }: Props) {
     const timestampError = validateQuestionTimestamps(allQuestions);
     if (timestampError) {
       setError(timestampError);
+      return;
+    }
+
+    const correctAnswersError = validateMultipleChoiceAnswers(allQuestions);
+    if (correctAnswersError) {
+      setError(correctAnswersError);
+      return;
+    }
+
+    const shortAnswerError = validateShortAnswerOptions(allQuestions);
+    if (shortAnswerError) {
+      setError(shortAnswerError);
       return;
     }
 
@@ -355,7 +381,7 @@ function QuestionEditor({
             Type:
             <select
               value={q.questionType}
-              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndex: null })}
+              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndices: [] })}
             >
               <option value="multipleChoice">Multiple choice</option>
               <option value="shortAnswer">Numeric short answer</option>
@@ -405,14 +431,20 @@ function QuestionEditor({
       </label>
       {q.questionType === 'multipleChoice' ? (
         <div className={styles.choiceList}>
-          <p className={styles.choiceLabel}>Answer choices (select the correct one)</p>
+          <p className={styles.choiceLabel}>Answer choices (select all correct answers)</p>
           {q.choices.map((choice, ci) => (
             <div key={ci} className={styles.choiceRow}>
               <input
-                type="radio"
-                name={`correct-${q.id}`}
-                checked={q.correctIndex === ci}
-                onChange={() => onUpdate({ correctIndex: ci })}
+                type="checkbox"
+                checked={q.correctIndices.includes(ci)}
+                onChange={() =>
+                  onUpdate({
+                    correctIndices: q.correctIndices.includes(ci)
+                      ? q.correctIndices.filter((index) => index !== ci)
+                      : [...q.correctIndices, ci].sort((a, b) => a - b),
+                  })
+                }
+                title="Mark as correct"
               />
               <input
                 value={choice}
@@ -427,36 +459,67 @@ function QuestionEditor({
               )}
             </div>
           ))}
-          {q.choices.length < 6 && (
+          {q.choices.length < 8 && (
             <button type="button" className={styles.addChoiceBtn} onClick={onAddChoice}>
               + Add choice
             </button>
           )}
         </div>
       ) : (
-        <div className={styles.fieldRow}>
+        <>
           <label className={styles.field}>
-            Expected answer
-            <input
-              type="number"
-              step="any"
-              required
-              value={q.expectedAnswer}
-              onChange={(e) => onUpdate({ expectedAnswer: e.target.value })}
-            />
+            Answer mode
+            <select
+              value={q.answerMode}
+              onChange={(e) =>
+                onUpdate({
+                  answerMode: e.target.value as ShortAnswerMode,
+                  expectedAnswer: '',
+                  minimumAnswer: '',
+                  maximumAnswer: '',
+                })
+              }
+            >
+              <option value="exact">Exact answer</option>
+              <option value="range">Answer range</option>
+            </select>
           </label>
-          <label className={styles.field}>
-            Tolerance (%)
-            <input
-              type="number"
-              min={0}
-              max={100}
-              required
-              value={q.tolerancePercent}
-              onChange={(e) => onUpdate({ tolerancePercent: e.target.value })}
-            />
-          </label>
-        </div>
+          {q.answerMode === 'exact' ? (
+            <label className={styles.field}>
+              Expected answer
+              <input
+                type="number"
+                step="any"
+                required
+                value={q.expectedAnswer}
+                onChange={(e) => onUpdate({ expectedAnswer: e.target.value })}
+              />
+            </label>
+          ) : (
+            <div className={styles.fieldRow}>
+              <label className={styles.field}>
+                Minimum answer
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  value={q.minimumAnswer}
+                  onChange={(e) => onUpdate({ minimumAnswer: e.target.value })}
+                />
+              </label>
+              <label className={styles.field}>
+                Maximum answer
+                <input
+                  type="number"
+                  step="any"
+                  required
+                  value={q.maximumAnswer}
+                  onChange={(e) => onUpdate({ maximumAnswer: e.target.value })}
+                />
+              </label>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

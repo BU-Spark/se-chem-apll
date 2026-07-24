@@ -38,7 +38,7 @@ describe('NodeEditForm checkpoint timestamps', () => {
           sortOrder: 0,
           prompt: 'What should happen next?',
           options: { type: 'multipleChoice', choices: ['A', 'B'] },
-          correctIndex: 0,
+          correctIndices: [0],
           isPreLecture: false,
           timeOffsetSeconds: 125,
           createdAt: now,
@@ -52,6 +52,7 @@ describe('NodeEditForm checkpoint timestamps', () => {
 
     expect(screen.getByLabelText('Minutes')).toHaveValue(2);
     expect(screen.getByLabelText('Seconds')).toHaveValue(5);
+    expect(screen.getAllByTitle('Mark as correct')[0]).toBeChecked();
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
@@ -60,6 +61,7 @@ describe('NodeEditForm checkpoint timestamps', () => {
     const body = JSON.parse(request.body);
 
     expect(body.questions[0].timeOffsetSeconds).toBe(125);
+    expect(body.questions[0].correctIndices).toEqual([0]);
     expect(body.questions[0].options).not.toHaveProperty('timeOffsetSeconds');
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
@@ -83,7 +85,7 @@ describe('NodeEditForm checkpoint timestamps', () => {
           sortOrder: 0,
           prompt: 'Question after the video',
           options: { type: 'multipleChoice', choices: ['A', 'B'] },
-          correctIndex: 0,
+          correctIndices: [0],
           isPreLecture: false,
           timeOffsetSeconds: null,
           createdAt: now,
@@ -104,5 +106,91 @@ describe('NodeEditForm checkpoint timestamps', () => {
     const request = (global.fetch as jest.Mock).mock.calls[0][1];
     const body = JSON.parse(request.body);
     expect(body.questions[0].timeOffsetSeconds).toBeNull();
+  });
+
+  it('loads and updates multiple correct answers', async () => {
+    const now = new Date();
+    const node: ComponentProps<typeof NodeEditForm>['node'] = {
+      id: 'node-1',
+      title: 'Safety video',
+      summary: null,
+      videoUrl: null,
+      muxPlaybackId: null,
+      thumbnailUrl: null,
+      estimatedMinutes: null,
+      createdAt: now,
+      updatedAt: now,
+      questions: [
+        {
+          id: 'question-1',
+          nodeId: 'node-1',
+          sortOrder: 0,
+          prompt: 'Select all',
+          options: { type: 'multipleChoice', choices: ['A', 'B'] },
+          correctIndices: [0],
+          isPreLecture: false,
+          timeOffsetSeconds: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+
+    const user = userEvent.setup();
+    render(<NodeEditForm node={node} />);
+    const answerCheckboxes = screen.getAllByTitle('Mark as correct');
+    expect(answerCheckboxes[0]).toBeChecked();
+    await user.click(answerCheckboxes[1]);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(JSON.parse(request.body).questions[0].correctIndices).toEqual([0, 1]);
+  });
+
+  it('loads a legacy tolerance answer as a range and rewrites it explicitly', async () => {
+    const now = new Date();
+    const node: ComponentProps<typeof NodeEditForm>['node'] = {
+      id: 'node-1',
+      title: 'Measurement',
+      summary: null,
+      videoUrl: null,
+      muxPlaybackId: null,
+      thumbnailUrl: null,
+      estimatedMinutes: null,
+      createdAt: now,
+      updatedAt: now,
+      questions: [
+        {
+          id: 'question-1',
+          nodeId: 'node-1',
+          sortOrder: 0,
+          prompt: 'Estimate',
+          options: { type: 'shortAnswer', expectedAnswer: 100, tolerancePercent: 5 },
+          correctIndices: [],
+          isPreLecture: false,
+          timeOffsetSeconds: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+
+    const user = userEvent.setup();
+    render(<NodeEditForm node={node} />);
+
+    expect(screen.getByLabelText('Answer mode')).toHaveValue('range');
+    expect(screen.getByLabelText('Minimum answer')).toHaveValue(95);
+    expect(screen.getByLabelText('Maximum answer')).toHaveValue(105);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(JSON.parse(request.body).questions[0].options).toEqual({
+      type: 'shortAnswer',
+      answerMode: 'range',
+      minimumAnswer: 95,
+      maximumAnswer: 105,
+    });
   });
 });

@@ -51,7 +51,7 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
             sortOrder: 0,
             prompt: 'Checkpoint',
             options: ['A', 'B'],
-            correctIndex: 1,
+            correctIndices: [1],
             isPreLecture: false,
             timeOffsetSeconds: 125,
           },
@@ -84,7 +84,9 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   ])('returns 422 for a %s checkpoint timestamp', async (_label, timeOffsetSeconds) => {
     const response = await PATCH(
       patchRequest({
-        questions: [{ sortOrder: 0, prompt: 'Checkpoint', options: [], timeOffsetSeconds }],
+        questions: [
+          { sortOrder: 0, prompt: 'Checkpoint', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds },
+        ],
       }) as never,
       context
     );
@@ -97,10 +99,16 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     const response = await PATCH(
       patchRequest({
         questions: [
-          { sortOrder: 0, prompt: 'First', options: [], timeOffsetSeconds: 30 },
-          { sortOrder: 1, prompt: 'Second', options: [], timeOffsetSeconds: 30 },
-          { sortOrder: 2, prompt: 'Third', options: [], timeOffsetSeconds: null },
-          { sortOrder: 3, prompt: 'Fourth', options: [] },
+          { sortOrder: 0, prompt: 'First', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds: 30 },
+          { sortOrder: 1, prompt: 'Second', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds: 30 },
+          {
+            sortOrder: 2,
+            prompt: 'Third',
+            options: ['A', 'B'],
+            correctIndices: [0],
+            timeOffsetSeconds: null,
+          },
+          { sortOrder: 3, prompt: 'Fourth', options: ['A', 'B'], correctIndices: [0] },
         ],
       }) as never,
       context
@@ -122,7 +130,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
           {
             sortOrder: 0,
             prompt: 'Pre-lecture',
-            options: ['A'],
+            options: ['A', 'B'],
+            correctIndices: [0],
             isPreLecture: true,
             timeOffsetSeconds: 99,
           },
@@ -160,5 +169,24 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
       })
     );
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('questions');
+  });
+
+  it('persists multiple correct answers', async () => {
+    const response = await PATCH(
+      patchRequest({
+        questions: [
+          {
+            sortOrder: 0,
+            prompt: 'Select all',
+            options: { type: 'multipleChoice', choices: ['A', 'B', 'C'] },
+            correctIndices: [0, 2],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].data.questions.create[0].correctIndices).toEqual([0, 2]);
   });
 });
