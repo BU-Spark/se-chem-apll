@@ -57,14 +57,20 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   // Initialize lesson nodes from existing data
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(() => {
     const preLectureMap = new Map(availableNodes.map((n) => [n.id, n.preLectureCount]));
-    return lesson.lessonNodes.map((ln) => ({
-      instanceId: ln.id ?? generateClientId('lesson-node'),
-      nodeId: ln.nodeId,
-      title: ln.node.title,
-      passingPercent: ln.passingPercent.toString(),
-      isRequired: ln.isRequired,
-      preLectureCount: preLectureMap.get(ln.nodeId) ?? 0,
-    }));
+    return lesson.lessonNodes.map((ln) => {
+      const bank = preLectureMap.get(ln.nodeId) ?? 0;
+      const savedCount = (ln as LessonNode & { quizQuestionCount?: number }).quizQuestionCount;
+
+      return {
+        instanceId: ln.id ?? generateClientId('lesson-node'),
+        nodeId: ln.nodeId,
+        title: ln.node.title,
+        passingPercent: ln.passingPercent.toString(),
+        quizQuestionCount: savedCount !== undefined ? String(savedCount) : bank > 0 ? String(bank) : '0',
+        isRequired: ln.isRequired,
+        preLectureCount: bank,
+      };
+    });
   });
 
   // instanceId === LessonNode.id for persisted nodes, matching edge sourceId/targetId from DB
@@ -104,6 +110,22 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       return;
     }
 
+    if (
+      lessonNodes.some((entry) => {
+        if (entry.preLectureCount === 0) {
+          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount != '';
+        }
+        return (
+          entry.quizQuestionCount === '' ||
+          !Number.isInteger(Number(entry.quizQuestionCount)) ||
+          Number(entry.quizQuestionCount) < 1
+        );
+      })
+    ) {
+      setError('Choose a whole-number quiz question count between 1 for every node with a pre-quiz.');
+      return;
+    }
+
     if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
       setError('Open date must be before due date.');
       return;
@@ -137,6 +159,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
             nodeId: entry.nodeId,
             sortOrder: idx,
             passingPercent: Number(entry.passingPercent),
+            quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
           edges: serialisedEdges,
