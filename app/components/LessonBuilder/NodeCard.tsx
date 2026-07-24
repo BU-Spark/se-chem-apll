@@ -9,6 +9,7 @@ export interface LessonNodeEntry {
   nodeId: string;
   title: string;
   passingPercent: string;
+  quizQuestionCount: string;
   isRequired: boolean;
   preLectureCount: number;
 }
@@ -30,6 +31,11 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
+
+  const requestedCount = Number(entry.quizQuestionCount);
+  const hasRequestedCount = entry.quizQuestionCount !== '' && Number.isInteger(requestedCount);
+  const showEqualMessage = entry.preLectureCount > 0 && hasRequestedCount && requestedCount === entry.preLectureCount;
+  const showGreaterMessage = entry.preLectureCount > 0 && hasRequestedCount && requestedCount > entry.preLectureCount;
 
   return (
     <div ref={setNodeRef} style={style} className={styles.nodeCard}>
@@ -61,6 +67,19 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
               onChange={(e) => onChange({ passingPercent: e.target.value })}
             />
           </label>
+          {entry.preLectureCount > 0 && (
+            <label className={styles.nodeCardField}>
+              Quiz questions
+              <input
+                type="number"
+                min={0}
+                required={entry.preLectureCount > 0}
+                placeholder="e.g. 5"
+                value={entry.quizQuestionCount}
+                onChange={(e) => onChange({ quizQuestionCount: e.target.value })}
+              />
+            </label>
+          )}
           <label className={styles.nodeCardCheckbox}>
             <input
               type="checkbox"
@@ -70,6 +89,19 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
             Required
           </label>
         </div>
+        {showEqualMessage && (
+          <p className={styles.nodeCardHint}>
+            The amount of questions shown in the quiz [{requestedCount}] is the same amount that is in the question bank
+            [{entry.preLectureCount}], so there is no variability in questions.
+          </p>
+        )}
+
+        {showGreaterMessage && (
+          <p className={styles.nodeCardHintWarning}>
+            The number of questions shown in the quiz [{requestedCount}] is greater than the amount that is in the
+            question bank [{entry.preLectureCount}]. Only [{entry.preLectureCount}] questions will be shown.
+          </p>
+        )}
       </div>
     </div>
   );
