@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
+import { parseShortAnswerOptions, ParsedShortAnswer } from '@/app/utils/shortAnswer';
 import styles from './page.module.css';
 
 type Question = {
@@ -10,9 +12,7 @@ type Question = {
   options: unknown;
 };
 
-type ParsedQuestionFormat =
-  | { type: 'multipleChoice'; choices: string[] }
-  | { type: 'shortAnswer'; expectedAnswer: number; tolerancePercent: number };
+type ParsedQuestionFormat = { type: 'multipleChoice'; choices: string[] } | ParsedShortAnswer;
 
 type Props = {
   lessonNodeId: string;
@@ -30,42 +30,22 @@ type SubmitResponse = {
 
 export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, questions }: Props) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<Record<string, number[]>>({});
   const [shortAnswers, setShortAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResponse | null>(null);
 
   function parseQuestionFormat(options: unknown): ParsedQuestionFormat | null {
-    if (Array.isArray(options) && options.every((v) => typeof v === 'string')) {
-      return { type: 'multipleChoice', choices: options };
-    }
-    if (options && typeof options === 'object') {
-      const opt = options as {
-        type?: string;
-        choices?: unknown;
-        expectedAnswer?: unknown;
-        tolerancePercent?: unknown;
-      };
-      if (opt.type === 'multipleChoice' && Array.isArray(opt.choices)) {
-        return { type: 'multipleChoice', choices: opt.choices.map((c) => String(c)) };
-      }
-      if (opt.type === 'shortAnswer') {
-        return {
-          type: 'shortAnswer',
-          expectedAnswer: Number(opt.expectedAnswer),
-          tolerancePercent: Number(opt.tolerancePercent ?? 0),
-        };
-      }
-    }
-    return null;
+    const choices = getMultipleChoiceChoices(options);
+    return choices ? { type: 'multipleChoice', choices } : parseShortAnswerOptions(options);
   }
 
   const isComplete = useMemo(() => {
     return questions.every((q) => {
       const format = parseQuestionFormat(q.options);
       if (!format) return false;
-      if (format.type === 'multipleChoice') return selected[q.id] !== undefined;
+      if (format.type === 'multipleChoice') return (selected[q.id]?.length ?? 0) > 0;
       return shortAnswers[q.id] !== undefined && String(shortAnswers[q.id]).trim().length > 0;
     });
   }, [questions, selected, shortAnswers]);
@@ -78,7 +58,7 @@ export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, ques
     try {
       const answers = questions.map((q) => ({
         questionId: q.id,
-        selectedIndex: selected[q.id],
+        selectedIndices: selected[q.id],
         rawAnswer: shortAnswers[q.id],
       }));
 
@@ -129,14 +109,15 @@ export default function PreQuizForm({ lessonNodeId, lessonTitle, nodeTitle, ques
                     {format.choices.map((option, optionIdx) => (
                       <label key={`${q.id}-${optionIdx}`} className={styles.optionLabel}>
                         <input
-                          type="radio"
-                          name={q.id}
+                          type="checkbox"
                           value={optionIdx}
-                          checked={selected[q.id] === optionIdx}
+                          checked={selected[q.id]?.includes(optionIdx) ?? false}
                           onChange={() =>
                             setSelected((prev) => ({
                               ...prev,
-                              [q.id]: optionIdx,
+                              [q.id]: prev[q.id]?.includes(optionIdx)
+                                ? prev[q.id].filter((index) => index !== optionIdx)
+                                : [...(prev[q.id] ?? []), optionIdx].sort((a, b) => a - b),
                             }))
                           }
                         />
