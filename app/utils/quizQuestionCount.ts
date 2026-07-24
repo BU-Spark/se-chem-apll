@@ -8,3 +8,16 @@ export function effectiveQuizQuestionCount(requested: number, bankSize: number):
   if (bankSize <= 0) return 0;
   return Math.min(requested, bankSize);
 }
+
+// random shuffling so we give the student a new set from the bank each time
+export function pickRandomQuizQuestions<T>(bank: T[], requestedCount: number): T[] {
+  const count = effectiveQuizQuestionCount(requestedCount, bank.length);
+  if (count === 0) return [];
+
+  const shuffled = [...bank];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, count);
+}
