@@ -171,7 +171,7 @@ model NodeQuestion {
   // For multiple-choice: JSON array of strings, e.g. ["Option A", "Option B"]
   // For short answer:    JSON object, e.g. { type: "shortAnswer", expectedAnswer: 42, tolerancePercent: 5 }
   options           Json
-  correctIndex      Int?
+  correctIndices    Int[]    @default([])
   isPreLecture      Boolean  @default(false)
   timeOffsetSeconds Int?
   createdAt         DateTime @default(now())
@@ -271,14 +271,14 @@ model NodeAttempt {
 }
 
 model NodeResponse {
-  id            String   @id @default(cuid())
-  attemptId     String
-  questionId    String
-  studentId     String
-  selectedIndex Int?
-  rawAnswer     String?
-  isCorrect     Boolean?
-  createdAt     DateTime @default(now())
+  id              String   @id @default(cuid())
+  attemptId       String
+  questionId      String
+  studentId       String
+  selectedIndices Int[]    @default([])
+  rawAnswer       String?
+  isCorrect       Boolean?
+  createdAt       DateTime @default(now())
 
   attempt  NodeAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question NodeQuestion @relation(fields: [questionId], references: [id])
