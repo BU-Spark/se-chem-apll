@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { effectiveQuizQuestionCount } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
   params: Promise<{ lessonNodeId: string }>;
@@ -65,9 +66,34 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   });
   if (!enrollment) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const preQuestions = lessonNode.node.questions;
-  if (preQuestions.length === 0) {
+  const bankQuestions = lessonNode.node.questions;
+  if (bankQuestions.length === 0) {
     return NextResponse.json({ error: 'No pre-quiz configured for this node' }, { status: 422 });
+  }
+
+  // figures out how many questions count, validates the submitted answers
+  // this is it ensure the api expects the same number of answer and only accepts IDs from the real bank
+  const quizCount = effectiveQuizQuestionCount(lessonNode.quizQuestionCount, bankQuestions.length);
+  if (quizCount === 0) {
+    return NextResponse.json({ error: 'No pre-quiz configured for this node' }, { status: 422 });
+  }
+
+  const bankById = new Map(bankQuestions.map((q) => [q.id, q]));
+  const answerQuestionIds = answers.map((a) => a.questionId);
+  const uniqueIds = new Set(answerQuestionIds);
+
+  if (uniqueIds.size !== quizCount || answerQuestionIds.length !== quizCount) {
+    return NextResponse.json({ error: `Pre-quiz requires exactly ${quizCount} answers` }, { status: 422 });
+  }
+
+  // building the questions list so that it can be graded
+  const preQuestions: typeof bankQuestions = [];
+  for (const id of uniqueIds) {
+    const question = bankById.get(id);
+    if (!question) {
+      return NextResponse.json({ error: 'Invalid pre-quiz question' }, { status: 422 });
+    }
+    preQuestions.push(question);
   }
 
   const answerByQuestionId = new Map(answers.map((a) => [a.questionId, a]));

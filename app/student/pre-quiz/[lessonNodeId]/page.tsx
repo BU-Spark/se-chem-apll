@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import PreQuizForm from './PreQuizForm';
+import { pickRandomQuizQuestions } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
   params: Promise<{ lessonNodeId: string }>;
@@ -52,12 +53,15 @@ export default async function StudentPreQuizPage({ params }: RouteContext) {
   });
   if (!enrollment) redirect('/student');
 
+  // find the safe number of questions to use for the quiz
+  const questions = pickRandomQuizQuestions(lessonNode.node.questions, lessonNode.quizQuestionCount);
+
   return (
     <PreQuizForm
       lessonNodeId={lessonNode.id}
       lessonTitle={lessonNode.lesson.title}
       nodeTitle={lessonNode.node.title}
-      questions={lessonNode.node.questions}
+      questions={questions}
     />
   );
 }

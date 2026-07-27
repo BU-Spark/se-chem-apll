@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { isAcyclic } from '@/app/utils/dagValidation';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
+import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
   params: Promise<{ lessonId: string }>;
@@ -57,6 +58,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       nodeId: string;
       sortOrder: number;
       passingPercent?: number;
+      quizQuestionCount?: number;
       isRequired?: boolean;
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
@@ -69,6 +71,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   if (lessonNodes?.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a passingPercent between 0 and 100' },
+      { status: 422 }
+    );
+  }
+
+  if (lessonNodes?.some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
+    return NextResponse.json(
+      { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
     );
   }
@@ -105,6 +114,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             nodeId: ln.nodeId,
             sortOrder: ln.sortOrder,
             passingPercent: ln.passingPercent!,
+            quizQuestionCount: ln.quizQuestionCount!,
             isRequired: ln.isRequired ?? true,
           })),
         },

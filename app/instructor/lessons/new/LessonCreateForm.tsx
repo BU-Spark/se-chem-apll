@@ -65,6 +65,22 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
       return;
     }
 
+    if (
+      lessonNodes.some((entry) => {
+        if (entry.preLectureCount === 0) {
+          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+        }
+        return (
+          entry.quizQuestionCount === '' ||
+          !Number.isInteger(Number(entry.quizQuestionCount)) ||
+          Number(entry.quizQuestionCount) < 1
+        );
+      })
+    ) {
+      setError('Choose a whole-number quiz question count between 1 for every node with a pre-quiz.');
+      return;
+    }
+
     if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
       setError('Open date must be before due date.');
       return;
@@ -88,6 +104,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
             nodeId: entry.nodeId,
             sortOrder: idx,
             passingPercent: Number(entry.passingPercent),
+            quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
         }),

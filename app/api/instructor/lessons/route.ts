@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
+import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
 
 // GET /api/instructor/lessons
 export async function GET() {
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
       nodeId: string;
       sortOrder: number;
       passingPercent?: number;
+      quizQuestionCount?: number;
       isRequired?: boolean;
     }>;
   };
@@ -62,6 +64,14 @@ export async function POST(req: NextRequest) {
   if ((lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a passingPercent between 0 and 100' },
+      { status: 422 }
+    );
+  }
+
+  // same check as above, but for quizQuestionCount
+  if ((lessonNodes ?? []).some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
+    return NextResponse.json(
+      { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
     );
   }
@@ -86,6 +96,7 @@ export async function POST(req: NextRequest) {
           nodeId: ln.nodeId,
           sortOrder: ln.sortOrder,
           passingPercent: ln.passingPercent!,
+          quizQuestionCount: ln.quizQuestionCount!,
           isRequired: ln.isRequired ?? true,
         })),
       },

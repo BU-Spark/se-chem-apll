@@ -192,6 +192,7 @@ model LessonNode {
   nodeId         String
   sortOrder      Int
   passingPercent Int
+  quizQuestionCount Int
   isRequired     Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

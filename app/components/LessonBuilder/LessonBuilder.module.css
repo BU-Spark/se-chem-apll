@@ -243,6 +243,21 @@
   border-color: #1f5fab;
 }
 
+.nodeCardHint,
+.nodeCardHintWarning {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.nodeCardHint {
+  color: #6b7280;
+}
+
+.nodeCardHintWarning {
+  color: #b45309;
+}
+
 /* ── Pre-quiz badge (shared by NodeCard and NodePalette) ──── */
 .preQuizBadge {
   font-size: 0.7rem;

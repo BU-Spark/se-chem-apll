@@ -66,6 +66,7 @@ async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) 
           nodeId: node.id,
           sortOrder: idx,
           passingPercent: 70,
+          quizQuestionCount: 1,
           isRequired: true,
         })),
       },
