@@ -55,18 +55,20 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
     if (
       lessonNodes.some(
         (entry) =>
-          entry.passingPercent === '' ||
-          !Number.isInteger(Number(entry.passingPercent)) ||
-          Number(entry.passingPercent) < 0 ||
-          Number(entry.passingPercent) > 100
+          entry.isRequired &&
+          (entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100)
       )
     ) {
-      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+      setError('Choose a whole-number pass threshold between 0 and 100 for every foundational node.');
       return;
     }
 
     if (
       lessonNodes.some((entry) => {
+        if (!entry.isRequired) return false;
         if (entry.preLectureCount === 0) {
           return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
         }
@@ -77,7 +79,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
         );
       })
     ) {
-      setError('Choose a whole-number quiz question count between 1 for every node with a pre-quiz.');
+      setError('Choose a whole-number quiz question count of at least 1 for every foundational node with a pre-quiz.');
       return;
     }
 
@@ -103,8 +105,8 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
-            passingPercent: Number(entry.passingPercent),
-            quizQuestionCount: Number(entry.quizQuestionCount),
+            passingPercent: entry.isRequired ? Number(entry.passingPercent) : 0,
+            quizQuestionCount: entry.isRequired ? Number(entry.quizQuestionCount || 0) : 0,
             isRequired: entry.isRequired,
           })),
         }),

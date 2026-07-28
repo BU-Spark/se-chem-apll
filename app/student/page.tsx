@@ -5,6 +5,7 @@ import styles from './page.module.css';
 import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
 import NodePreview from '@/app/components/NodePreview/NodePreview';
 import StudentQuizTaskList from '@/app/components/StudentQuizTaskList/StudentQuizTaskList';
+import { getFoundationalAccess, getPreQuizOutcome } from '@/app/utils/foundationalAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -223,21 +224,40 @@ export default async function StudentHomePage() {
                                     };
                                   }[];
                                 }[];
-                              }) => (
-                                <li key={ln.id} className={styles.nodeChip}>
-                                  <div className={styles.nodePreviewWrapper}>
-                                    {/* Render inline preview when available */}
-                                    <NodePreview node={ln.node} />
-                                  </div>
-                                  <StudentQuizTaskList
-                                    isFoundational={ln.isRequired} // temporary
-                                    preQuestionCount={ln.node.questions.filter((q) => q.isPreLecture).length}
-                                    regularQuestionCount={ln.node.questions.filter((q) => !q.isPreLecture).length}
-                                    attempts={ln.attempts}
-                                    lessonNodeId={ln.id}
-                                  />
-                                </li>
-                              )
+                              }) => {
+                                const preQuestionCount = ln.node.questions.filter((q) => q.isPreLecture).length;
+                                const regularQuestionCount = ln.node.questions.filter((q) => !q.isPreLecture).length;
+                                // isRequired is the foundational flag from lesson import
+                                const access = getFoundationalAccess({
+                                  isFoundational: ln.isRequired,
+                                  hasPreQuiz: preQuestionCount > 0,
+                                  preQuizOutcome: getPreQuizOutcome(ln.attempts),
+                                });
+
+                                return (
+                                  <li key={ln.id} className={styles.nodeChip}>
+                                    <div className={styles.nodePreviewWrapper}>
+                                      {/* QEV stand-in: hide video until foundational pre-quiz is resolved, or skip if passed. */}
+                                      {access.qevSkipped ? (
+                                        <p className={styles.qevStatusMessage}>Skipped — passed foundational quiz</p>
+                                      ) : access.qevLocked ? (
+                                        <p className={styles.qevStatusMessage}>
+                                          Complete the pre-quiz to unlock this lesson
+                                        </p>
+                                      ) : (
+                                        <NodePreview node={ln.node} />
+                                      )}
+                                    </div>
+                                    <StudentQuizTaskList
+                                      isFoundational={ln.isRequired}
+                                      preQuestionCount={preQuestionCount}
+                                      regularQuestionCount={regularQuestionCount}
+                                      attempts={ln.attempts}
+                                      lessonNodeId={ln.id}
+                                    />
+                                  </li>
+                                );
+                              }
                             )}
                           </ul>
                         )}
