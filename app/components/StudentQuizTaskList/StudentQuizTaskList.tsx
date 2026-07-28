@@ -1,5 +1,6 @@
 import styles from './StudentQuizTaskList.module.css';
 import Link from 'next/link';
+import { getFoundationalAccess, getPreQuizOutcome } from '@/app/utils/foundationalAccess';
 
 type Attempt = {
   id: string;
@@ -13,7 +14,7 @@ type Attempt = {
   }[];
 };
 
-type QuizTaskStatus = 'available' | 'completed' | 'locked' | 'needs-retry';
+type QuizTaskStatus = 'available' | 'completed' | 'locked' | 'needs-retry' | 'skipped';
 
 type QuizTask = {
   key: 'pre' | 'regular';
@@ -23,12 +24,18 @@ type QuizTask = {
 };
 
 type BuildQuizTasksInput = {
+  isFoundational: boolean;
   preQuestionCount: number;
   regularQuestionCount: number;
   attempts: Attempt[];
 };
 
-export function buildQuizTasks({ preQuestionCount, regularQuestionCount, attempts }: BuildQuizTasksInput): QuizTask[] {
+export function buildQuizTasks({
+  isFoundational,
+  preQuestionCount,
+  regularQuestionCount,
+  attempts,
+}: BuildQuizTasksInput): QuizTask[] {
   const preAnsweredIds = new Set<string>();
   const regularAnsweredIds = new Set<string>();
 
@@ -42,28 +49,42 @@ export function buildQuizTasks({ preQuestionCount, regularQuestionCount, attempt
     }
   }
 
-  const preCompleted = preQuestionCount > 0 && preAnsweredIds.size >= preQuestionCount;
+  const preQuizOutcome = getPreQuizOutcome(attempts);
+  const access = getFoundationalAccess({
+    isFoundational,
+    hasPreQuiz: preQuestionCount > 0,
+    preQuizOutcome,
+  });
+
+  const preTaken = preQuizOutcome === 'passed' || preQuizOutcome === 'failed';
   const regularCompleted = regularQuestionCount > 0 && regularAnsweredIds.size >= regularQuestionCount;
-  const latestCompletedAttempt = attempts.find((attempt) => attempt.completedAt !== null) ?? null;
-  const needsRetry = regularQuestionCount > 0 && !regularCompleted && latestCompletedAttempt?.isPassing === false;
-  const regularLocked = preQuestionCount > 0 && !preCompleted;
+
+  const latestRegularAttempt =
+    attempts.find(
+      (attempt) => attempt.completedAt !== null && attempt.responses.some((response) => !response.question.isPreLecture)
+    ) ?? null;
+
+  const needsRetry = regularQuestionCount > 0 && !regularCompleted && latestRegularAttempt?.isPassing === false;
 
   const tasks: QuizTask[] = [];
 
-  if (preQuestionCount > 0) {
+  if (access.showPreQuiz && preQuestionCount > 0) {
     tasks.push({
       key: 'pre',
       label: 'Pre-quiz',
-      status: preCompleted ? 'completed' : 'available',
-      actionLabel: preCompleted ? 'Review pre-quiz' : 'Start pre-quiz',
+      status: preTaken ? 'completed' : 'available',
+      actionLabel: preTaken ? 'Review pre-quiz' : 'Start pre-quiz',
     });
   }
 
   if (regularQuestionCount > 0) {
     let status: QuizTaskStatus = 'available';
-    if (regularCompleted) {
+
+    if (access.qevSkipped) {
+      status = 'skipped';
+    } else if (regularCompleted) {
       status = 'completed';
-    } else if (regularLocked) {
+    } else if (access.qevLocked) {
       status = 'locked';
     } else if (needsRetry) {
       status = 'needs-retry';
@@ -76,11 +97,13 @@ export function buildQuizTasks({ preQuestionCount, regularQuestionCount, attempt
       actionLabel:
         status === 'completed'
           ? 'Review quiz'
-          : status === 'needs-retry'
-            ? 'Retry quiz'
-            : status === 'locked'
-              ? 'Complete pre-quiz first'
-              : 'Start quiz',
+          : status === 'skipped'
+            ? 'Skipped — passed foundational quiz'
+            : status === 'needs-retry'
+              ? 'Retry quiz'
+              : status === 'locked'
+                ? 'Complete pre-quiz first'
+                : 'Start quiz',
     });
   }
 
@@ -89,6 +112,7 @@ export function buildQuizTasks({ preQuestionCount, regularQuestionCount, attempt
 
 function statusLabel(status: QuizTaskStatus) {
   if (status === 'completed') return 'Completed';
+  if (status === 'skipped') return 'Skipped';
   if (status === 'needs-retry') return 'Needs retry';
   if (status === 'locked') return 'Locked';
   return 'Available';
@@ -96,18 +120,25 @@ function statusLabel(status: QuizTaskStatus) {
 
 function statusClass(status: QuizTaskStatus) {
   if (status === 'completed') return styles.statusCompleted;
+  if (status === 'skipped') return styles.statusSkipped;
   if (status === 'needs-retry') return styles.statusNeedsRetry;
   if (status === 'locked') return styles.statusLocked;
   return styles.statusAvailable;
 }
 
 export default function StudentQuizTaskList({
+  isFoundational,
   preQuestionCount,
   regularQuestionCount,
   attempts,
   lessonNodeId,
 }: BuildQuizTasksInput & { lessonNodeId: string }) {
-  const tasks = buildQuizTasks({ preQuestionCount, regularQuestionCount, attempts });
+  const tasks = buildQuizTasks({
+    isFoundational,
+    preQuestionCount,
+    regularQuestionCount,
+    attempts,
+  });
   if (tasks.length === 0) return null;
 
   return (

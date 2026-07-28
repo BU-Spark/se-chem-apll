@@ -86,7 +86,7 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
               checked={entry.isRequired}
               onChange={(e) => onChange({ isRequired: e.target.checked })}
             />
-            Required
+            Foundational
           </label>
         </div>
         {showEqualMessage && (

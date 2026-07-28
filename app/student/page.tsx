@@ -204,6 +204,7 @@ export default async function StudentHomePage() {
                             {lesson.lessonNodes.map(
                               (ln: {
                                 id: string;
+                                isRequired: boolean;
                                 node: {
                                   id: string;
                                   title: string;
@@ -229,6 +230,7 @@ export default async function StudentHomePage() {
                                     <NodePreview node={ln.node} />
                                   </div>
                                   <StudentQuizTaskList
+                                    isFoundational={ln.isRequired} // temporary
                                     preQuestionCount={ln.node.questions.filter((q) => q.isPreLecture).length}
                                     regularQuestionCount={ln.node.questions.filter((q) => !q.isPreLecture).length}
                                     attempts={ln.attempts}
