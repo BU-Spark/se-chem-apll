@@ -52,11 +52,16 @@ export function parseShortAnswerOptions(options: unknown): ParsedShortAnswer | n
     }
 
     const tolerance = Math.abs(value.expectedAnswer) * (value.tolerancePercent / 100);
+    const minimumAnswer = value.expectedAnswer - tolerance;
+    const maximumAnswer = value.expectedAnswer + tolerance;
+    if (!Number.isFinite(minimumAnswer) || !Number.isFinite(maximumAnswer)) {
+      return null;
+    }
     return {
       type: 'shortAnswer',
       answerMode: 'range',
-      minimumAnswer: value.expectedAnswer - tolerance,
-      maximumAnswer: value.expectedAnswer + tolerance,
+      minimumAnswer,
+      maximumAnswer,
     };
   }
 

@@ -54,7 +54,10 @@ export function splitTimeOffsetSeconds(timeOffsetSeconds: number | null | undefi
 
 export function validateQuestionTimestamps(questions: TimestampedQuestionInput[]): string | null {
   for (const question of questions) {
-    if (question.isPreLecture) continue;
+    if (question.isPreLecture !== undefined && typeof question.isPreLecture !== 'boolean') {
+      return 'Checkpoint timestamps must be non-negative whole seconds.';
+    }
+    if (question.isPreLecture === true) continue;
 
     const timestamp = question.timeOffsetSeconds;
     if (timestamp == null) continue;

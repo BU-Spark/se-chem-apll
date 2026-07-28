@@ -13,7 +13,7 @@ describe('PreQuizForm multiple-choice answers', () => {
   beforeEach(() => {
     push.mockReset();
     refresh.mockReset();
-    global.fetch = jest.fn().mockReturnValue(new Promise(() => {}));
+    jest.spyOn(global, 'fetch').mockResolvedValue({} as Response);
   });
 
   afterEach(() => {
