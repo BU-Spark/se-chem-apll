@@ -52,15 +52,11 @@ async function createDemoNode(index) {
 async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) {
   const lesson = await prisma.lesson.create({
     data: {
-      courseId,
       title,
       slug: lessonSlug(title.toLowerCase().replace(/\s+/g, '-')),
       summary,
       description: '[seed-demo] Example lesson with a simple roadmap.',
       estimatedMinutes: 45,
-      openDate: new Date(),
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      sortOrder,
       lessonNodes: {
         create: nodes.map((node, idx) => ({
           nodeId: node.id,
@@ -75,6 +71,16 @@ async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) 
       lessonNodes: {
         orderBy: { sortOrder: 'asc' },
       },
+    },
+  });
+
+  await prisma.courseLesson.create({
+    data: {
+      courseId,
+      lessonId: lesson.id,
+      openDate: new Date(),
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      sortOrder,
     },
   });
 
@@ -104,6 +110,10 @@ async function main() {
       where: { id: { in: demoCourses.map((c) => c.id) } },
     });
   }
+
+  await prisma.lesson.deleteMany({
+    where: { description: { contains: '[seed-demo]' } },
+  });
 
   await prisma.node.deleteMany({
     where: { summary: { contains: '[seed-demo]' } },
@@ -187,7 +197,7 @@ async function main() {
 
   const createdLessons = await prisma.lesson.findMany({
     where: { id: { in: createdLessonIds } },
-    orderBy: [{ courseId: 'asc' }, { sortOrder: 'asc' }],
+    orderBy: { createdAt: 'asc' },
     include: {
       lessonNodes: {
         orderBy: { sortOrder: 'asc' },
