@@ -335,6 +335,9 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
             <p className={styles.sectionNote}>
               Draw prerequisite paths between nodes. Connections must form a directed acyclic graph — no cycles allowed.
             </p>
+            <p className={styles.sectionNote}>
+              Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+            </p>
             <LessonRoadmapBuilder lessonNodes={lessonNodes} edges={edges} onEdgesChange={setEdges} />
           </section>
         )}
