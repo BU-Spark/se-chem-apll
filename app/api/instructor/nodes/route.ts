@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
+import { getMultipleChoiceChoices, validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
+import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 
 // GET /api/instructor/nodes — list all nodes
 export async function GET() {
@@ -37,13 +40,29 @@ export async function POST(req: NextRequest) {
       sortOrder: number;
       prompt: string;
       options: unknown;
-      correctIndex?: number | null;
+      correctIndices?: unknown;
       isPreLecture?: boolean;
+      timeOffsetSeconds?: number | null;
     }>;
   };
 
   if (!title?.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
+  }
+
+  const timestampError = validateQuestionTimestamps(questions ?? []);
+  if (timestampError) {
+    return NextResponse.json({ error: timestampError }, { status: 422 });
+  }
+
+  const correctAnswersError = validateMultipleChoiceAnswers(questions ?? []);
+  if (correctAnswersError) {
+    return NextResponse.json({ error: correctAnswersError }, { status: 422 });
+  }
+
+  const shortAnswerError = validateShortAnswerOptions(questions ?? []);
+  if (shortAnswerError) {
+    return NextResponse.json({ error: shortAnswerError }, { status: 422 });
   }
 
   const node = await prisma.node.create({
@@ -56,8 +75,9 @@ export async function POST(req: NextRequest) {
           sortOrder: q.sortOrder,
           prompt: q.prompt,
           options: q.options as object,
-          correctIndex: q.correctIndex ?? null,
+          correctIndices: getMultipleChoiceChoices(q.options) ? (q.correctIndices as number[]) : [],
           isPreLecture: q.isPreLecture ?? false,
+          timeOffsetSeconds: q.isPreLecture ? null : (q.timeOffsetSeconds ?? null),
         })),
       },
     },
