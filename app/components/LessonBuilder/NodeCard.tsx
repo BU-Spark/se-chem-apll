@@ -55,22 +55,20 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
         </div>
 
         <div className={styles.nodeCardControls}>
-          {entry.isRequired && (
-            <label className={styles.nodeCardField}>
-              Pass threshold (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                required
-                placeholder="e.g. 70"
-                value={entry.passingPercent}
-                onChange={(e) => onChange({ passingPercent: e.target.value })}
-              />
-            </label>
-          )}
+          <label className={styles.nodeCardField}>
+            Pass threshold (%)
+            <input
+              type="number"
+              min={0}
+              max={100}
+              required
+              placeholder="e.g. 70"
+              value={entry.passingPercent}
+              onChange={(e) => onChange({ passingPercent: e.target.value })}
+            />
+          </label>
 
-          {entry.isRequired && entry.preLectureCount > 0 && (
+          {entry.preLectureCount > 0 && (
             <label className={styles.nodeCardField}>
               Quiz questions
               <input
@@ -94,14 +92,14 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
           </label>
         </div>
 
-        {entry.isRequired && showEqualMessage && (
+        {showEqualMessage && (
           <p className={styles.nodeCardHint}>
             The amount of questions shown in the quiz [{requestedCount}] is the same amount that is in the question bank
             [{entry.preLectureCount}], so there is no variability in questions.
           </p>
         )}
 
-        {entry.isRequired && showGreaterMessage && (
+        {showGreaterMessage && (
           <p className={styles.nodeCardHintWarning}>
             The number of questions shown in the quiz [{requestedCount}] is greater than the amount that is in the
             question bank [{entry.preLectureCount}]. Only [{entry.preLectureCount}] questions will be shown.
