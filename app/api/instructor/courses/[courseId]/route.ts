@@ -15,7 +15,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
       enrollments: true,
       contacts: true,
     },
@@ -37,11 +40,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, section, title, description } = body as {
+  const { code, section, title, description, lessons } = body as {
     code?: string;
     section?: string | null;
     title?: string;
     description?: string | null;
+    lessons?: Array<{
+      lessonId: string;
+      openDate?: string | null;
+      dueDate?: string | null;
+      sortOrder: number;
+    }>;
   };
 
   // If code or section is being updated, check for duplicates
@@ -69,6 +78,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  if (lessons !== undefined) {
+    for (const row of lessons) {
+      if (!row.lessonId) {
+        return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
+      }
+      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
+        return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
+      }
+    }
+  }
+
   const course = await prisma.course.update({
     where: { id: courseId },
     data: {
@@ -76,9 +96,23 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       ...(section !== undefined && { section: section?.trim() || null }),
       ...(title !== undefined && { title: title.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
+      ...(lessons !== undefined && {
+        courseLessons: {
+          deleteMany: {},
+          create: lessons.map((row) => ({
+            lessonId: row.lessonId,
+            openDate: row.openDate ? new Date(row.openDate) : null,
+            dueDate: row.dueDate ? new Date(row.dueDate) : null,
+            sortOrder: row.sortOrder,
+          })),
+        },
+      }),
     },
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
       enrollments: true,
       contacts: true,
     },

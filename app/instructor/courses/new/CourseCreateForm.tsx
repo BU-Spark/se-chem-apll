@@ -4,7 +4,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 
-export default function CourseCreateForm() {
+type AvailableLesson = { id: string; title: string; slug: string };
+
+type ImportedLesson = {
+  lessonId: string;
+  title: string;
+  openDate: string;
+  dueDate: string;
+};
+
+interface Props {
+  availableLessons: AvailableLesson[];
+}
+
+export default function CourseCreateForm({ availableLessons }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,11 +27,36 @@ export default function CourseCreateForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
+  const [importedLessons, setImportedLessons] = useState<ImportedLesson[]>([]);
+  const [selectedLessonId, setSelectedLessonId] = useState('');
+
+  const unusedLessons = availableLessons.filter((l) => !importedLessons.some((row) => row.lessonId === l.id));
+
+  function addLesson() {
+    if (!selectedLessonId) return;
+    const lesson = availableLessons.find((l) => l.id === selectedLessonId);
+    if (!lesson) return;
+    setImportedLessons((prev) => [...prev, { lessonId: lesson.id, title: lesson.title, openDate: '', dueDate: '' }]);
+    setSelectedLessonId('');
+  }
+  function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
+    setImportedLessons((prev) => prev.map((row) => (row.lessonId === lessonId ? { ...row, ...patch } : row)));
+  }
+
+  function removeImported(lessonId: string) {
+    setImportedLessons((prev) => prev.filter((row) => row.lessonId !== lessonId));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    for (const row of importedLessons) {
+      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
+        setError(`Open date must be before due date for "${row.title}".`);
+        return;
+      }
+    }
     setSaving(true);
-
     try {
       const res = await fetch('/api/instructor/courses', {
         method: 'POST',
@@ -28,14 +66,18 @@ export default function CourseCreateForm() {
           section: section || null,
           title,
           description: description || null,
+          lessons: importedLessons.map((row, idx) => ({
+            lessonId: row.lessonId,
+            openDate: row.openDate || null,
+            dueDate: row.dueDate || null,
+            sortOrder: idx,
+          })),
         }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
-
       router.push('/instructor/courses');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -96,6 +138,61 @@ export default function CourseCreateForm() {
               placeholder="Optional course description…"
             />
           </label>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Imported lessons</h2>
+          <p className={styles.sectionNote}>Add lessons to this course and set open/due dates for each.</p>
+
+          <div className={styles.importRow}>
+            <label className={styles.field} style={{ flex: 1 }}>
+              Lesson
+              <select value={selectedLessonId} onChange={(e) => setSelectedLessonId(e.target.value)}>
+                <option value="">Select a lesson…</option>
+                {unusedLessons.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className={styles.addBtn} onClick={addLesson} disabled={!selectedLessonId}>
+              Add
+            </button>
+          </div>
+
+          {importedLessons.length === 0 ? (
+            <p className={styles.emptyImport}>No lessons imported yet.</p>
+          ) : (
+            <ul className={styles.importList}>
+              {importedLessons.map((row) => (
+                <li key={row.lessonId} className={styles.importItem}>
+                  <p className={styles.importTitle}>{row.title}</p>
+                  <div className={styles.fieldRow2}>
+                    <label className={styles.field}>
+                      Open date
+                      <input
+                        type="date"
+                        value={row.openDate}
+                        onChange={(e) => updateImported(row.lessonId, { openDate: e.target.value })}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      Due date
+                      <input
+                        type="date"
+                        value={row.dueDate}
+                        onChange={(e) => updateImported(row.lessonId, { dueDate: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {error && <p className={styles.error}>{error}</p>}

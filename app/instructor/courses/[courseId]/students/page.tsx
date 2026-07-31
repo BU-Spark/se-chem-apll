@@ -18,9 +18,13 @@ export default async function CourseStudentsPage({ params }: Props) {
         include: { student: true },
         orderBy: { createdAt: 'asc' },
       },
-      lessons: {
+      courseLessons: {
         include: {
-          lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+          lesson: {
+            include: {
+              lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+            },
+          },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -36,7 +40,7 @@ export default async function CourseStudentsPage({ params }: Props) {
       courseCode={course.code}
       courseSection={course.section}
       initialEnrollments={course.enrollments}
-      lessons={course.lessons}
+      lessons={course.courseLessons.map((cl) => cl.lesson)}
     />
   );
 }
