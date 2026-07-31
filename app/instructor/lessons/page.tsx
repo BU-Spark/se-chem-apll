@@ -7,7 +7,6 @@ export const dynamic = 'force-dynamic';
 export default async function LessonsPage() {
   const lessons = await prisma.lesson.findMany({
     include: {
-      course: true,
       lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { createdAt: 'desc' },
@@ -31,10 +30,7 @@ export default async function LessonsPage() {
               <div className={styles.cardBody}>
                 <p className={styles.cardTitle}>{lesson.title}</p>
                 <p className={styles.cardMeta}>
-                  {lesson.course.code} &middot; {lesson.lessonNodes.length} node
-                  {lesson.lessonNodes.length !== 1 ? 's' : ''}
-                  {lesson.openDate && ` · Opens ${new Date(lesson.openDate).toLocaleDateString()}`}
-                  {lesson.dueDate && ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`}
+                  {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
                 </p>
                 <p className={styles.cardSlug}>/lessons/{lesson.slug}</p>
               </div>

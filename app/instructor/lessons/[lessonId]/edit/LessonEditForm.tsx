@@ -1,8 +1,7 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Lesson, LessonNode, Node, Course } from '@prisma/client';
+import type { Lesson, LessonNode, Node } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
 import LessonBuilder from '@/app/components/LessonBuilder';
 import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
@@ -13,17 +12,15 @@ import styles from './page.module.css';
 
 interface Props {
   lesson: Lesson & {
-    course: Course;
     lessonNodes: (LessonNode & { node: Node })[];
     lessonNodeEdges: { id: string; sourceId: string; targetId: string }[];
   };
   availableNodes: PaletteNode[];
-  courses: Course[];
 }
 
 type TabId = 'builder' | 'roadmap';
 
-export default function LessonEditForm({ lesson, availableNodes, courses }: Props) {
+export default function LessonEditForm({ lesson, availableNodes }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -35,12 +32,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   const [slug, setSlug] = useState(lesson.slug);
   const [summary, setSummary] = useState(lesson.summary);
   const [description, setDescription] = useState(lesson.description || '');
-  const [courseId, setCourseId] = useState(lesson.courseId);
   const [estimatedMinutes, setEstimatedMinutes] = useState(lesson.estimatedMinutes?.toString() || '');
-  const [openDate, setOpenDate] = useState(
-    lesson.openDate ? new Date(lesson.openDate).toISOString().split('T')[0] : ''
-  );
-  const [dueDate, setDueDate] = useState(lesson.dueDate ? new Date(lesson.dueDate).toISOString().split('T')[0] : '');
 
   // Auto-generate slug from title
   function handleTitleChange(val: string) {
@@ -126,11 +118,6 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       return;
     }
 
-    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
-      setError('Open date must be before due date.');
-      return;
-    }
-
     const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
     const serialisedEdges = edges
       .map((e) => ({
@@ -153,8 +140,6 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           summary,
           description: description || null,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
-          openDate: openDate || null,
-          dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
@@ -210,7 +195,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Edit lesson</h1>
         <p className={styles.pageSubtitle}>
-          {lesson.course.code} · {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
+          {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
         </p>
       </header>
 
@@ -219,41 +204,16 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Course <span className={styles.required}>*</span>
-              <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                {courses.length === 0 && <option value="">No courses — create one first</option>}
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                    {c.section ? ` §${c.section}` : ''} — {c.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Estimated duration (min)
-              <input
-                type="number"
-                min={1}
-                value={estimatedMinutes}
-                onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="30"
-              />
-            </label>
-          </div>
-
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Open date
-              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              Due date
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Estimated duration (min)
+            <input
+              type="number"
+              min={1}
+              value={estimatedMinutes}
+              onChange={(e) => setEstimatedMinutes(e.target.value)}
+              placeholder="30"
+            />
+          </label>
 
           <div className={styles.fieldRow2}>
             <label className={styles.field}>

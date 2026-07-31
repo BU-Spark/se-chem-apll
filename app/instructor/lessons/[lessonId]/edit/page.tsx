@@ -11,11 +11,10 @@ interface Props {
 export default async function EditLessonPage({ params }: Props) {
   const { lessonId } = await params;
 
-  const [lesson, nodes, courses] = await Promise.all([
+  const [lesson, nodes] = await Promise.all([
     prisma.lesson.findUnique({
       where: { id: lessonId },
       include: {
-        course: true,
         lessonNodes: {
           include: { node: true },
           orderBy: { sortOrder: 'asc' },
@@ -33,7 +32,6 @@ export default async function EditLessonPage({ params }: Props) {
       },
       orderBy: { title: 'asc' },
     }),
-    prisma.course.findMany({ orderBy: { code: 'asc' } }),
   ]);
 
   if (!lesson) {
@@ -48,5 +46,5 @@ export default async function EditLessonPage({ params }: Props) {
     preLectureCount: n.questions.length,
   }));
 
-  return <LessonEditForm lesson={lesson} availableNodes={paletteNodes} courses={courses} />;
+  return <LessonEditForm lesson={lesson} availableNodes={paletteNodes} />;
 }
