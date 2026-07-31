@@ -113,7 +113,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
     if (
       lessonNodes.some((entry) => {
         if (entry.preLectureCount === 0) {
-          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount != '';
+          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
         }
         return (
           entry.quizQuestionCount === '' ||
