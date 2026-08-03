@@ -5,7 +5,7 @@ import styles from './page.module.css';
 import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
 import NodePreview from '@/app/components/NodePreview/NodePreview';
 import StudentQuizTaskList from '@/app/components/StudentQuizTaskList/StudentQuizTaskList';
-import { getFoundationalAccess, getPreQuizOutcome } from '@/app/utils/foundationalAccess';
+import { getFoundationalAccess } from '@/app/utils/foundationalAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,10 +48,11 @@ export default async function StudentHomePage() {
                 include: {
                   node: {
                     include: {
-                      questions: {
+                      quizQuestions: { select: { id: true } },
+                      checkpoints: {
                         select: {
                           id: true,
-                          isPreLecture: true,
+                          questions: { select: { id: true } },
                         },
                       },
                     },
@@ -61,13 +62,9 @@ export default async function StudentHomePage() {
                     orderBy: { createdAt: 'desc' },
                     include: {
                       responses: {
-                        include: {
-                          question: {
-                            select: {
-                              id: true,
-                              isPreLecture: true,
-                            },
-                          },
+                        select: {
+                          quizQuestionId: true,
+                          checkpointQuestionId: true,
                         },
                       },
                     },
@@ -211,38 +208,38 @@ export default async function StudentHomePage() {
                                   title: string;
                                   videoUrl?: string | null;
                                   muxPlaybackId?: string | null;
-                                  questions: { id: string; isPreLecture: boolean }[];
+                                  quizQuestions: { id: string }[];
+                                  checkpoints: { id: string; questions: { id: string }[] }[];
                                 };
                                 attempts: {
                                   id: string;
                                   isPassing: boolean | null;
                                   completedAt: Date | null;
                                   responses: {
-                                    question: {
-                                      id: string;
-                                      isPreLecture: boolean;
-                                    };
+                                    quizQuestionId: string | null;
+                                    checkpointQuestionId: string | null;
                                   }[];
                                 }[];
                               }) => {
-                                const preQuestionCount = ln.node.questions.filter((q) => q.isPreLecture).length;
-                                const regularQuestionCount = ln.node.questions.filter((q) => !q.isPreLecture).length;
-                                // isRequired is the foundational flag from lesson import
+                                const quizBankCount = ln.node.quizQuestions.length;
+                                const checkpointQuestionCount = ln.node.checkpoints.reduce(
+                                  (sum, checkpoint) => sum + checkpoint.questions.length,
+                                  0
+                                );
                                 const access = getFoundationalAccess({
                                   isFoundational: ln.isRequired,
-                                  hasPreQuiz: preQuestionCount > 0,
-                                  preQuizOutcome: getPreQuizOutcome(ln.attempts),
+                                  hasCheckpoints: checkpointQuestionCount > 0,
+                                  hasQuizBank: quizBankCount > 0,
                                 });
 
                                 return (
                                   <li key={ln.id} className={styles.nodeChip}>
                                     <div className={styles.nodePreviewWrapper}>
-                                      {/* QEV stand-in: hide video until foundational pre-quiz is resolved, or skip if passed. */}
                                       {access.qevSkipped ? (
                                         <p className={styles.qevStatusMessage}>Skipped — passed foundational quiz</p>
                                       ) : access.qevLocked ? (
                                         <p className={styles.qevStatusMessage}>
-                                          Complete the pre-quiz to unlock this lesson
+                                          Complete the quiz to unlock this lesson
                                         </p>
                                       ) : (
                                         <NodePreview node={ln.node} />
@@ -250,8 +247,8 @@ export default async function StudentHomePage() {
                                     </div>
                                     <StudentQuizTaskList
                                       isFoundational={ln.isRequired}
-                                      preQuestionCount={preQuestionCount}
-                                      regularQuestionCount={regularQuestionCount}
+                                      quizBankCount={quizBankCount}
+                                      checkpointQuestionCount={checkpointQuestionCount}
                                       attempts={ln.attempts}
                                       lessonNodeId={ln.id}
                                     />

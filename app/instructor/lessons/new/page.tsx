@@ -7,8 +7,7 @@ export default async function NewLessonPage() {
   const [nodes, courses] = await Promise.all([
     prisma.node.findMany({
       include: {
-        _count: { select: { questions: true } },
-        questions: { where: { isPreLecture: true }, select: { id: true } },
+        _count: { select: { quizQuestions: true, checkpoints: true } },
       },
       orderBy: { title: 'asc' },
     }),
@@ -19,8 +18,8 @@ export default async function NewLessonPage() {
     id: n.id,
     title: n.title,
     summary: n.summary,
-    questionCount: n._count.questions,
-    preLectureCount: n.questions.length,
+    quizBankCount: n._count.quizQuestions,
+    checkpointCount: n._count.checkpoints,
   }));
 
   return <LessonCreateForm availableNodes={paletteNodes} courses={courses} />;

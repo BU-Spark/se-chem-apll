@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     include: {
       course: true,
       lessonNodes: {
-        include: { node: { include: { questions: { orderBy: { sortOrder: 'asc' } } } } },
+        include: { node: { include: { quizQuestions: true, checkpoints: { include: { questions: true } } } } },
         orderBy: { sortOrder: 'asc' },
       },
       lessonNodeEdges: {
