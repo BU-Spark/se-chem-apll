@@ -16,13 +16,26 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const nodes = await prisma.node.findMany({
-    include: {
-      ...nodeInclude,
-      _count: { select: { lessonNodes: true } },
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      videoUrl: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { lessonNodes: true, checkpoints: true, quizQuestions: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(nodes);
+}
+
+function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) {
+    return NextResponse.json({ error: `${field} must be an array` }, { status: 422 });
+  }
+  return null;
 }
 
 // POST /api/instructor/nodes — create a new node with checkpoints + quiz bank
@@ -48,6 +61,11 @@ export async function POST(req: NextRequest) {
   if (!title?.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
   }
+
+  const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
+  if (checkpointsTypeError) return checkpointsTypeError;
+  const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
+  if (quizQuestionsTypeError) return quizQuestionsTypeError;
 
   const contentError = validateNodeContent({ checkpoints, quizQuestions });
   if (contentError) {

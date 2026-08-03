@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NewNodePage from './page';
 
@@ -12,6 +12,10 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   __esModule: true,
   default: () => <div data-testid="youtube-player" />,
 }));
+
+function questionCardFor(prompt: HTMLElement) {
+  return prompt.closest('[class*="questionCard"]') as HTMLElement;
+}
 
 describe('NewNodePage', () => {
   beforeEach(() => {
@@ -30,13 +34,21 @@ describe('NewNodePage', () => {
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/Question prompt/), 'Checkpoint question');
-    await user.click(screen.getAllByTitle('Mark as correct')[0]);
+
+    const checkpointPrompt = screen.getByLabelText(/Question prompt/);
+    const checkpointCard = questionCardFor(checkpointPrompt);
+    await user.type(checkpointPrompt, 'Checkpoint question');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 1'), 'A');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'B');
+    await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
     await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
     const prompts = screen.getAllByLabelText(/Question prompt/);
+    const quizCard = questionCardFor(prompts[1]);
     await user.type(prompts[1], 'Quiz bank question');
-    await user.click(screen.getAllByTitle('Mark as correct')[2]);
+    await user.type(within(quizCard).getByPlaceholderText('Choice 1'), 'X');
+    await user.type(within(quizCard).getByPlaceholderText('Choice 2'), 'Y');
+    await user.click(within(quizCard).getAllByTitle('Mark as correct')[0]);
 
     await user.click(screen.getByRole('button', { name: 'Create node' }));
 
@@ -55,19 +67,20 @@ describe('NewNodePage', () => {
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
 
-  it('rejects duplicate checkpoint timestamps by focusing the existing one', async () => {
+  it('assigns the next free offset when adding checkpoints manually', async () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     await user.type(screen.getByLabelText(/Question prompt/), 'First');
-    await user.click(screen.getAllByTitle('Mark as correct')[0]);
+    await user.click(
+      within(questionCardFor(screen.getByLabelText(/Question prompt/))).getAllByTitle('Mark as correct')[0]
+    );
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
-    expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(1);
-
-    await user.click(screen.getByRole('button', { name: 'Create node' }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Checkpoint 2 · 1:00/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(2);
   });
 });

@@ -68,6 +68,19 @@ describe('NodeEditForm', () => {
     expect(request.method).toBe('PATCH');
     const body = JSON.parse(request.body);
     expect(body.checkpoints[0].timeOffsetSeconds).toBe(90);
-    expect(body.quizQuestions[0].prompt).toBe('Quiz prompt');
+    expect(body.checkpoints[0].questions[0]).toEqual(
+      expect.objectContaining({
+        prompt: 'Checkpoint prompt',
+        options: { type: 'multipleChoice', choices: ['A', 'B'] },
+        correctIndices: [0],
+      })
+    );
+    expect(body.quizQuestions[0]).toEqual(
+      expect.objectContaining({
+        prompt: 'Quiz prompt',
+        options: { type: 'multipleChoice', choices: ['X', 'Y'] },
+        correctIndices: [1],
+      })
+    );
   });
 });

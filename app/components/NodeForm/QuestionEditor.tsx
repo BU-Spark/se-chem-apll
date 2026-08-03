@@ -78,6 +78,7 @@ export default function QuestionEditor({
                 title="Mark as correct"
               />
               <input
+                required
                 value={choice}
                 onChange={(e) => onUpdateChoice(ci, e.target.value)}
                 placeholder={`Choice ${ci + 1}`}

@@ -10,6 +10,7 @@ type Attempt = {
   }[];
 };
 
+// locked/skipped are reserved for future foundational QEV gating; not assigned yet.
 type QuizTaskStatus = 'available' | 'completed' | 'locked' | 'needs-retry' | 'skipped';
 
 type QuizTask = {
@@ -19,6 +20,7 @@ type QuizTask = {
   actionLabel: string;
 };
 
+// isFoundational / checkpointQuestionCount reserved for future QEV task rows.
 type BuildQuizTasksInput = {
   isFoundational: boolean;
   quizBankCount: number;
@@ -36,16 +38,18 @@ export function buildQuizTasks({ quizBankCount, attempts }: BuildQuizTasksInput)
     }
   }
 
-  const quizCompleted = quizAnsweredIds.size >= quizBankCount;
+  const fullCoverage = quizAnsweredIds.size >= quizBankCount;
   const latestQuizAttempt =
     attempts.find(
       (attempt) => attempt.completedAt !== null && attempt.responses.some((response) => response.quizQuestionId != null)
     ) ?? null;
-  const needsRetry = !quizCompleted && latestQuizAttempt?.isPassing === false;
 
   let status: QuizTaskStatus = 'available';
-  if (quizCompleted) status = 'completed';
-  else if (needsRetry) status = 'needs-retry';
+  if (latestQuizAttempt?.isPassing === true) {
+    status = 'completed';
+  } else if (fullCoverage || latestQuizAttempt?.isPassing === false) {
+    status = 'needs-retry';
+  }
 
   return [
     {

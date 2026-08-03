@@ -313,9 +313,12 @@ model NodeResponse {
   createdAt            DateTime @default(now())
 
   attempt            NodeAttempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  checkpointQuestion CheckpointQuestion? @relation(fields: [checkpointQuestionId], references: [id])
-  quizQuestion       QuizQuestion?       @relation(fields: [quizQuestionId], references: [id])
+  checkpointQuestion CheckpointQuestion? @relation(fields: [checkpointQuestionId], references: [id], onDelete: Cascade)
+  quizQuestion       QuizQuestion?       @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
   student            User                @relation(fields: [studentId], references: [id])
+
+  @@index([checkpointQuestionId])
+  @@index([quizQuestionId])
 }
 
 // ---------------------------------------------------------------------------

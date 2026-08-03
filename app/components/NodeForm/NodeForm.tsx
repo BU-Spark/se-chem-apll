@@ -97,13 +97,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     focusCheckpoint(checkpoint.id);
   }
 
+  function nextManualCheckpointOffset(): number {
+    const used = new Set(checkpoints.map((c) => c.timeOffsetSeconds));
+    let offset = 0;
+    while (used.has(offset)) offset += 60;
+    return offset;
+  }
+
   function handleAddCheckpointFromVideo() {
     const player = playerRef.current;
     if (!player) {
       setError('Wait for the video player to finish loading, then try again.');
       return;
     }
-    const seconds = Math.floor(player.getCurrentTime());
+    const raw = player.getCurrentTime();
+    if (!Number.isFinite(raw)) {
+      setError('Could not read the current video time. Try again in a moment.');
+      return;
+    }
+    const seconds = Math.floor(raw);
     try {
       player.pauseVideo();
     } catch {
@@ -257,8 +269,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             </>
           ) : (
             <p className={styles.videoHint}>
-              Enter a YouTube URL above to scrub the video and add checkpoints automatically. You can still add
-              checkpoints manually with a timestamp below.
+              Enter a YouTube URL above to scrub the video and capture checkpoints at the current playback time. Without
+              a video, add checkpoints manually — each gets the next free offset (0:00, 1:00, 2:00, …).
             </p>
           )}
 
@@ -361,7 +373,11 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             ))}
 
             {!youtubeId && (
-              <button type="button" className={styles.addQuestionBtn} onClick={() => addCheckpointAt(0)}>
+              <button
+                type="button"
+                className={styles.addQuestionBtn}
+                onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
+              >
                 + Add checkpoint manually
               </button>
             )}

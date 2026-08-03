@@ -48,11 +48,12 @@ export default async function StudentHomePage() {
                 include: {
                   node: {
                     include: {
-                      quizQuestions: { select: { id: true } },
+                      _count: {
+                        select: { quizQuestions: true },
+                      },
                       checkpoints: {
                         select: {
-                          id: true,
-                          questions: { select: { id: true } },
+                          _count: { select: { questions: true } },
                         },
                       },
                     },
@@ -199,63 +200,39 @@ export default async function StudentHomePage() {
 
                         {lesson.lessonNodes.length > 0 && (
                           <ul className={styles.nodeList}>
-                            {lesson.lessonNodes.map(
-                              (ln: {
-                                id: string;
-                                isRequired: boolean;
-                                node: {
-                                  id: string;
-                                  title: string;
-                                  videoUrl?: string | null;
-                                  muxPlaybackId?: string | null;
-                                  quizQuestions: { id: string }[];
-                                  checkpoints: { id: string; questions: { id: string }[] }[];
-                                };
-                                attempts: {
-                                  id: string;
-                                  isPassing: boolean | null;
-                                  completedAt: Date | null;
-                                  responses: {
-                                    quizQuestionId: string | null;
-                                    checkpointQuestionId: string | null;
-                                  }[];
-                                }[];
-                              }) => {
-                                const quizBankCount = ln.node.quizQuestions.length;
-                                const checkpointQuestionCount = ln.node.checkpoints.reduce(
-                                  (sum, checkpoint) => sum + checkpoint.questions.length,
-                                  0
-                                );
-                                const access = getFoundationalAccess({
-                                  isFoundational: ln.isRequired,
-                                  hasCheckpoints: checkpointQuestionCount > 0,
-                                  hasQuizBank: quizBankCount > 0,
-                                });
+                            {lesson.lessonNodes.map((ln) => {
+                              const quizBankCount = ln.node._count.quizQuestions;
+                              const checkpointQuestionCount = ln.node.checkpoints.reduce(
+                                (sum, checkpoint) => sum + checkpoint._count.questions,
+                                0
+                              );
+                              const access = getFoundationalAccess({
+                                isFoundational: ln.isRequired,
+                                hasCheckpoints: checkpointQuestionCount > 0,
+                                hasQuizBank: quizBankCount > 0,
+                              });
 
-                                return (
-                                  <li key={ln.id} className={styles.nodeChip}>
-                                    <div className={styles.nodePreviewWrapper}>
-                                      {access.qevSkipped ? (
-                                        <p className={styles.qevStatusMessage}>Skipped — passed foundational quiz</p>
-                                      ) : access.qevLocked ? (
-                                        <p className={styles.qevStatusMessage}>
-                                          Complete the quiz to unlock this lesson
-                                        </p>
-                                      ) : (
-                                        <NodePreview node={ln.node} />
-                                      )}
-                                    </div>
-                                    <StudentQuizTaskList
-                                      isFoundational={ln.isRequired}
-                                      quizBankCount={quizBankCount}
-                                      checkpointQuestionCount={checkpointQuestionCount}
-                                      attempts={ln.attempts}
-                                      lessonNodeId={ln.id}
-                                    />
-                                  </li>
-                                );
-                              }
-                            )}
+                              return (
+                                <li key={ln.id} className={styles.nodeChip}>
+                                  <div className={styles.nodePreviewWrapper}>
+                                    {access.qevSkipped ? (
+                                      <p className={styles.qevStatusMessage}>Skipped — passed foundational quiz</p>
+                                    ) : access.qevLocked ? (
+                                      <p className={styles.qevStatusMessage}>Complete the quiz to unlock this lesson</p>
+                                    ) : (
+                                      <NodePreview node={ln.node} />
+                                    )}
+                                  </div>
+                                  <StudentQuizTaskList
+                                    isFoundational={ln.isRequired}
+                                    quizBankCount={quizBankCount}
+                                    checkpointQuestionCount={checkpointQuestionCount}
+                                    attempts={ln.attempts}
+                                    lessonNodeId={ln.id}
+                                  />
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </li>

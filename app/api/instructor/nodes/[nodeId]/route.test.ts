@@ -174,4 +174,116 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('checkpoints');
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
   });
+
+  it('replaces only quiz questions when checkpoints are omitted', async () => {
+    const response = await PATCH(
+      patchRequest({
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz only',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCheckpointDeleteMany).not.toHaveBeenCalled();
+    expect(mockCheckpointFindMany).not.toHaveBeenCalled();
+    expect(mockQuizDeleteMany).toHaveBeenCalledWith({ where: { nodeId: 'node-1' } });
+    expect(mockUpdate.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        quizQuestions: {
+          create: [expect.objectContaining({ prompt: 'Quiz only' })],
+        },
+      })
+    );
+    expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('checkpoints');
+  });
+
+  it('replaces only checkpoints when quiz questions are omitted', async () => {
+    const response = await PATCH(
+      patchRequest({
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                prompt: 'Checkpoint only',
+                options: { type: 'multipleChoice', choices: ['A', 'B'] },
+                correctIndices: [1],
+              },
+            ],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockQuizDeleteMany).not.toHaveBeenCalled();
+    expect(mockQuizFindMany).not.toHaveBeenCalled();
+    expect(mockCheckpointDeleteMany).toHaveBeenCalledWith({ where: { nodeId: 'node-1' } });
+    expect(mockUpdate.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        checkpoints: {
+          create: [
+            expect.objectContaining({
+              timeOffsetSeconds: 45,
+              questions: {
+                create: [expect.objectContaining({ prompt: 'Checkpoint only' })],
+              },
+            }),
+          ],
+        },
+      })
+    );
+    expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
+  });
+
+  it('deletes related responses before replacing each collection', async () => {
+    mockCheckpointFindMany.mockResolvedValue([{ id: 'cp-1', questions: [{ id: 'cq-1' }, { id: 'cq-2' }] }]);
+    mockQuizFindMany.mockResolvedValue([{ id: 'qq-1' }]);
+
+    const response = await PATCH(
+      patchRequest({
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 10,
+            questions: [
+              {
+                sortOrder: 0,
+                prompt: 'New checkpoint',
+                options: { type: 'multipleChoice', choices: ['A', 'B'] },
+                correctIndices: [0],
+              },
+            ],
+          },
+        ],
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'New quiz',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [1],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockResponseDeleteMany).toHaveBeenCalledWith({
+      where: { checkpointQuestionId: { in: ['cq-1', 'cq-2'] } },
+    });
+    expect(mockResponseDeleteMany).toHaveBeenCalledWith({
+      where: { quizQuestionId: { in: ['qq-1'] } },
+    });
+  });
 });

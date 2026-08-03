@@ -77,7 +77,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
         );
       })
     ) {
-      setError('Choose a whole-number quiz question count between 1 for every node with a quiz bank.');
+      setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
       return;
     }
 

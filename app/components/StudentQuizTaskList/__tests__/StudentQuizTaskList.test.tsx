@@ -31,7 +31,7 @@ describe('buildQuizTasks', () => {
     ]);
   });
 
-  it('marks quiz completed when enough quiz responses exist', () => {
+  it('marks quiz completed when latest completed quiz attempt passed', () => {
     expect(
       buildQuizTasks({
         isFoundational: true,
@@ -47,6 +47,24 @@ describe('buildQuizTasks', () => {
         ],
       })[0].status
     ).toBe('completed');
+  });
+
+  it('marks needs-retry when full coverage exists but latest attempt failed', () => {
+    expect(
+      buildQuizTasks({
+        isFoundational: false,
+        quizBankCount: 1,
+        checkpointQuestionCount: 0,
+        attempts: [
+          {
+            id: 'a1',
+            isPassing: false,
+            completedAt: new Date(),
+            responses: [{ quizQuestionId: 'q1', checkpointQuestionId: null }],
+          },
+        ],
+      })[0].status
+    ).toBe('needs-retry');
   });
 });
 
