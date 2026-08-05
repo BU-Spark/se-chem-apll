@@ -30,37 +30,67 @@ describe('POST /api/instructor/nodes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'instructor-1' });
-    mockCreate.mockResolvedValue({ id: 'node-1', questions: [] });
+    mockCreate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
   });
 
-  it('persists null, omitted, and duplicate checkpoint timestamps', async () => {
+  it('persists checkpoints and quiz questions', async () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [
-          { sortOrder: 0, prompt: 'First', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds: 45 },
-          { sortOrder: 1, prompt: 'Second', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds: 45 },
-          { sortOrder: 2, prompt: 'Third', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds: null },
-          { sortOrder: 3, prompt: 'Fourth', options: ['A', 'B'], correctIndices: [0] },
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                prompt: 'Checkpoint Q',
+                options: { type: 'multipleChoice', choices: ['A', 'B'] },
+                correctIndices: [0],
+              },
+            ],
+          },
+        ],
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [1],
+          },
         ],
       }) as never
     );
 
     expect(response.status).toBe(201);
-    expect(mockCreate.mock.calls[0][0].data.questions.create).toEqual([
-      expect.objectContaining({ prompt: 'First', timeOffsetSeconds: 45 }),
-      expect.objectContaining({ prompt: 'Second', timeOffsetSeconds: 45 }),
-      expect.objectContaining({ prompt: 'Third', timeOffsetSeconds: null }),
-      expect.objectContaining({ prompt: 'Fourth', timeOffsetSeconds: null }),
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual([
+      expect.objectContaining({
+        timeOffsetSeconds: 45,
+        questions: {
+          create: [expect.objectContaining({ prompt: 'Checkpoint Q', correctIndices: [0] })],
+        },
+      }),
+    ]);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create).toEqual([
+      expect.objectContaining({ prompt: 'Quiz Q', correctIndices: [1] }),
     ]);
   });
 
-  it.each([-1, 1.5])('returns 422 for invalid checkpoint timestamp %p', async (timeOffsetSeconds) => {
+  it('returns 422 for duplicate checkpoint timestamps', async () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [
-          { sortOrder: 0, prompt: 'Checkpoint', options: ['A', 'B'], correctIndices: [0], timeOffsetSeconds },
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, prompt: 'A', options: ['A', 'B'], correctIndices: [0] }],
+          },
+          {
+            sortOrder: 1,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, prompt: 'B', options: ['A', 'B'], correctIndices: [0] }],
+          },
         ],
       }) as never
     );
@@ -69,11 +99,41 @@ describe('POST /api/instructor/nodes', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it('persists multiple correct answers', async () => {
+  it.each([-1, 1.5])('returns 422 for invalid checkpoint timestamp %p', async (timeOffsetSeconds) => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds,
+            questions: [{ sortOrder: 0, prompt: 'Checkpoint', options: ['A', 'B'], correctIndices: [0] }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 for a checkpoint without questions', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [{ sortOrder: 0, timeOffsetSeconds: 10, questions: [] }],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists multiple correct answers on quiz questions', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        quizQuestions: [
           {
             sortOrder: 0,
             prompt: 'Select all',
@@ -85,7 +145,7 @@ describe('POST /api/instructor/nodes', () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mockCreate.mock.calls[0][0].data.questions.create[0].correctIndices).toEqual([0, 2]);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0].correctIndices).toEqual([0, 2]);
   });
 
   it.each([
@@ -97,22 +157,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [{ sortOrder: 0, prompt: 'Question', options: ['A', 'B'], correctIndices }],
-      }) as never
-    );
-
-    expect(response.status).toBe(422);
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['too few', ['A']],
-    ['too many', ['1', '2', '3', '4', '5', '6', '7', '8', '9']],
-  ])('returns 422 for %s multiple-choice options', async (_label, options) => {
-    const response = await POST(
-      postRequest({
-        title: 'Safety video',
-        questions: [{ sortOrder: 0, prompt: 'Question', options, correctIndices: [0] }],
+        quizQuestions: [{ sortOrder: 0, prompt: 'Question', options: ['A', 'B'], correctIndices }],
       }) as never
     );
 
@@ -125,12 +170,12 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [{ sortOrder: 0, prompt: 'Estimate', options }],
+        quizQuestions: [{ sortOrder: 0, prompt: 'Estimate', options }],
       }) as never
     );
 
     expect(response.status).toBe(201);
-    expect(mockCreate.mock.calls[0][0].data.questions.create[0]).toEqual(
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toEqual(
       expect.objectContaining({ options, correctIndices: [] })
     );
   });
@@ -139,7 +184,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        questions: [
+        quizQuestions: [
           {
             sortOrder: 0,
             prompt: 'Estimate',

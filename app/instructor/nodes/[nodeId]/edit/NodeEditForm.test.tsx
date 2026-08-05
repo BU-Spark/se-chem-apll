@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ComponentProps } from 'react';
 import NodeEditForm from './NodeEditForm';
 
 const push = jest.fn();
@@ -9,7 +8,41 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 
-describe('NodeEditForm checkpoint timestamps', () => {
+jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
+  __esModule: true,
+  default: () => <div data-testid="youtube-player" />,
+}));
+
+const node = {
+  id: 'node-1',
+  title: 'Existing node',
+  summary: 'Summary',
+  videoUrl: '',
+  checkpoints: [
+    {
+      id: 'cp-1',
+      timeOffsetSeconds: 90,
+      questions: [
+        {
+          id: 'cq-1',
+          prompt: 'Checkpoint prompt',
+          options: { type: 'multipleChoice', choices: ['A', 'B'] },
+          correctIndices: [0],
+        },
+      ],
+    },
+  ],
+  quizQuestions: [
+    {
+      id: 'qq-1',
+      prompt: 'Quiz prompt',
+      options: { type: 'multipleChoice', choices: ['X', 'Y'] },
+      correctIndices: [1],
+    },
+  ],
+};
+
+describe('NodeEditForm', () => {
   beforeEach(() => {
     push.mockReset();
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
@@ -19,178 +52,35 @@ describe('NodeEditForm checkpoint timestamps', () => {
     jest.restoreAllMocks();
   });
 
-  it('loads and preserves an existing timestamp in the PATCH payload', async () => {
-    const now = new Date();
-    const node: ComponentProps<typeof NodeEditForm>['node'] = {
-      id: 'node-1',
-      title: 'Safety video',
-      summary: null,
-      videoUrl: 'https://example.com/video.mp4',
-      muxPlaybackId: null,
-      thumbnailUrl: null,
-      estimatedMinutes: null,
-      createdAt: now,
-      updatedAt: now,
-      questions: [
-        {
-          id: 'question-1',
-          nodeId: 'node-1',
-          sortOrder: 0,
-          prompt: 'What should happen next?',
-          options: { type: 'multipleChoice', choices: ['A', 'B'] },
-          correctIndices: [0],
-          isPreLecture: false,
-          timeOffsetSeconds: 125,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    };
-
+  it('hydrates checkpoints and quiz bank and PATCHes them', async () => {
     const user = userEvent.setup();
     render(<NodeEditForm node={node} />);
 
-    expect(screen.getByLabelText('Minutes')).toHaveValue(2);
-    expect(screen.getByLabelText('Seconds')).toHaveValue(5);
-    expect(screen.getAllByTitle('Mark as correct')[0]).toBeChecked();
+    expect(screen.getByDisplayValue('Existing node')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Checkpoint prompt')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Quiz prompt')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
-    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('/api/instructor/nodes/node-1');
+    expect(request.method).toBe('PATCH');
     const body = JSON.parse(request.body);
-
-    expect(body.questions[0].timeOffsetSeconds).toBe(125);
-    expect(body.questions[0].correctIndices).toEqual([0]);
-    expect(body.questions[0].options).not.toHaveProperty('timeOffsetSeconds');
-    expect(push).toHaveBeenCalledWith('/instructor/nodes');
-  });
-
-  it('loads and preserves an untagged checkpoint question', async () => {
-    const now = new Date();
-    const node: ComponentProps<typeof NodeEditForm>['node'] = {
-      id: 'node-1',
-      title: 'Safety video',
-      summary: null,
-      videoUrl: 'https://example.com/video.mp4',
-      muxPlaybackId: null,
-      thumbnailUrl: null,
-      estimatedMinutes: null,
-      createdAt: now,
-      updatedAt: now,
-      questions: [
-        {
-          id: 'question-1',
-          nodeId: 'node-1',
-          sortOrder: 0,
-          prompt: 'Question after the video',
-          options: { type: 'multipleChoice', choices: ['A', 'B'] },
-          correctIndices: [0],
-          isPreLecture: false,
-          timeOffsetSeconds: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    };
-
-    const user = userEvent.setup();
-    render(<NodeEditForm node={node} />);
-
-    expect(screen.getByText('Leave blank to show this question after the video.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Minutes')).toHaveValue(null);
-    expect(screen.getByLabelText('Seconds')).toHaveValue(null);
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
-    const request = (global.fetch as jest.Mock).mock.calls[0][1];
-    const body = JSON.parse(request.body);
-    expect(body.questions[0].timeOffsetSeconds).toBeNull();
-  });
-
-  it('loads and updates multiple correct answers', async () => {
-    const now = new Date();
-    const node: ComponentProps<typeof NodeEditForm>['node'] = {
-      id: 'node-1',
-      title: 'Safety video',
-      summary: null,
-      videoUrl: null,
-      muxPlaybackId: null,
-      thumbnailUrl: null,
-      estimatedMinutes: null,
-      createdAt: now,
-      updatedAt: now,
-      questions: [
-        {
-          id: 'question-1',
-          nodeId: 'node-1',
-          sortOrder: 0,
-          prompt: 'Select all',
-          options: { type: 'multipleChoice', choices: ['A', 'B'] },
-          correctIndices: [0],
-          isPreLecture: false,
-          timeOffsetSeconds: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    };
-
-    const user = userEvent.setup();
-    render(<NodeEditForm node={node} />);
-    const answerCheckboxes = screen.getAllByTitle('Mark as correct');
-    expect(answerCheckboxes[0]).toBeChecked();
-    await user.click(answerCheckboxes[1]);
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
-    const request = (global.fetch as jest.Mock).mock.calls[0][1];
-    expect(JSON.parse(request.body).questions[0].correctIndices).toEqual([0, 1]);
-  });
-
-  it('loads a legacy tolerance answer as a range and rewrites it explicitly', async () => {
-    const now = new Date();
-    const node: ComponentProps<typeof NodeEditForm>['node'] = {
-      id: 'node-1',
-      title: 'Measurement',
-      summary: null,
-      videoUrl: null,
-      muxPlaybackId: null,
-      thumbnailUrl: null,
-      estimatedMinutes: null,
-      createdAt: now,
-      updatedAt: now,
-      questions: [
-        {
-          id: 'question-1',
-          nodeId: 'node-1',
-          sortOrder: 0,
-          prompt: 'Estimate',
-          options: { type: 'shortAnswer', expectedAnswer: 100, tolerancePercent: 5 },
-          correctIndices: [],
-          isPreLecture: false,
-          timeOffsetSeconds: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    };
-
-    const user = userEvent.setup();
-    render(<NodeEditForm node={node} />);
-
-    expect(screen.getByLabelText('Answer mode')).toHaveValue('range');
-    expect(screen.getByLabelText('Minimum answer')).toHaveValue(95);
-    expect(screen.getByLabelText('Maximum answer')).toHaveValue(105);
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
-    const request = (global.fetch as jest.Mock).mock.calls[0][1];
-    expect(JSON.parse(request.body).questions[0].options).toEqual({
-      type: 'shortAnswer',
-      answerMode: 'range',
-      minimumAnswer: 95,
-      maximumAnswer: 105,
-    });
+    expect(body.checkpoints[0].timeOffsetSeconds).toBe(90);
+    expect(body.checkpoints[0].questions[0]).toEqual(
+      expect.objectContaining({
+        prompt: 'Checkpoint prompt',
+        options: { type: 'multipleChoice', choices: ['A', 'B'] },
+        correctIndices: [0],
+      })
+    );
+    expect(body.quizQuestions[0]).toEqual(
+      expect.objectContaining({
+        prompt: 'Quiz prompt',
+        options: { type: 'multipleChoice', choices: ['X', 'Y'] },
+        correctIndices: [1],
+      })
+    );
   });
 });

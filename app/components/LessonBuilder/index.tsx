@@ -33,9 +33,9 @@ export default function LessonBuilder({ availableNodes, entries, onChange }: Pro
         nodeId: node.id,
         title: node.title,
         passingPercent: '',
-        quizQuestionCount: node.preLectureCount > 0 ? String(node.preLectureCount) : '0',
+        quizQuestionCount: node.quizBankCount > 0 ? String(node.quizBankCount) : '0',
         isRequired: true,
-        preLectureCount: node.preLectureCount,
+        quizBankCount: node.quizBankCount,
       },
     ]);
   }

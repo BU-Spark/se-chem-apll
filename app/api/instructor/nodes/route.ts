@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { validateQuestionTimestamps } from '@/app/utils/questionTimestamps';
-import { getMultipleChoiceChoices, validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
-import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
+import {
+  nodeInclude,
+  serializeCheckpointCreate,
+  serializeQuestionCreate,
+  validateNodeContent,
+  type CheckpointPayload,
+  type QuestionPayload,
+} from '@/app/utils/nodeContent';
 
 // GET /api/instructor/nodes — list all nodes
 export async function GET() {
@@ -11,16 +16,29 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const nodes = await prisma.node.findMany({
-    include: {
-      questions: { orderBy: { sortOrder: 'asc' } },
-      _count: { select: { lessonNodes: true } },
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      videoUrl: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { lessonNodes: true, checkpoints: true, quizQuestions: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(nodes);
 }
 
-// POST /api/instructor/nodes — create a new node with questions
+function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) {
+    return NextResponse.json({ error: `${field} must be an array` }, { status: 422 });
+  }
+  return null;
+}
+
+// POST /api/instructor/nodes — create a new node with checkpoints + quiz bank
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -32,37 +50,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, questions } = body as {
+  const { title, summary, videoUrl, checkpoints, quizQuestions } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
-    questions?: Array<{
-      sortOrder: number;
-      prompt: string;
-      options: unknown;
-      correctIndices?: unknown;
-      isPreLecture?: boolean;
-      timeOffsetSeconds?: number | null;
-    }>;
+    checkpoints?: CheckpointPayload[];
+    quizQuestions?: QuestionPayload[];
   };
 
   if (!title?.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
   }
 
-  const timestampError = validateQuestionTimestamps(questions ?? []);
-  if (timestampError) {
-    return NextResponse.json({ error: timestampError }, { status: 422 });
-  }
+  const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
+  if (checkpointsTypeError) return checkpointsTypeError;
+  const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
+  if (quizQuestionsTypeError) return quizQuestionsTypeError;
 
-  const correctAnswersError = validateMultipleChoiceAnswers(questions ?? []);
-  if (correctAnswersError) {
-    return NextResponse.json({ error: correctAnswersError }, { status: 422 });
-  }
-
-  const shortAnswerError = validateShortAnswerOptions(questions ?? []);
-  if (shortAnswerError) {
-    return NextResponse.json({ error: shortAnswerError }, { status: 422 });
+  const contentError = validateNodeContent({ checkpoints, quizQuestions });
+  if (contentError) {
+    return NextResponse.json({ error: contentError }, { status: 422 });
   }
 
   const node = await prisma.node.create({
@@ -70,18 +77,14 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       summary: summary?.trim() ?? null,
       videoUrl: videoUrl ?? null,
-      questions: {
-        create: (questions ?? []).map((q) => ({
-          sortOrder: q.sortOrder,
-          prompt: q.prompt,
-          options: q.options as object,
-          correctIndices: getMultipleChoiceChoices(q.options) ? (q.correctIndices as number[]) : [],
-          isPreLecture: q.isPreLecture ?? false,
-          timeOffsetSeconds: q.isPreLecture ? null : (q.timeOffsetSeconds ?? null),
-        })),
+      checkpoints: {
+        create: (checkpoints ?? []).map(serializeCheckpointCreate),
+      },
+      quizQuestions: {
+        create: (quizQuestions ?? []).map(serializeQuestionCreate),
       },
     },
-    include: { questions: { orderBy: { sortOrder: 'asc' } } },
+    include: nodeInclude,
   });
 
   return NextResponse.json(node, { status: 201 });
