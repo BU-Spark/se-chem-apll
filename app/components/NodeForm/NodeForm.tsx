@@ -3,7 +3,9 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatTimeOffsetSeconds, validateCheckpointTimestamps } from '@/app/utils/questionTimestamps';
+import { downloadCsvFile } from '@/app/utils/csv';
 import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
+import { csvToFormQuestions, formQuestionsToCsv, sampleQuizQuestionsCsv } from '@/app/utils/quizQuestionCsv';
 import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import QuestionEditor from './QuestionEditor';
@@ -59,9 +61,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const router = useRouter();
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const quizCsvInputRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quizCsvErrors, setQuizCsvErrors] = useState<string[] | null>(null);
+  const [quizCsvStatus, setQuizCsvStatus] = useState<string | null>(null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
@@ -123,6 +128,41 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     }
     setError(null);
     addCheckpointAt(Math.max(0, seconds));
+  }
+
+  function handleDownloadSampleQuizCsv() {
+    downloadCsvFile('quiz-questions-sample.csv', sampleQuizQuestionsCsv());
+  }
+
+  function handleDownloadCurrentQuizCsv() {
+    downloadCsvFile('quiz-questions.csv', formQuestionsToCsv(quizQuestions));
+  }
+
+  async function handleQuizCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setQuizCsvErrors(null);
+    setQuizCsvStatus(null);
+
+    try {
+      const text = await file.text();
+      const result = csvToFormQuestions(text);
+      if (!result.ok) {
+        setQuizCsvErrors(result.errors);
+        return;
+      }
+      setQuizQuestions(result.questions);
+      setQuizCsvStatus(
+        result.questions.length === 0
+          ? 'Loaded 0 questions. Save the node to persist.'
+          : `Loaded ${result.questions.length} question${result.questions.length === 1 ? '' : 's'}. Review and save the node to persist.`
+      );
+    } catch {
+      setQuizCsvErrors(['Could not read that CSV file.']);
+    } finally {
+      if (quizCsvInputRef.current) quizCsvInputRef.current.value = '';
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -390,6 +430,39 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
             timestamps.
           </p>
+          <div className={styles.quizCsvToolbar}>
+            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadSampleQuizCsv}>
+              Download sample CSV
+            </button>
+            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadCurrentQuizCsv}>
+              Download current CSV
+            </button>
+            <button type="button" className={styles.quizCsvBtn} onClick={() => quizCsvInputRef.current?.click()}>
+              Upload CSV
+            </button>
+            <input
+              ref={quizCsvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className={styles.quizCsvInput}
+              onChange={handleQuizCsvUpload}
+            />
+          </div>
+          <p className={styles.sectionNote}>Upload replaces the quiz bank below. Save the node to persist.</p>
+          {quizCsvStatus && <p className={styles.quizCsvStatus}>{quizCsvStatus}</p>}
+          {quizCsvErrors && quizCsvErrors.length > 0 && (
+            <div className={styles.quizCsvErrors}>
+              <p className={styles.quizCsvErrorsTitle}>
+                Could not import CSV ({quizCsvErrors.length} error
+                {quizCsvErrors.length === 1 ? '' : 's'}):
+              </p>
+              <ul className={styles.quizCsvErrorList}>
+                {quizCsvErrors.map((message, idx) => (
+                  <li key={`${idx}-${message}`}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className={styles.questionList}>
             {quizQuestions.map((q, qIdx) => (
               <QuestionEditor
