@@ -139,27 +139,55 @@
   color: #6b7280;
 }
 
-.importRow {
+.importSearch {
   display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.addBtn {
-  padding: 0.5rem 1rem;
-  background: #1f5fab;
-  color: #fff;
-  border: none;
+.searchResults {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  height: fit-content;
 }
 
-.addBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.searchEmpty {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.searchResultBtn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.65rem 1rem;
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  text-align: left;
+}
+
+.searchResultBtn:hover {
+  background: #f9fafb;
+}
+
+.searchResultTitle {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.searchResultSlug {
+  font-size: 0.75rem;
+  color: #9ca3af;
 }
 
 .emptyImport {

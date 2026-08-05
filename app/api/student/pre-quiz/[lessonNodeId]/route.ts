@@ -55,12 +55,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   });
 
   if (!lessonNode) return NextResponse.json({ error: 'Lesson node not found' }, { status: 404 });
-
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      studentId_courseId: {
-        studentId: student.id,
-        courseId: lessonNode.lesson.courseId,
+      studentId: student.id,
+      course: {
+        courseLessons: {
+          some: { lessonId: lessonNode.lessonId },
+        },
       },
     },
   });

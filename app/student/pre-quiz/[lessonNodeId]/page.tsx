@@ -43,11 +43,13 @@ export default async function StudentPreQuizPage({ params }: RouteContext) {
 
   if (!lessonNode) redirect('/student');
 
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      studentId_courseId: {
-        studentId: student.id,
-        courseId: lessonNode.lesson.courseId,
+      studentId: student.id,
+      course: {
+        courseLessons: {
+          some: { lessonId: lessonNode.lessonId },
+        },
       },
     },
   });

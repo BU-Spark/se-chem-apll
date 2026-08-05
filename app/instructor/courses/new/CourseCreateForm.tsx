@@ -28,16 +28,19 @@ export default function CourseCreateForm({ availableLessons }: Props) {
   const [description, setDescription] = useState('');
 
   const [importedLessons, setImportedLessons] = useState<ImportedLesson[]>([]);
-  const [selectedLessonId, setSelectedLessonId] = useState('');
+  const [lessonQuery, setLessonQuery] = useState('');
 
   const unusedLessons = availableLessons.filter((l) => !importedLessons.some((row) => row.lessonId === l.id));
 
-  function addLesson() {
-    if (!selectedLessonId) return;
-    const lesson = availableLessons.find((l) => l.id === selectedLessonId);
-    if (!lesson) return;
+  const filteredLessons = unusedLessons.filter((l) => {
+    const q = lessonQuery.trim().toLowerCase();
+    if (!q) return true;
+    return l.title.toLowerCase().includes(q) || l.slug.toLowerCase().includes(q);
+  });
+
+  function addLesson(lesson: AvailableLesson) {
     setImportedLessons((prev) => [...prev, { lessonId: lesson.id, title: lesson.title, openDate: '', dueDate: '' }]);
-    setSelectedLessonId('');
+    setLessonQuery('');
   }
   function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
     setImportedLessons((prev) => prev.map((row) => (row.lessonId === lessonId ? { ...row, ...patch } : row)));
@@ -144,21 +147,36 @@ export default function CourseCreateForm({ availableLessons }: Props) {
           <h2 className={styles.sectionTitle}>Imported lessons</h2>
           <p className={styles.sectionNote}>Add lessons to this course and set open/due dates for each.</p>
 
-          <div className={styles.importRow}>
-            <label className={styles.field} style={{ flex: 1 }}>
-              Lesson
-              <select value={selectedLessonId} onChange={(e) => setSelectedLessonId(e.target.value)}>
-                <option value="">Select a lesson…</option>
-                {unusedLessons.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.title}
-                  </option>
-                ))}
-              </select>
+          <div className={styles.importSearch}>
+            <label className={styles.field}>
+              Search lessons
+              <input
+                type="search"
+                value={lessonQuery}
+                onChange={(e) => setLessonQuery(e.target.value)}
+                placeholder="Type a lesson title…"
+                autoComplete="off"
+              />
             </label>
-            <button type="button" className={styles.addBtn} onClick={addLesson} disabled={!selectedLessonId}>
-              Add
-            </button>
+
+            {unusedLessons.length === 0 ? (
+              <p className={styles.emptyImport}>All lessons are already imported.</p>
+            ) : (
+              <ul className={styles.searchResults}>
+                {filteredLessons.length === 0 ? (
+                  <li className={styles.searchEmpty}>No matching lessons</li>
+                ) : (
+                  filteredLessons.map((l) => (
+                    <li key={l.id}>
+                      <button type="button" className={styles.searchResultBtn} onClick={() => addLesson(l)}>
+                        <span className={styles.searchResultTitle}>{l.title}</span>
+                        <span className={styles.searchResultSlug}>{l.slug}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </div>
 
           {importedLessons.length === 0 ? (
