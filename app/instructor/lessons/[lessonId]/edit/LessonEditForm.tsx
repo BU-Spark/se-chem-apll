@@ -56,9 +56,9 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
 
   // Initialize lesson nodes from existing data
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(() => {
-    const quizBankMap = new Map(availableNodes.map((n) => [n.id, n.quizBankCount]));
+    const preLectureMap = new Map(availableNodes.map((n) => [n.id, n.preLectureCount]));
     return lesson.lessonNodes.map((ln) => {
-      const bank = quizBankMap.get(ln.nodeId) ?? 0;
+      const bank = preLectureMap.get(ln.nodeId) ?? 0;
       const savedCount = (ln as LessonNode & { quizQuestionCount?: number }).quizQuestionCount;
 
       return {
@@ -68,7 +68,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
         passingPercent: ln.passingPercent.toString(),
         quizQuestionCount: savedCount !== undefined ? String(savedCount) : bank > 0 ? String(bank) : '0',
         isRequired: ln.isRequired,
-        quizBankCount: bank,
+        preLectureCount: bank,
       };
     });
   });
@@ -112,7 +112,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
 
     if (
       lessonNodes.some((entry) => {
-        if (entry.quizBankCount === 0) {
+        if (entry.preLectureCount === 0) {
           return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
         }
         return (
@@ -122,7 +122,7 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
         );
       })
     ) {
-      setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+      setError('Choose a whole-number quiz question count between 1 for every node with a pre-quiz.');
       return;
     }
 

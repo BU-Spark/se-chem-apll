@@ -7,8 +7,8 @@ export interface PaletteNode {
   id: string;
   title: string;
   summary: string | null;
-  quizBankCount: number;
-  checkpointCount: number;
+  questionCount: number;
+  preLectureCount: number;
 }
 
 interface Props {
@@ -41,12 +41,11 @@ export default function NodePalette({ nodes, onAdd }: Props) {
             <div className={styles.paletteItemBody}>
               <div className={styles.paletteItemTitleRow}>
                 <span className={styles.paletteItemTitle}>{node.title}</span>
-                {node.quizBankCount > 0 && <span className={styles.quizBankBadge}>Quiz bank</span>}
+                {node.preLectureCount > 0 && <span className={styles.preQuizBadge}>Pre-quiz</span>}
               </div>
               {node.summary && <span className={styles.paletteItemMeta}>{node.summary}</span>}
               <span className={styles.paletteItemMeta}>
-                {node.checkpointCount} checkpoint{node.checkpointCount !== 1 ? 's' : ''} · {node.quizBankCount} quiz
-                question{node.quizBankCount !== 1 ? 's' : ''}
+                {node.questionCount} question{node.questionCount !== 1 ? 's' : ''}
               </span>
             </div>
             <button type="button" className={styles.paletteAddBtn} onClick={() => onAdd(node)} title="Add to lesson">

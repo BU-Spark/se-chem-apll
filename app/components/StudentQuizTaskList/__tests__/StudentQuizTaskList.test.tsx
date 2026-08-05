@@ -1,87 +1,106 @@
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import StudentQuizTaskList, { buildQuizTasks } from '../StudentQuizTaskList';
 
 describe('buildQuizTasks', () => {
-  it('returns no tasks without a quiz bank', () => {
-    expect(
-      buildQuizTasks({
-        isFoundational: true,
-        quizBankCount: 0,
-        checkpointQuestionCount: 2,
-        attempts: [],
-      })
-    ).toEqual([]);
+  it('locks regular quiz until foundational pre-quiz is taken', () => {
+    const tasks = buildQuizTasks({
+      isFoundational: true,
+      preQuestionCount: 2,
+      regularQuestionCount: 3,
+      attempts: [],
+    });
+
+    expect(tasks[0]).toMatchObject({ key: 'pre', status: 'available' });
+    expect(tasks[1]).toMatchObject({ key: 'regular', status: 'locked' });
   });
 
-  it('shows available quiz when bank exists', () => {
-    expect(
-      buildQuizTasks({
-        isFoundational: false,
-        quizBankCount: 2,
-        checkpointQuestionCount: 1,
-        attempts: [],
-      })
-    ).toEqual([
-      expect.objectContaining({
-        key: 'quiz',
-        label: 'Quiz',
-        status: 'available',
-        actionLabel: 'Start quiz',
-      }),
-    ]);
+  it('skips regular quiz when foundational pre-quiz is passed', () => {
+    const tasks = buildQuizTasks({
+      isFoundational: true,
+      preQuestionCount: 1,
+      regularQuestionCount: 2,
+      attempts: [
+        {
+          id: 'a1',
+          isPassing: true,
+          completedAt: new Date(),
+          responses: [{ question: { id: 'q-pre-1', isPreLecture: true } }],
+        },
+      ],
+    });
+
+    expect(tasks[0]).toMatchObject({ key: 'pre', status: 'completed' });
+    expect(tasks[1]).toMatchObject({ key: 'regular', status: 'skipped' });
   });
 
-  it('marks quiz completed when latest completed quiz attempt passed', () => {
-    expect(
-      buildQuizTasks({
-        isFoundational: true,
-        quizBankCount: 1,
-        checkpointQuestionCount: 0,
-        attempts: [
-          {
-            id: 'a1',
-            isPassing: true,
-            completedAt: new Date(),
-            responses: [{ quizQuestionId: 'q1', checkpointQuestionId: null }],
-          },
-        ],
-      })[0].status
-    ).toBe('completed');
+  it('requires regular quiz when foundational pre-quiz is failed', () => {
+    const tasks = buildQuizTasks({
+      isFoundational: true,
+      preQuestionCount: 1,
+      regularQuestionCount: 2,
+      attempts: [
+        {
+          id: 'a1',
+          isPassing: false,
+          completedAt: new Date(),
+          responses: [{ question: { id: 'q-pre-1', isPreLecture: true } }],
+        },
+      ],
+    });
+
+    expect(tasks[0]).toMatchObject({ key: 'pre', status: 'completed' });
+    expect(tasks[1]).toMatchObject({ key: 'regular', status: 'available' });
   });
 
-  it('marks needs-retry when full coverage exists but latest attempt failed', () => {
-    expect(
-      buildQuizTasks({
-        isFoundational: false,
-        quizBankCount: 1,
-        checkpointQuestionCount: 0,
-        attempts: [
-          {
-            id: 'a1',
-            isPassing: false,
-            completedAt: new Date(),
-            responses: [{ quizQuestionId: 'q1', checkpointQuestionId: null }],
-          },
-        ],
-      })[0].status
-    ).toBe('needs-retry');
+  it('hides pre-quiz and keeps regular available when not foundational', () => {
+    const tasks = buildQuizTasks({
+      isFoundational: false,
+      preQuestionCount: 2,
+      regularQuestionCount: 3,
+      attempts: [],
+    });
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ key: 'regular', status: 'available' });
+  });
+
+  it('marks regular quiz needs-retry when latest regular attempt failed', () => {
+    const tasks = buildQuizTasks({
+      isFoundational: false,
+      preQuestionCount: 0,
+      regularQuestionCount: 2,
+      attempts: [
+        {
+          id: 'a1',
+          isPassing: false,
+          completedAt: new Date(),
+          responses: [{ question: { id: 'q-reg-1', isPreLecture: false } }],
+        },
+      ],
+    });
+
+    expect(tasks[0]).toMatchObject({ key: 'regular', status: 'needs-retry' });
   });
 });
 
 describe('StudentQuizTaskList', () => {
-  it('renders quiz task as coming soon', () => {
+  it('renders pre-quiz before quiz with status badges', () => {
     render(
       <StudentQuizTaskList
         isFoundational
-        quizBankCount={1}
-        checkpointQuestionCount={0}
+        preQuestionCount={1}
+        regularQuestionCount={1}
         attempts={[]}
         lessonNodeId="ln-1"
       />
     );
 
-    expect(screen.getByText('Quiz')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Start quiz \(coming soon\)/ })).toBeDisabled();
-    expect(screen.queryByText('Pre-quiz')).not.toBeInTheDocument();
+    const preQuiz = screen.getByText('Pre-quiz');
+    const quiz = screen.getByText('Quiz');
+    expect(preQuiz.compareDocumentPosition(quiz) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByText('Locked')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Start pre-quiz' })).toHaveAttribute('href', '/student/pre-quiz/ln-1');
   });
 });

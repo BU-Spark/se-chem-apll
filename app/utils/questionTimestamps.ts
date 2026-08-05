@@ -1,10 +1,11 @@
+export interface TimestampedQuestionInput {
+  isPreLecture?: boolean;
+  timeOffsetSeconds?: unknown;
+}
+
 export interface TimestampParts {
   minutes: string;
   seconds: string;
-}
-
-export interface CheckpointTimestampInput {
-  timeOffsetSeconds?: unknown;
 }
 
 export function validateTimestampParts(minutes: string, seconds: string): string | null {
@@ -51,25 +52,18 @@ export function splitTimeOffsetSeconds(timeOffsetSeconds: number | null | undefi
   };
 }
 
-export function formatTimeOffsetSeconds(timeOffsetSeconds: number): string {
-  const minutes = Math.floor(timeOffsetSeconds / 60);
-  const seconds = timeOffsetSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
+export function validateQuestionTimestamps(questions: TimestampedQuestionInput[]): string | null {
+  for (const question of questions) {
+    if (question.isPreLecture !== undefined && typeof question.isPreLecture !== 'boolean') {
+      return 'Checkpoint timestamps must be non-negative whole seconds.';
+    }
+    if (question.isPreLecture === true) continue;
 
-/** Checkpoint timestamps are required, non-negative integers, and unique per node. */
-export function validateCheckpointTimestamps(checkpoints: CheckpointTimestampInput[]): string | null {
-  const seen = new Set<number>();
-
-  for (const checkpoint of checkpoints) {
-    const timestamp = checkpoint.timeOffsetSeconds;
+    const timestamp = question.timeOffsetSeconds;
+    if (timestamp == null) continue;
     if (typeof timestamp !== 'number' || !Number.isInteger(timestamp) || timestamp < 0) {
-      return 'Each checkpoint must have a non-negative whole-second timestamp.';
+      return 'Checkpoint timestamps must be non-negative whole seconds.';
     }
-    if (seen.has(timestamp)) {
-      return 'Checkpoint timestamps must be unique within a node.';
-    }
-    seen.add(timestamp);
   }
 
   return null;

@@ -34,6 +34,7 @@ interface Props {
 
 interface RoadmapNodeData {
   label: string;
+  preLectureCount: number;
   [key: string]: unknown;
 }
 
@@ -42,6 +43,7 @@ function RoadmapNode({ data }: { data: RoadmapNodeData }) {
     <div className={styles.graphNode}>
       <Handle type="target" position={Position.Top} />
       <span className={styles.graphNodeLabel}>{data.label}</span>
+      {data.preLectureCount > 0 && <span className={styles.preQuizBadge}>Pre-quiz</span>}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -108,7 +110,7 @@ function toXYNodes(nodes: LessonNodeEntry[]): XYNode[] {
     id: n.instanceId,
     type: 'roadmapNode',
     position: { x: 220 * (i % 4), y: 130 * Math.floor(i / 4) },
-    data: { label: n.title } as RoadmapNodeData,
+    data: { label: n.title, preLectureCount: n.preLectureCount } as RoadmapNodeData,
   }));
 }
 

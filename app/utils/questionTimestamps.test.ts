@@ -1,8 +1,7 @@
 import {
   combineTimestampParts,
-  formatTimeOffsetSeconds,
   splitTimeOffsetSeconds,
-  validateCheckpointTimestamps,
+  validateQuestionTimestamps,
   validateTimestampParts,
 } from './questionTimestamps';
 
@@ -58,36 +57,22 @@ describe('question timestamp helpers', () => {
     expect(splitTimeOffsetSeconds(null)).toEqual({ minutes: '', seconds: '' });
   });
 
-  it('formats seconds as m:ss', () => {
-    expect(formatTimeOffsetSeconds(0)).toBe('0:00');
-    expect(formatTimeOffsetSeconds(125)).toBe('2:05');
-  });
-
-  describe('validateCheckpointTimestamps', () => {
-    it('accepts unique non-negative timestamps', () => {
+  describe('validateQuestionTimestamps', () => {
+    it('accepts missing and duplicate checkpoint timestamps and ignores pre-lecture timestamps', () => {
       expect(
-        validateCheckpointTimestamps([{ timeOffsetSeconds: 0 }, { timeOffsetSeconds: 90 }, { timeOffsetSeconds: 125 }])
+        validateQuestionTimestamps([
+          { isPreLecture: true, timeOffsetSeconds: 99 },
+          { isPreLecture: false, timeOffsetSeconds: null },
+          { isPreLecture: false },
+          { isPreLecture: false, timeOffsetSeconds: 90 },
+          { isPreLecture: false, timeOffsetSeconds: 90 },
+        ])
       ).toBeNull();
     });
 
-    it('rejects missing timestamps', () => {
-      expect(validateCheckpointTimestamps([{}])).toBe(
-        'Each checkpoint must have a non-negative whole-second timestamp.'
-      );
-      expect(validateCheckpointTimestamps([{ timeOffsetSeconds: null }])).toBe(
-        'Each checkpoint must have a non-negative whole-second timestamp.'
-      );
-    });
-
-    it('rejects duplicate timestamps', () => {
-      expect(validateCheckpointTimestamps([{ timeOffsetSeconds: 90 }, { timeOffsetSeconds: 90 }])).toBe(
-        'Checkpoint timestamps must be unique within a node.'
-      );
-    });
-
     it.each([-1, 1.5, Number.NaN])('rejects invalid timestamp %p', (timeOffsetSeconds) => {
-      expect(validateCheckpointTimestamps([{ timeOffsetSeconds }])).toBe(
-        'Each checkpoint must have a non-negative whole-second timestamp.'
+      expect(validateQuestionTimestamps([{ timeOffsetSeconds }])).toBe(
+        'Checkpoint timestamps must be non-negative whole seconds.'
       );
     });
   });

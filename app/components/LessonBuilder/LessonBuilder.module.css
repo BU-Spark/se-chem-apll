@@ -259,7 +259,7 @@
 }
 
 /* ── Pre-quiz badge (shared by NodeCard and NodePalette) ──── */
-.quizBankBadge {
+.preQuizBadge {
   font-size: 0.7rem;
   font-weight: 600;
   color: #92400e;

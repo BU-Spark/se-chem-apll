@@ -27,51 +27,25 @@ async function createDemoNode(index) {
       summary: '[seed-demo] Example learning node',
       videoUrl: pickRandomYoutube(),
       estimatedMinutes: 8 + index,
-      checkpoints: {
+      questions: {
         create: [
           {
             sortOrder: 0,
-            timeOffsetSeconds: 30 + index * 10,
-            questions: {
-              create: [
-                {
-                  sortOrder: 0,
-                  prompt: `Checkpoint question for demo node ${index}`,
-                  options: { type: 'multipleChoice', choices: ['True', 'False'] },
-                  correctIndices: [0],
-                },
-              ],
-            },
-          },
-        ],
-      },
-      quizQuestions: {
-        create: [
-          {
-            sortOrder: 0,
-            prompt: `Quiz bank question for demo node ${index}`,
-            options: {
-              type: 'multipleChoice',
-              choices: ['Option A', 'Option B', 'Option C', 'Option D'],
-            },
+            prompt: `Pre-quiz question for demo node ${index}`,
+            options: ['Option A', 'Option B', 'Option C', 'Option D'],
             correctIndices: [1],
+            isPreLecture: true,
           },
           {
             sortOrder: 1,
-            prompt: `Second quiz bank question for demo node ${index}`,
-            options: {
-              type: 'shortAnswer',
-              answerMode: 'exact',
-              expectedAnswer: index,
-            },
-            correctIndices: [],
+            prompt: `Checkpoint question for demo node ${index}`,
+            options: ['True', 'False'],
+            correctIndices: [0],
+            isPreLecture: false,
+            timeOffsetSeconds: 90,
           },
         ],
       },
-    },
-    include: {
-      checkpoints: { include: { questions: true } },
-      quizQuestions: true,
     },
   });
 }
@@ -94,7 +68,7 @@ async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) 
           sortOrder: idx,
           passingPercent: 70,
           quizQuestionCount: 1,
-          isRequired: idx === 0,
+          isRequired: true,
         })),
       },
     },
@@ -121,6 +95,7 @@ async function createDemoLesson({ courseId, title, summary, sortOrder, nodes }) 
 }
 
 async function main() {
+  // Clean up prior demo data created by this seed.
   const demoCourses = await prisma.course.findMany({
     where: { code: { startsWith: 'DEMO-' } },
     select: { id: true },
@@ -220,10 +195,7 @@ async function main() {
         include: {
           node: {
             include: {
-              quizQuestions: { orderBy: { sortOrder: 'asc' } },
-              checkpoints: {
-                include: { questions: { orderBy: { sortOrder: 'asc' } } },
-              },
+              questions: { orderBy: { sortOrder: 'asc' } },
             },
           },
         },
@@ -262,11 +234,35 @@ async function main() {
     const primaryLessonNode = lesson.lessonNodes[0];
     if (!primaryLessonNode) continue;
 
-    const quizQuestions = primaryLessonNode.node.quizQuestions;
-    const checkpointQuestions = primaryLessonNode.node.checkpoints.flatMap((c) => c.questions);
+    const preQuestions = primaryLessonNode.node.questions.filter((q) => q.isPreLecture);
+    const regularQuestions = primaryLessonNode.node.questions.filter((q) => !q.isPreLecture);
 
-    if (quizQuestions.length > 0) {
+    if (preQuestions.length > 0) {
+      const preAttempt = await prisma.nodeAttempt.create({
+        data: {
+          lessonNodeId: primaryLessonNode.id,
+          userId: demoStudent.id,
+          isPassing: true,
+          score: 100,
+          startedAt: new Date(),
+          completedAt: new Date(),
+        },
+      });
+
+      await prisma.nodeResponse.createMany({
+        data: preQuestions.map((q) => ({
+          attemptId: preAttempt.id,
+          questionId: q.id,
+          studentId: demoStudent.id,
+          selectedIndices: [1],
+          isCorrect: true,
+        })),
+      });
+    }
+
+    if (regularQuestions.length > 0) {
       const shouldFail = i % 2 === 0;
+
       const quizAttempt = await prisma.nodeAttempt.create({
         data: {
           lessonNodeId: primaryLessonNode.id,
@@ -279,42 +275,19 @@ async function main() {
       });
 
       await prisma.nodeResponse.createMany({
-        data: quizQuestions.slice(0, 1).map((q) => ({
+        data: regularQuestions.map((q) => ({
           attemptId: quizAttempt.id,
-          quizQuestionId: q.id,
+          questionId: q.id,
           studentId: demoStudent.id,
-          selectedIndices: [shouldFail ? 0 : 1],
+          selectedIndices: [shouldFail ? 1 : 0],
           isCorrect: !shouldFail,
-        })),
-      });
-    }
-
-    if (checkpointQuestions.length > 0 && i % 2 === 1) {
-      const checkpointAttempt = await prisma.nodeAttempt.create({
-        data: {
-          lessonNodeId: primaryLessonNode.id,
-          userId: demoStudent.id,
-          isPassing: true,
-          score: 100,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        },
-      });
-
-      await prisma.nodeResponse.createMany({
-        data: checkpointQuestions.map((q) => ({
-          attemptId: checkpointAttempt.id,
-          checkpointQuestionId: q.id,
-          studentId: demoStudent.id,
-          selectedIndices: [0],
-          isCorrect: true,
         })),
       });
     }
   }
 
   console.log(
-    'Seed complete: demo courses, lessons, nodes, roadmap edges, YouTube videos, checkpoints, and quiz bank attempts created.'
+    'Seed complete: demo courses, lessons, nodes, roadmap edges, YouTube videos, and student pre-quiz/quiz attempts created.'
   );
 }
 
