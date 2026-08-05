@@ -228,6 +228,8 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
           onPaneClick={() => setSelectedEdgeId(null)}
           fitView
           deleteKeyCode="Backspace"
+          panOnDrag={[1, 2]}
+          panOnScroll
         >
           <Background />
           <Controls />
@@ -236,7 +238,7 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
       </div>
       {connectError && <p className={styles.error}>{connectError}</p>}
       <p className={styles.hint}>
-        Drag between node handles to connect. Click a connection and use the{' '}
+        Drag between blue dots to connect. Click a connection and use the{' '}
         <span className={styles.edgeDeleteHintIcon}>×</span> button (or press <kbd>Backspace</kbd>) to delete it.
       </p>
     </>

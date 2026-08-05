@@ -105,7 +105,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
     if (
       lessonNodes.some((entry) => {
         if (entry.preLectureCount === 0) {
-          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount != '';
+          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
         }
         return (
           entry.quizQuestionCount === '' ||
@@ -294,6 +294,9 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
             <h2 className={styles.sectionTitle}>Learning roadmap</h2>
             <p className={styles.sectionNote}>
               Draw prerequisite paths between nodes. Connections must form a directed acyclic graph — no cycles allowed.
+            </p>
+            <p className={styles.sectionNote}>
+              Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
             </p>
             <LessonRoadmapBuilder lessonNodes={lessonNodes} edges={edges} onEdgesChange={setEdges} />
           </section>

@@ -20,7 +20,7 @@ describe('Home Page', () => {
   });
 
   it('redirects to /sign-in when user is not logged in', async () => {
-    (auth as jest.Mock).mockResolvedValue({ userId: null });
+    (auth as unknown as jest.Mock).mockResolvedValue({ userId: null });
 
     await HomePage();
 
@@ -28,8 +28,8 @@ describe('Home Page', () => {
   });
 
   it('redirects to /select-role when user has no role set', async () => {
-    (auth as jest.Mock).mockResolvedValue({ userId: 'user_123' });
-    (currentUser as jest.Mock).mockResolvedValue({
+    (auth as unknown as jest.Mock).mockResolvedValue({ userId: 'user_123' });
+    (currentUser as unknown as jest.Mock).mockResolvedValue({
       unsafeMetadata: {},
     });
 
@@ -39,8 +39,8 @@ describe('Home Page', () => {
   });
 
   it('redirects to /instructor when user role is instructor', async () => {
-    (auth as jest.Mock).mockResolvedValue({ userId: 'user_123' });
-    (currentUser as jest.Mock).mockResolvedValue({
+    (auth as unknown as jest.Mock).mockResolvedValue({ userId: 'user_123' });
+    (currentUser as unknown as jest.Mock).mockResolvedValue({
       unsafeMetadata: { role: 'instructor' },
     });
 
@@ -50,8 +50,8 @@ describe('Home Page', () => {
   });
 
   it('redirects to /student when user role is student', async () => {
-    (auth as jest.Mock).mockResolvedValue({ userId: 'user_123' });
-    (currentUser as jest.Mock).mockResolvedValue({
+    (auth as unknown as jest.Mock).mockResolvedValue({ userId: 'user_123' });
+    (currentUser as unknown as jest.Mock).mockResolvedValue({
       unsafeMetadata: { role: 'student' },
     });
 

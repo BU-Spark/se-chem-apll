@@ -67,28 +67,31 @@ export default function NodeCard({ entry, index, onChange, onRemove }: Props) {
               onChange={(e) => onChange({ passingPercent: e.target.value })}
             />
           </label>
+
           {entry.preLectureCount > 0 && (
             <label className={styles.nodeCardField}>
               Quiz questions
               <input
                 type="number"
                 min={0}
-                required={entry.preLectureCount > 0}
+                required
                 placeholder="e.g. 5"
                 value={entry.quizQuestionCount}
                 onChange={(e) => onChange({ quizQuestionCount: e.target.value })}
               />
             </label>
           )}
+
           <label className={styles.nodeCardCheckbox}>
             <input
               type="checkbox"
               checked={entry.isRequired}
               onChange={(e) => onChange({ isRequired: e.target.checked })}
             />
-            Required
+            Foundational
           </label>
         </div>
+
         {showEqualMessage && (
           <p className={styles.nodeCardHint}>
             The amount of questions shown in the quiz [{requestedCount}] is the same amount that is in the question bank

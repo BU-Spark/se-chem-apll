@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { areIndexSetsEqual, getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
+import { gradeShortAnswer, parseShortAnswerOptions, ParsedShortAnswer } from '@/app/utils/shortAnswer';
+
 import { effectiveQuizQuestionCount } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
@@ -9,7 +12,7 @@ interface RouteContext {
 
 type AnswerInput = {
   questionId: string;
-  selectedIndex?: number;
+  selectedIndices?: unknown;
   rawAnswer?: string;
 };
 
@@ -101,32 +104,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   function parseQuestionFormat(
     options: unknown
-  ):
-    | { type: 'multipleChoice'; choices: string[] }
-    | { type: 'shortAnswer'; expectedAnswer: number; tolerancePercent: number }
-    | null {
-    if (Array.isArray(options) && options.every((v) => typeof v === 'string')) {
-      return { type: 'multipleChoice', choices: options };
-    }
-    if (options && typeof options === 'object') {
-      const opt = options as {
-        type?: string;
-        choices?: unknown;
-        expectedAnswer?: unknown;
-        tolerancePercent?: unknown;
-      };
-      if (opt.type === 'multipleChoice' && Array.isArray(opt.choices)) {
-        return { type: 'multipleChoice', choices: opt.choices.map((c) => String(c)) };
-      }
-      if (opt.type === 'shortAnswer') {
-        return {
-          type: 'shortAnswer',
-          expectedAnswer: Number(opt.expectedAnswer),
-          tolerancePercent: Number(opt.tolerancePercent ?? 0),
-        };
-      }
-    }
-    return null;
+  ): { type: 'multipleChoice'; choices: string[] } | ParsedShortAnswer | null {
+    const choices = getMultipleChoiceChoices(options);
+    return choices ? { type: 'multipleChoice', choices } : parseShortAnswerOptions(options);
   }
 
   for (const q of preQuestions) {
@@ -138,8 +118,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     if (!answer) {
       return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
     }
-    if (format.type === 'multipleChoice' && answer.selectedIndex === undefined) {
-      return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
+    if (format.type === 'multipleChoice') {
+      const selectedIndices = answer.selectedIndices;
+      if (!Array.isArray(selectedIndices) || selectedIndices.length === 0) {
+        return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
+      }
+      if (
+        selectedIndices.some((index) => !Number.isInteger(index) || index < 0 || index >= format.choices.length) ||
+        new Set(selectedIndices).size !== selectedIndices.length
+      ) {
+        return NextResponse.json({ error: `Invalid answer selection: ${q.id}` }, { status: 422 });
+      }
     }
     if (format.type === 'shortAnswer' && String(answer.rawAnswer ?? '').trim().length === 0) {
       return NextResponse.json({ error: 'All pre-quiz questions must be answered' }, { status: 422 });
@@ -165,19 +154,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       if (!format) {
         throw new Error(`Unsupported question format: ${q.id}`);
       }
-      const selectedIndex = answer?.selectedIndex ?? null;
+      const selectedIndices = Array.isArray(answer?.selectedIndices) ? (answer.selectedIndices as number[]) : [];
       const rawAnswer = answer?.rawAnswer ?? null;
       let isCorrect: boolean | null = null;
 
       if (format.type === 'multipleChoice') {
-        isCorrect = selectedIndex !== null && q.correctIndex !== null ? selectedIndex === q.correctIndex : null;
+        isCorrect = q.correctIndices.length > 0 ? areIndexSetsEqual(selectedIndices, q.correctIndices) : null;
       } else {
-        const submitted = Number(rawAnswer);
-        if (!Number.isNaN(submitted) && Number.isFinite(submitted)) {
-          const expected = format.expectedAnswer;
-          const tolerance = Math.abs(expected) * (format.tolerancePercent / 100);
-          isCorrect = Math.abs(submitted - expected) <= tolerance;
-        }
+        isCorrect = gradeShortAnswer(q.options, rawAnswer);
       }
 
       if (isCorrect === true) correctCount += 1;
@@ -187,7 +171,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           attemptId: attempt.id,
           questionId: q.id,
           studentId: student.id,
-          selectedIndex,
+          selectedIndices,
           rawAnswer,
           isCorrect,
         },

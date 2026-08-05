@@ -101,3 +101,19 @@
   color: #dc2626;
   font-size: 0.82rem;
 }
+
+.canvas :global(.react-flow__handle) {
+  width: 14px;
+  height: 14px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #93c5fd;
+}
+
+.canvas :global(.react-flow__handle:hover),
+.canvas :global(.react-flow__handle-connecting),
+.canvas :global(.react-flow__handle-valid) {
+  width: 16px;
+  height: 16px;
+  background: #1d4ed8;
+}
