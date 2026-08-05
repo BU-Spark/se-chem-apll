@@ -1,0 +1,98 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  
+  .courseList {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .courseCard {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.875rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .courseHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  
+  .cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .lessonStack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .bone {
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 0.4rem;
+  }
+  
+  .title {
+    width: 11rem;
+    height: 1.75rem;
+  }
+  
+  .lineLg {
+    width: 45%;
+    height: 1.1rem;
+  }
+  
+  .lineMd {
+    width: 80%;
+    height: 0.85rem;
+  }
+  
+  .lineSm {
+    width: 25%;
+    height: 0.75rem;
+  }
+  
+  .badge {
+    flex-shrink: 0;
+    width: 5rem;
+    height: 1.4rem;
+    border-radius: 9999px;
+  }
+  
+  .lesson {
+    width: 100%;
+    height: 3.5rem;
+    border-radius: 0.75rem;
+  }
+  
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .bone {
+      animation: none;
+      background: #e5e7eb;
+    }
+  }

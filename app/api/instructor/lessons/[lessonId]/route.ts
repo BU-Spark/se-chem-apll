@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { isAcyclic } from '@/app/utils/dagValidation';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
 import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
+import { nodeInclude } from '@/app/utils/nodeContent';
 
 interface RouteContext {
   params: Promise<{ lessonId: string }>;
@@ -19,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     where: { id: lessonId },
     include: {
       lessonNodes: {
-        include: { node: { include: { questions: { orderBy: { sortOrder: 'asc' } } } } },
+        include: { node: { include: nodeInclude } },
         orderBy: { sortOrder: 'asc' },
       },
       lessonNodeEdges: {

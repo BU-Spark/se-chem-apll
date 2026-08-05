@@ -163,32 +163,63 @@ model CourseLesson {
 // ---------------------------------------------------------------------------
 
 model Node {
-  id               String         @id @default(cuid())
+  id               String           @id @default(cuid())
   title            String
   summary          String?
   videoUrl         String?
   muxPlaybackId    String?
   thumbnailUrl     String?
   estimatedMinutes Int?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  questions        NodeQuestion[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  checkpoints      NodeCheckpoint[]
+  quizQuestions    QuizQuestion[]
   lessonNodes      LessonNode[]
 }
 
-model NodeQuestion {
-  id                String   @id @default(cuid())
+// Timestamped QEV cue during the node video; holds one or more checkpoint questions.
+model NodeCheckpoint {
+  id                String               @id @default(cuid())
   nodeId            String
   sortOrder         Int
-  prompt            String
-  // For multiple-choice: JSON array of strings, e.g. ["Option A", "Option B"]
-  // For short answer:    JSON object, e.g. { type: "shortAnswer", expectedAnswer: 42, tolerancePercent: 5 }
-  options           Json
-  correctIndices    Int[]    @default([])
-  isPreLecture      Boolean  @default(false)
-  timeOffsetSeconds Int?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  timeOffsetSeconds Int
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  node              Node                 @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  questions         CheckpointQuestion[]
+
+  @@unique([nodeId, sortOrder])
+  @@unique([nodeId, timeOffsetSeconds])
+}
+
+model CheckpointQuestion {
+  id             String   @id @default(cuid())
+  checkpointId   String
+  sortOrder      Int
+  prompt         String
+  // For multiple-choice: { type: "multipleChoice", choices: string[] } or legacy string[]
+  // For short answer:    { type: "shortAnswer", answerMode: "exact"|"range", ... }
+  options        Json
+  correctIndices Int[]    @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  checkpoint NodeCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+  responses  NodeResponse[]
+
+  @@unique([checkpointId, sortOrder])
+}
+
+// Post-video (or foundational first-attempt) quiz bank; sampled via LessonNode.quizQuestionCount.
+model QuizQuestion {
+  id             String   @id @default(cuid())
+  nodeId         String
+  sortOrder      Int
+  prompt         String
+  options        Json
+  correctIndices Int[]    @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   node      Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   responses NodeResponse[]
@@ -284,18 +315,23 @@ model NodeAttempt {
 }
 
 model NodeResponse {
-  id              String   @id @default(cuid())
-  attemptId       String
-  questionId      String
-  studentId       String
-  selectedIndices Int[]    @default([])
-  rawAnswer       String?
-  isCorrect       Boolean?
-  createdAt       DateTime @default(now())
+  id                   String   @id @default(cuid())
+  attemptId            String
+  checkpointQuestionId String?
+  quizQuestionId       String?
+  studentId            String
+  selectedIndices      Int[]    @default([])
+  rawAnswer            String?
+  isCorrect            Boolean?
+  createdAt            DateTime @default(now())
 
-  attempt  NodeAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question NodeQuestion @relation(fields: [questionId], references: [id])
-  student  User         @relation(fields: [studentId], references: [id])
+  attempt            NodeAttempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  checkpointQuestion CheckpointQuestion? @relation(fields: [checkpointQuestionId], references: [id], onDelete: Cascade)
+  quizQuestion       QuizQuestion?       @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+  student            User                @relation(fields: [studentId], references: [id])
+
+  @@index([checkpointQuestionId])
+  @@index([quizQuestionId])
 }
 
 // ---------------------------------------------------------------------------

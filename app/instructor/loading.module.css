@@ -1,0 +1,94 @@
+.root {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.75rem;
+  }
+  
+  .list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    gap: 1rem;
+  }
+  
+  .cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .bone {
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 0.4rem;
+  }
+  
+  .title {
+    width: 9rem;
+    height: 1.75rem;
+  }
+  
+  .button {
+    width: 6.5rem;
+    height: 2.25rem;
+    border-radius: 0.6rem;
+  }
+  
+  .lineLg {
+    width: 40%;
+    height: 1rem;
+  }
+  
+  .lineMd {
+    width: 70%;
+    height: 0.85rem;
+  }
+  
+  .lineSm {
+    width: 28%;
+    height: 0.75rem;
+  }
+  
+  .action {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 0.9rem;
+  }
+  
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .bone {
+      animation: none;
+      background: #e5e7eb;
+    }
+  }
