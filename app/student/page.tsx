@@ -42,42 +42,46 @@ export default async function StudentHomePage() {
     include: {
       course: {
         include: {
-          lessons: {
+          courseLessons: {
+            orderBy: { sortOrder: 'asc' },
             include: {
-              lessonNodes: {
+              lesson: {
                 include: {
-                  node: {
+                  lessonNodes: {
+                    orderBy: { sortOrder: 'asc' },
                     include: {
-                      _count: {
-                        select: { quizQuestions: true },
+                      node: {
+                        include: {
+                          _count: {
+                            select: { quizQuestions: true },
+                          },
+                          checkpoints: {
+                            select: {
+                              _count: { select: { questions: true } },
+                            },
+                          },
+                        },
                       },
-                      checkpoints: {
-                        select: {
-                          _count: { select: { questions: true } },
+                      attempts: {
+                        where: { userId: student.id },
+                        orderBy: { createdAt: 'desc' },
+                        include: {
+                          responses: {
+                            select: {
+                              quizQuestionId: true,
+                              checkpointQuestionId: true,
+                            },
+                          },
                         },
                       },
                     },
                   },
-                  attempts: {
-                    where: { userId: student.id },
-                    orderBy: { createdAt: 'desc' },
-                    include: {
-                      responses: {
-                        select: {
-                          quizQuestionId: true,
-                          checkpointQuestionId: true,
-                        },
-                      },
-                    },
+                  progress: {
+                    where: { studentId: student.id },
                   },
                 },
-                orderBy: { sortOrder: 'asc' },
-              },
-              progress: {
-                where: { studentId: student.id },
               },
             },
-            orderBy: { sortOrder: 'asc' },
           },
         },
       },
@@ -93,27 +97,24 @@ export default async function StudentHomePage() {
 
   const dailyEnrollments = enrollments
     .map(({ course }) => {
-      const lessonsToday = course.lessons.filter(
-        (lesson: {
-          openDate?: Date | null;
-          dueDate?: Date | null;
-          progress?: { startedAt?: Date | null; completedAt?: Date | null }[];
-        }) => {
-          const open = lesson.openDate ? new Date(lesson.openDate) : null;
-          const due = lesson.dueDate ? new Date(lesson.dueDate) : null;
-          const progress = (lesson.progress && lesson.progress[0]) ?? null;
+      const lessonsToday = course.courseLessons
+        .filter((cl) => {
+          const open = cl.openDate ? new Date(cl.openDate) : null;
+          const due = cl.dueDate ? new Date(cl.dueDate) : null;
+          const progress = (cl.lesson.progress && cl.lesson.progress[0]) ?? null;
           const startedAt = progress?.startedAt ? new Date(progress.startedAt) : null;
           const completedAt = progress?.completedAt ? new Date(progress.completedAt) : null;
-
           const overlaps =
             (open && open <= todayEnd && (!due || due >= todayStart)) ||
             (startedAt && startedAt >= todayStart && startedAt <= todayEnd) ||
             (completedAt && completedAt >= todayStart && completedAt <= todayEnd);
-
           return overlaps;
-        }
-      );
-
+        })
+        .map((cl) => ({
+          ...cl.lesson,
+          openDate: cl.openDate,
+          dueDate: cl.dueDate,
+        }));
       return {
         courseId: course.id,
         title: course.title,
@@ -123,7 +124,6 @@ export default async function StudentHomePage() {
       };
     })
     .filter((e) => e.lessons.length > 0);
-
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>My Courses</h1>
@@ -151,17 +151,22 @@ export default async function StudentHomePage() {
                   </span>
                 </div>
                 <span className={styles.courseBadge}>
-                  {course.lessons.length} lesson{course.lessons.length !== 1 ? 's' : ''}
+                  {course.courseLessons.length} lesson{course.courseLessons.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
               {course.description && <p className={styles.courseDesc}>{course.description}</p>}
 
-              {course.lessons.length === 0 ? (
+              {course.courseLessons.length === 0 ? (
                 <p className={styles.noLessons}>No lessons assigned yet.</p>
               ) : (
                 <ul className={styles.lessonList}>
-                  {course.lessons.map((lesson) => {
+                  {course.courseLessons.map((cl) => {
+                    const lesson = {
+                      ...cl.lesson,
+                      openDate: cl.openDate,
+                      dueDate: cl.dueDate,
+                    };
                     const now = new Date();
                     const isUpcoming = lesson.openDate !== null && now < lesson.openDate;
                     const isClosed = lesson.dueDate !== null && now > lesson.dueDate;

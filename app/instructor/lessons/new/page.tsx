@@ -4,15 +4,12 @@ import LessonCreateForm from './LessonCreateForm';
 export const dynamic = 'force-dynamic';
 
 export default async function NewLessonPage() {
-  const [nodes, courses] = await Promise.all([
-    prisma.node.findMany({
-      include: {
-        _count: { select: { quizQuestions: true, checkpoints: true } },
-      },
-      orderBy: { title: 'asc' },
-    }),
-    prisma.course.findMany({ orderBy: { code: 'asc' } }),
-  ]);
+  const nodes = await prisma.node.findMany({
+    include: {
+      _count: { select: { quizQuestions: true, checkpoints: true } },
+    },
+    orderBy: { title: 'asc' },
+  });
 
   const paletteNodes = nodes.map((n) => ({
     id: n.id,
@@ -22,5 +19,5 @@ export default async function NewLessonPage() {
     checkpointCount: n._count.checkpoints,
   }));
 
-  return <LessonCreateForm availableNodes={paletteNodes} courses={courses} />;
+  return <LessonCreateForm availableNodes={paletteNodes} />;
 }

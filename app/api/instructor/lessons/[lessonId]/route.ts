@@ -19,7 +19,6 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
     include: {
-      course: true,
       lessonNodes: {
         include: { node: { include: nodeInclude } },
         orderBy: { sortOrder: 'asc' },
@@ -47,14 +46,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, openDate, dueDate, lessonNodes, edges } = body as {
+  const { title, slug, summary, description, estimatedMinutes, lessonNodes, edges } = body as {
     title?: string;
     slug?: string;
     summary?: string;
     description?: string | null;
     estimatedMinutes?: number | null;
-    openDate?: string | null;
-    dueDate?: string | null;
     lessonNodes?: Array<{
       nodeId: string;
       sortOrder: number;
@@ -64,10 +61,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
   };
-
-  if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
-    return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
-  }
 
   if (lessonNodes?.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
@@ -106,8 +99,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       ...(summary !== undefined && { summary: summary.trim() }),
       ...(description !== undefined && { description: description ?? null }),
       ...(estimatedMinutes !== undefined && { estimatedMinutes: estimatedMinutes ?? null }),
-      ...(openDate !== undefined && { openDate: openDate ? new Date(openDate) : null }),
-      ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
       ...(lessonNodes !== undefined && {
         lessonNodes: {
           deleteMany: {},

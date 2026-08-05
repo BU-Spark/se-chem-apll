@@ -9,9 +9,12 @@ export async function GET() {
 
   const courses = await prisma.course.findMany({
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
       enrollments: true,
       contacts: true,
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -30,11 +33,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, section, title, description } = body as {
+  const { code, section, title, description, lessons } = body as {
     code?: string;
     section?: string | null;
     title?: string;
     description?: string | null;
+    lessons?: Array<{
+      lessonId: string;
+      openDate?: string | null;
+      dueDate?: string | null;
+      sortOrder: number;
+    }>;
   };
 
   if (!code?.trim()) return NextResponse.json({ error: 'code is required' }, { status: 422 });
@@ -57,15 +66,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A course with this code and section already exists' }, { status: 409 });
   }
 
+  const lessonInputs = lessons ?? [];
+
+  for (const row of lessonInputs) {
+    if (!row.lessonId) {
+      return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
+    }
+    if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
+      return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
+    }
+  }
+
   const course = await prisma.course.create({
     data: {
       code: code.trim().toUpperCase(),
       section: section?.trim() || null,
       title: title.trim(),
       description: description?.trim() || null,
+      courseLessons: {
+        create: lessonInputs.map((row) => ({
+          lessonId: row.lessonId,
+          openDate: row.openDate ? new Date(row.openDate) : null,
+          dueDate: row.dueDate ? new Date(row.dueDate) : null,
+          sortOrder: row.sortOrder,
+        })),
+      },
     },
     include: {
-      lessons: true,
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
       enrollments: true,
       contacts: true,
     },

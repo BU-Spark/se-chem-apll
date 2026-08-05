@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export default async function CoursesPage() {
   const courses = await prisma.course.findMany({
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
+      courseLessons: true,
       enrollments: true,
       contacts: true,
     },
@@ -34,8 +34,8 @@ export default async function CoursesPage() {
                 {course.description && <p className={styles.cardDescription}>{course.description}</p>}
                 <p className={styles.cardMeta}>
                   {course.code}
-                  {course.section && ` · Section ${course.section}`} · {course.lessons.length} lesson
-                  {course.lessons.length !== 1 ? 's' : ''} · {course.enrollments.length} student
+                  {course.section && ` · Section ${course.section}`} · {course.courseLessons.length} lesson
+                  {course.courseLessons.length !== 1 ? 's' : ''} · {course.enrollments.length} student
                   {course.enrollments.length !== 1 ? 's' : ''}
                 </p>
               </div>

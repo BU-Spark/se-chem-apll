@@ -2,18 +2,28 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Course, Lesson, Enrollment, CourseContact } from '@prisma/client';
+import type { Course, Lesson, Enrollment, CourseContact, CourseLesson } from '@prisma/client';
 import styles from './page.module.css';
+
+type AvailableLesson = { id: string; title: string; slug: string };
+
+type ImportedLesson = {
+  lessonId: string;
+  title: string;
+  openDate: string;
+  dueDate: string;
+};
 
 interface Props {
   course: Course & {
-    lessons: Lesson[];
+    courseLessons: (CourseLesson & { lesson: Lesson })[];
     enrollments: Enrollment[];
     contacts: CourseContact[];
   };
+  availableLessons: AvailableLesson[];
 }
 
-export default function CourseEditForm({ course }: Props) {
+export default function CourseEditForm({ course, availableLessons }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -24,11 +34,46 @@ export default function CourseEditForm({ course }: Props) {
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description || '');
 
+  const [importedLessons, setImportedLessons] = useState<ImportedLesson[]>(() =>
+    course.courseLessons.map((cl) => ({
+      lessonId: cl.lessonId,
+      title: cl.lesson.title,
+      openDate: cl.openDate ? new Date(cl.openDate).toISOString().split('T')[0] : '',
+      dueDate: cl.dueDate ? new Date(cl.dueDate).toISOString().split('T')[0] : '',
+    }))
+  );
+
+  const [lessonQuery, setLessonQuery] = useState('');
+  const unusedLessons = availableLessons.filter((l) => !importedLessons.some((row) => row.lessonId === l.id));
+
+  const filteredLessons = unusedLessons.filter((l) => {
+    const q = lessonQuery.trim().toLowerCase();
+    if (!q) return true;
+    return l.title.toLowerCase().includes(q) || l.slug.toLowerCase().includes(q);
+  });
+
+  function addLesson(lesson: AvailableLesson) {
+    setImportedLessons((prev) => [...prev, { lessonId: lesson.id, title: lesson.title, openDate: '', dueDate: '' }]);
+    setLessonQuery('');
+  }
+  function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
+    setImportedLessons((prev) => prev.map((row) => (row.lessonId === lessonId ? { ...row, ...patch } : row)));
+  }
+
+  function removeImported(lessonId: string) {
+    setImportedLessons((prev) => prev.filter((row) => row.lessonId !== lessonId));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    for (const row of importedLessons) {
+      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
+        setError(`Open date must be before due date for "${row.title}".`);
+        return;
+      }
+    }
     setSaving(true);
-
     try {
       const res = await fetch(`/api/instructor/courses/${course.id}`, {
         method: 'PATCH',
@@ -38,14 +83,18 @@ export default function CourseEditForm({ course }: Props) {
           section: section || null,
           title,
           description: description || null,
+          lessons: importedLessons.map((row, idx) => ({
+            lessonId: row.lessonId,
+            openDate: row.openDate || null,
+            dueDate: row.dueDate || null,
+            sortOrder: idx,
+          })),
         }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
-
       router.push('/instructor/courses');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -55,7 +104,10 @@ export default function CourseEditForm({ course }: Props) {
   }
 
   async function handleDelete() {
-    if (!confirm(`Delete course "${course.title}"? This will also delete all associated lessons and enrollments.`)) {
+    if (
+      !confirm(`Delete course "${course.title}"? This will remove enrollments and lesson 
+      links for this course. Lessons themselves will not be deleted.`)
+    ) {
       return;
     }
 
@@ -85,7 +137,8 @@ export default function CourseEditForm({ course }: Props) {
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Edit course</h1>
         <p className={styles.pageSubtitle}>
-          {course.lessons.length} lesson{course.lessons.length !== 1 ? 's' : ''} · {course.enrollments.length} student
+          {course.courseLessons.length} lesson{course.courseLessons.length !== 1 ? 's' : ''} ·{' '}
+          {course.enrollments.length} student
           {course.enrollments.length !== 1 ? 's' : ''}
         </p>
       </header>
@@ -135,6 +188,76 @@ export default function CourseEditForm({ course }: Props) {
               placeholder="Optional course description…"
             />
           </label>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Imported lessons</h2>
+          <p className={styles.sectionNote}>Add lessons to this course and set open/due dates for each.</p>
+
+          <div className={styles.importSearch}>
+            <label className={styles.field}>
+              Search lessons
+              <input
+                type="search"
+                value={lessonQuery}
+                onChange={(e) => setLessonQuery(e.target.value)}
+                placeholder="Type a lesson title…"
+                autoComplete="off"
+              />
+            </label>
+
+            {unusedLessons.length === 0 ? (
+              <p className={styles.emptyImport}>All lessons are already imported.</p>
+            ) : (
+              <ul className={styles.searchResults}>
+                {filteredLessons.length === 0 ? (
+                  <li className={styles.searchEmpty}>No matching lessons</li>
+                ) : (
+                  filteredLessons.map((l) => (
+                    <li key={l.id}>
+                      <button type="button" className={styles.searchResultBtn} onClick={() => addLesson(l)}>
+                        <span className={styles.searchResultTitle}>{l.title}</span>
+                        <span className={styles.searchResultSlug}>{l.slug}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
+
+          {importedLessons.length === 0 ? (
+            <p className={styles.emptyImport}>No lessons imported yet.</p>
+          ) : (
+            <ul className={styles.importList}>
+              {importedLessons.map((row) => (
+                <li key={row.lessonId} className={styles.importItem}>
+                  <p className={styles.importTitle}>{row.title}</p>
+                  <div className={styles.fieldRow2}>
+                    <label className={styles.field}>
+                      Open date
+                      <input
+                        type="date"
+                        value={row.openDate}
+                        onChange={(e) => updateImported(row.lessonId, { openDate: e.target.value })}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      Due date
+                      <input
+                        type="date"
+                        value={row.dueDate}
+                        onChange={(e) => updateImported(row.lessonId, { dueDate: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {error && <p className={styles.error}>{error}</p>}

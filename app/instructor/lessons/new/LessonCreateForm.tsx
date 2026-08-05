@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Course } from '@prisma/client';
 import LessonBuilder from '@/app/components/LessonBuilder';
 import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
 import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
@@ -10,10 +9,9 @@ import styles from './page.module.css';
 
 interface Props {
   availableNodes: PaletteNode[];
-  courses: Course[];
 }
 
-export default function LessonCreateForm({ availableNodes, courses }: Props) {
+export default function LessonCreateForm({ availableNodes }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +21,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
   const [slug, setSlug] = useState('');
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
-  const [openDate, setOpenDate] = useState('');
-  const [dueDate, setDueDate] = useState('');
 
   // Auto-generate slug from title
   function handleTitleChange(val: string) {
@@ -81,11 +76,6 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
       return;
     }
 
-    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
-      setError('Open date must be before due date.');
-      return;
-    }
-
     setSaving(true);
     try {
       const res = await fetch('/api/instructor/lessons', {
@@ -96,10 +86,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           slug,
           summary,
           description: description || null,
-          courseId,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
-          openDate: openDate || null,
-          dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
@@ -137,41 +124,16 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Course <span className={styles.required}>*</span>
-              <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                {courses.length === 0 && <option value="">No courses — create one first</option>}
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                    {c.section ? ` §${c.section}` : ''} — {c.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Estimated duration (min)
-              <input
-                type="number"
-                min={1}
-                value={estimatedMinutes}
-                onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="30"
-              />
-            </label>
-          </div>
-
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Open date
-              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              Due date
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Estimated duration (min)
+            <input
+              type="number"
+              min={1}
+              value={estimatedMinutes}
+              onChange={(e) => setEstimatedMinutes(e.target.value)}
+              placeholder="30"
+            />
+          </label>
 
           <div className={styles.fieldRow2}>
             <label className={styles.field}>
