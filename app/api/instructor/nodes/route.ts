@@ -16,6 +16,9 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const nodes = await prisma.node.findMany({
+    where: {
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     select: {
       id: true,
       title: true,
@@ -77,6 +80,7 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       summary: summary?.trim() ?? null,
       videoUrl: videoUrl ?? null,
+      createdByClerkId: userId,
       checkpoints: {
         create: (checkpoints ?? []).map(serializeCheckpointCreate),
       },
