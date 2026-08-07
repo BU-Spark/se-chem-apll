@@ -13,7 +13,12 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const { courseId } = await params;
 
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   const enrollments = await prisma.enrollment.findMany({
@@ -33,7 +38,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const { courseId } = await params;
 
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   let body: unknown;
@@ -81,6 +91,14 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { courseId } = await params;
+
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
+  if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   let body: unknown;
   try {

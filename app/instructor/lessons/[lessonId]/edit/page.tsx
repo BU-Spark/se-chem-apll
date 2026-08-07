@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
-import LessonEditForm from './LessonEditForm';
 import { auth } from '@clerk/nextjs/server';
+import LessonEditForm from './LessonEditForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,9 +15,13 @@ export default async function EditLessonPage({ params }: Props) {
   if (!userId) {
     redirect('/sign-in');
   }
+
   const [lesson, nodes] = await Promise.all([
-    prisma.lesson.findUnique({
-      where: { id: lessonId },
+    prisma.lesson.findFirst({
+      where: {
+        id: lessonId,
+        OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      },
       include: {
         lessonNodes: {
           include: { node: true },

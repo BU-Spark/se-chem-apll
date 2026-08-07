@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { notFound } from 'next/navigation';
-import CourseEditForm from './CourseEditForm';
+import { notFound, redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import CourseEditForm from './CourseEditForm';
+
 export const dynamic = 'force-dynamic';
 
 interface Props {
@@ -15,9 +15,13 @@ export default async function EditCoursePage({ params }: Props) {
   if (!userId) {
     redirect('/sign-in');
   }
+
   const [course, availableLessons] = await Promise.all([
-    prisma.course.findUnique({
-      where: { id: courseId },
+    prisma.course.findFirst({
+      where: {
+        id: courseId,
+        OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      },
       include: {
         courseLessons: {
           include: { lesson: true },
