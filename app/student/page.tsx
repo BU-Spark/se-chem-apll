@@ -166,10 +166,12 @@ export default async function StudentHomePage() {
                       ...cl.lesson,
                       openDate: cl.openDate,
                       dueDate: cl.dueDate,
+                      accessibleAfterDue: cl.accessibleAfterDue,
                     };
                     const now = new Date();
                     const isUpcoming = lesson.openDate !== null && now < lesson.openDate;
-                    const isClosed = lesson.dueDate !== null && now > lesson.dueDate;
+                    const isPastDue = lesson.dueDate !== null && now > lesson.dueDate;
+                    const isClosed = isPastDue && !lesson.accessibleAfterDue;
                     const cardClass = isUpcoming || isClosed ? styles.lessonCardUnavailable : styles.lessonCard;
 
                     return (
@@ -193,10 +195,10 @@ export default async function StudentHomePage() {
                             {lesson.openDate && !isUpcoming
                               ? ` · Opened ${new Date(lesson.openDate).toLocaleDateString()}`
                               : ''}
-                            {lesson.dueDate && !isClosed
+                            {lesson.dueDate && !isPastDue
                               ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`
                               : ''}
-                            {isClosed && lesson.dueDate
+                            {isPastDue && lesson.dueDate
                               ? ` · Was due ${new Date(lesson.dueDate).toLocaleDateString()}`
                               : ''}
                           </p>

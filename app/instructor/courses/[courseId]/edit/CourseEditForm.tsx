@@ -12,6 +12,7 @@ type ImportedLesson = {
   title: string;
   openDate: string;
   dueDate: string;
+  accessibleAfterDue: boolean;
 };
 
 interface Props {
@@ -40,6 +41,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
       title: cl.lesson.title,
       openDate: cl.openDate ? new Date(cl.openDate).toISOString().split('T')[0] : '',
       dueDate: cl.dueDate ? new Date(cl.dueDate).toISOString().split('T')[0] : '',
+      accessibleAfterDue: cl.accessibleAfterDue,
     }))
   );
 
@@ -53,7 +55,16 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
   });
 
   function addLesson(lesson: AvailableLesson) {
-    setImportedLessons((prev) => [...prev, { lessonId: lesson.id, title: lesson.title, openDate: '', dueDate: '' }]);
+    setImportedLessons((prev) => [
+      ...prev,
+      {
+        lessonId: lesson.id,
+        title: lesson.title,
+        openDate: '',
+        dueDate: '',
+        accessibleAfterDue: false,
+      },
+    ]);
     setLessonQuery('');
   }
   function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
@@ -87,6 +98,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
             lessonId: row.lessonId,
             openDate: row.openDate || null,
             dueDate: row.dueDate || null,
+            accessibleAfterDue: row.accessibleAfterDue,
             sortOrder: idx,
           })),
         }),
@@ -251,6 +263,14 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
                       />
                     </label>
                   </div>
+                  <label className={styles.checkboxField}>
+                    <input
+                      type="checkbox"
+                      checked={row.accessibleAfterDue}
+                      onChange={(e) => updateImported(row.lessonId, { accessibleAfterDue: e.target.checked })}
+                    />
+                    Keep accessible after due date
+                  </label>
                   <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
                     Remove
                   </button>
