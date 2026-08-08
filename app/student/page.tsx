@@ -198,9 +198,14 @@ export default async function StudentHomePage() {
                             {lesson.dueDate && !isPastDue
                               ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`
                               : ''}
-                            {isPastDue && lesson.dueDate
-                              ? ` · Was due ${new Date(lesson.dueDate).toLocaleDateString()}`
-                              : ''}
+                            {isPastDue && lesson.dueDate ? (
+                              <>
+                                {' · '}
+                                <span className={styles.wasDue}>
+                                  Was Due on {new Date(lesson.dueDate).toLocaleDateString()}
+                                </span>
+                              </>
+                            ) : null}
                           </p>
                           {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
                         </div>
