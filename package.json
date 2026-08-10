@@ -24,13 +24,21 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@prisma/client": "^6.17.0",
     "@xyflow/react": "^12.10.2",
+    "ag-grid-community": "^36.1.0",
+    "ag-grid-react": "^36.1.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.25",
     "hls.js": "^1.6.16",
+    "katex": "^0.16.0",
     "next": "^15.5.4",
+    "papaparse": "^5.5.4",
     "prisma": "^6.17.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.4.0",
@@ -42,6 +50,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^29.5.14",
     "@types/node": "^24",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
@@ -60,6 +69,9 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
