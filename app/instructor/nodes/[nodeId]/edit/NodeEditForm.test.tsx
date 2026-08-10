@@ -13,6 +13,36 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   default: () => <div data-testid="youtube-player" />,
 }));
 
+jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
+  return {
+    __esModule: true,
+    default: function MockQuestionBankEditor({
+      questions,
+      onChange,
+    }: {
+      questions: Array<{ id: string; type: string; prompt: string }>;
+      onChange: (next: typeof questions) => void;
+    }) {
+      return (
+        <div data-testid="question-bank-editor">
+          {questions.map((q, index) => (
+            <label key={q.id}>
+              Quiz question prompt {index + 1}
+              <input
+                aria-label={`Quiz question prompt ${index + 1}`}
+                value={q.prompt}
+                onChange={(e) =>
+                  onChange(questions.map((item) => (item.id === q.id ? { ...item, prompt: e.target.value } : item)))
+                }
+              />
+            </label>
+          ))}
+        </div>
+      );
+    },
+  };
+});
+
 const node = {
   id: 'node-1',
   title: 'Existing node',

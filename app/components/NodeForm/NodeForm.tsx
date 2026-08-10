@@ -3,11 +3,13 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatTimeOffsetSeconds, validateCheckpointTimestamps } from '@/app/utils/questionTimestamps';
-import { downloadCsvFile } from '@/app/utils/csv';
 import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
-import { csvToFormQuestions, formQuestionsToCsv, sampleQuizQuestionsCsv } from '@/app/utils/quizQuestionCsv';
 import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import { parseYouTubeId } from '@/app/utils/youtube';
+import QuestionBankEditor from '@/app/components/QuestionBank/QuestionBankEditor';
+import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
+import { countIssuesBySeverity, validateQuestionBank } from '@/app/components/QuestionBank/validation';
+import type { AuthoringQuestion } from '@/app/components/QuestionBank/types';
 import QuestionEditor from './QuestionEditor';
 import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer';
 import {
@@ -61,12 +63,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const router = useRouter();
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const quizCsvInputRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quizCsvErrors, setQuizCsvErrors] = useState<string[] | null>(null);
-  const [quizCsvStatus, setQuizCsvStatus] = useState<string | null>(null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
@@ -78,8 +77,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       questions: checkpoint.questions.map(dbQuestionToForm),
     }))
   );
-  const [quizQuestions, setQuizQuestions] = useState<FormQuestion[]>(() =>
-    (initial?.quizQuestions ?? []).map(dbQuestionToForm)
+  const [quizQuestions, setQuizQuestions] = useState<AuthoringQuestion[]>(() =>
+    (initial?.quizQuestions ?? []).map(dbQuestionToAuthoring)
   );
 
   const youtubeId = parseYouTubeId(videoUrl.trim());
@@ -130,41 +129,6 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     addCheckpointAt(Math.max(0, seconds));
   }
 
-  function handleDownloadSampleQuizCsv() {
-    downloadCsvFile('quiz-questions-sample.csv', sampleQuizQuestionsCsv());
-  }
-
-  function handleDownloadCurrentQuizCsv() {
-    downloadCsvFile('quiz-questions.csv', formQuestionsToCsv(quizQuestions));
-  }
-
-  async function handleQuizCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setQuizCsvErrors(null);
-    setQuizCsvStatus(null);
-
-    try {
-      const text = await file.text();
-      const result = csvToFormQuestions(text);
-      if (!result.ok) {
-        setQuizCsvErrors(result.errors);
-        return;
-      }
-      setQuizQuestions(result.questions);
-      setQuizCsvStatus(
-        result.questions.length === 0
-          ? 'Loaded 0 questions. Save the node to persist.'
-          : `Loaded ${result.questions.length} question${result.questions.length === 1 ? '' : 's'}. Review and save the node to persist.`
-      );
-    } catch {
-      setQuizCsvErrors(['Could not read that CSV file.']);
-    } finally {
-      if (quizCsvInputRef.current) quizCsvInputRef.current.value = '';
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -180,12 +144,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       })),
     }));
 
-    const quizPayload = quizQuestions.map((q, idx) => ({
-      sortOrder: idx,
-      prompt: q.prompt,
-      options: serializeQuestionOptions(q),
-      correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
-    }));
+    const quizIssues = validateQuestionBank(quizQuestions);
+    const { errors: quizErrorCount } = countIssuesBySeverity(quizIssues);
+    if (quizErrorCount > 0) {
+      setError(`Fix ${quizErrorCount} quiz question error${quizErrorCount === 1 ? '' : 's'} before saving.`);
+      return;
+    }
+
+    const quizPayload = quizQuestions.map((q, idx) => authoringQuestionToPayload(q, idx));
 
     const timestampError = validateCheckpointTimestamps(checkpointPayload);
     if (timestampError) {
@@ -428,63 +394,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           <h2 className={styles.sectionTitle}>Quiz question bank</h2>
           <p className={styles.sectionNote}>
             These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
-            timestamps.
+            timestamps. Markdown, LaTeX math, and mhchem chemistry notation are supported.
           </p>
-          <div className={styles.quizCsvToolbar}>
-            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadSampleQuizCsv}>
-              Download sample CSV
-            </button>
-            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadCurrentQuizCsv}>
-              Download current CSV
-            </button>
-            <button type="button" className={styles.quizCsvBtn} onClick={() => quizCsvInputRef.current?.click()}>
-              Upload CSV
-            </button>
-            <input
-              ref={quizCsvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className={styles.quizCsvInput}
-              onChange={handleQuizCsvUpload}
-            />
-          </div>
-          <p className={styles.sectionNote}>Upload replaces the quiz bank below. Save the node to persist.</p>
-          {quizCsvStatus && <p className={styles.quizCsvStatus}>{quizCsvStatus}</p>}
-          {quizCsvErrors && quizCsvErrors.length > 0 && (
-            <div className={styles.quizCsvErrors}>
-              <p className={styles.quizCsvErrorsTitle}>
-                Could not import CSV ({quizCsvErrors.length} error
-                {quizCsvErrors.length === 1 ? '' : 's'}):
-              </p>
-              <ul className={styles.quizCsvErrorList}>
-                {quizCsvErrors.map((message, idx) => (
-                  <li key={`${idx}-${message}`}>{message}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className={styles.questionList}>
-            {quizQuestions.map((q, qIdx) => (
-              <QuestionEditor
-                key={q.id}
-                q={q}
-                index={qIdx}
-                onUpdate={(patch) => setQuizQuestions((prev) => updateQuestionInList(prev, q.id, patch))}
-                onRemove={() => setQuizQuestions((prev) => prev.filter((question) => question.id !== q.id))}
-                onUpdateChoice={(ci, v) => setQuizQuestions((prev) => updateChoiceInList(prev, q.id, ci, v))}
-                onAddChoice={() => setQuizQuestions((prev) => addChoiceInList(prev, q.id))}
-                onRemoveChoice={(ci) => setQuizQuestions((prev) => removeChoiceInList(prev, q.id, ci))}
-                canRemove={quizQuestions.length > 0}
-              />
-            ))}
-            <button
-              type="button"
-              className={styles.addQuestionBtn}
-              onClick={() => setQuizQuestions((prev) => [...prev, makeQuestion()])}
-            >
-              + Add quiz question
-            </button>
-          </div>
+          <QuestionBankEditor questions={quizQuestions} onChange={setQuizQuestions} />
         </section>
 
         {error && <p className={styles.error}>{error}</p>}

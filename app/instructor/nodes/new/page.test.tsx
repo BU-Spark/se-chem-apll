@@ -13,6 +13,72 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   default: () => <div data-testid="youtube-player" />,
 }));
 
+jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
+  return {
+    __esModule: true,
+    default: function MockQuestionBankEditor({
+      questions,
+      onChange,
+    }: {
+      questions: Array<{ id: string; type: string; prompt: string; [key: string]: unknown }>;
+      onChange: (next: typeof questions) => void;
+    }) {
+      return (
+        <div data-testid="question-bank-editor">
+          {questions.map((q, index) => (
+            <div key={q.id}>
+              <label>
+                Quiz question prompt {index + 1}
+                <input
+                  aria-label={`Quiz question prompt ${index + 1}`}
+                  value={q.prompt}
+                  onChange={(e) =>
+                    onChange(questions.map((item) => (item.id === q.id ? { ...item, prompt: e.target.value } : item)))
+                  }
+                />
+              </label>
+            </div>
+          ))}
+          <div data-testid="quiz-draft-row">
+            <label>
+              Draft quiz prompt
+              <input aria-label="Draft quiz prompt" name="prompt" />
+            </label>
+            <input aria-label="Draft quiz choice 1" name="choice1" placeholder="Choice 1" />
+            <input aria-label="Draft quiz choice 2" name="choice2" placeholder="Choice 2" />
+            <button
+              type="button"
+              onClick={(e) => {
+                const root = (e.currentTarget.parentElement as HTMLElement) ?? null;
+                const prompt = (root?.querySelector('input[name="prompt"]') as HTMLInputElement | null)?.value ?? '';
+                const choice1 = (root?.querySelector('input[name="choice1"]') as HTMLInputElement | null)?.value ?? '';
+                const choice2 = (root?.querySelector('input[name="choice2"]') as HTMLInputElement | null)?.value ?? '';
+                onChange([
+                  ...questions,
+                  {
+                    id: `mock-q-${questions.length + 1}`,
+                    type: 'multipleChoice' as const,
+                    prompt,
+                    choices: [
+                      { id: `mock-c-${questions.length + 1}-1`, content: choice1, correct: true },
+                      { id: `mock-c-${questions.length + 1}-2`, content: choice2, correct: false },
+                    ],
+                  },
+                ]);
+                root?.querySelectorAll('input').forEach((input) => {
+                  (input as HTMLInputElement).value = '';
+                });
+              }}
+            >
+              Commit draft
+            </button>
+          </div>
+        </div>
+      );
+    },
+  };
+});
+
 function questionCardFor(prompt: HTMLElement) {
   return prompt.closest('[class*="questionCard"]') as HTMLElement;
 }
@@ -42,13 +108,11 @@ describe('NewNodePage', () => {
     await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'B');
     await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
-    await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
-    const prompts = screen.getAllByLabelText(/Question prompt/);
-    const quizCard = questionCardFor(prompts[1]);
-    await user.type(prompts[1], 'Quiz bank question');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 1'), 'X');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 2'), 'Y');
-    await user.click(within(quizCard).getAllByTitle('Mark as correct')[0]);
+    const quizGrid = screen.getByTestId('question-bank-editor');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'X');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'Y');
+    await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
 
     await user.click(screen.getByRole('button', { name: 'Create node' }));
 
