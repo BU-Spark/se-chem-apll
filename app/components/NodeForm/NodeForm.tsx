@@ -237,7 +237,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>{mode === 'create' ? 'New node' : 'Edit node'}</h1>
         <p className={styles.pageSubtitle}>

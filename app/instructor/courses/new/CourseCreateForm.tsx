@@ -90,7 +90,7 @@ export default function CourseCreateForm({ availableLessons }: Props) {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New course</h1>
         <p className={styles.pageSubtitle}>Create a new course to organize your lessons.</p>

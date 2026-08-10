@@ -191,7 +191,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Edit lesson</h1>
         <p className={styles.pageSubtitle}>
