@@ -163,18 +163,19 @@ model CourseLesson {
 // ---------------------------------------------------------------------------
 
 model Node {
-  id               String           @id @default(cuid())
-  title            String
-  summary          String?
-  videoUrl         String?
-  muxPlaybackId    String?
-  thumbnailUrl     String?
-  estimatedMinutes Int?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  checkpoints      NodeCheckpoint[]
-  quizQuestions    QuizQuestion[]
-  lessonNodes      LessonNode[]
+  id                  String           @id @default(cuid())
+  title               String
+  summary             String?
+  videoUrl            String?
+  muxPlaybackId       String?
+  thumbnailUrl        String?
+  estimatedMinutes    Int?
+  learningObjectives  String[]         @default([])
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  checkpoints         NodeCheckpoint[]
+  quizQuestions       QuizQuestion[]
+  lessonNodes         LessonNode[]
 }
 
 // Timestamped QEV cue during the node video; holds one or more checkpoint questions.

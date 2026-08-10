@@ -52,7 +52,6 @@ export default function QuestionEditor({
           Question prompt <span className={styles.required}>*</span>
         </span>
         <textarea
-          required
           rows={2}
           value={q.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
@@ -78,7 +77,6 @@ export default function QuestionEditor({
                 title="Mark as correct"
               />
               <input
-                required
                 value={choice}
                 onChange={(e) => onUpdateChoice(ci, e.target.value)}
                 placeholder={`Choice ${ci + 1}`}
@@ -122,7 +120,6 @@ export default function QuestionEditor({
               <input
                 type="number"
                 step="any"
-                required
                 value={q.expectedAnswer}
                 onChange={(e) => onUpdate({ expectedAnswer: e.target.value })}
                 placeholder="42"
@@ -135,7 +132,6 @@ export default function QuestionEditor({
                 <input
                   type="number"
                   step="any"
-                  required
                   value={q.minimumAnswer}
                   onChange={(e) => onUpdate({ minimumAnswer: e.target.value })}
                   placeholder="40"
@@ -146,7 +142,6 @@ export default function QuestionEditor({
                 <input
                   type="number"
                   step="any"
-                  required
                   value={q.maximumAnswer}
                   onChange={(e) => onUpdate({ maximumAnswer: e.target.value })}
                   placeholder="45"
