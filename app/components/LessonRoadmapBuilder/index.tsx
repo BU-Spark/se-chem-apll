@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -19,17 +19,23 @@ import {
   type EdgeChange,
   type EdgeProps,
   MarkerType,
+  type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
 import type { LessonEdgeEntry } from '@/app/types';
+import NodeSearchPopup from './NodeSearchPopup';
+import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
+import { generateClientId } from '@/lib/generateClientId';
 import { wouldCreateCycle } from '@/app/utils/dagValidation';
 import styles from './LessonRoadmapBuilder.module.css';
 
 interface Props {
+  availableNodes: PaletteNode[];
   lessonNodes: LessonNodeEntry[];
   edges: LessonEdgeEntry[];
   onEdgesChange: (edges: LessonEdgeEntry[]) => void;
+  onLessonNodesChange: (nodes: LessonNodeEntry[]) => void;
 }
 
 interface RoadmapNodeData {
@@ -130,9 +136,16 @@ function toXYEdges(
   }));
 }
 
-export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange }: Props) {
+export default function LessonRoadmapBuilder({
+  availableNodes,
+  lessonNodes,
+  edges,
+  onEdgesChange,
+  onLessonNodesChange,
+}: Props) {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null); // sets the edge id of the selected edge
+  const [popupNode, setPopupNode] = useState(false);
 
   // `edges` (prop) is the single source of truth; xyNodes/xyEdges are derived from it on
   // every render rather than duplicated into separate ReactFlow-owned state. This keeps
@@ -146,13 +159,18 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
     [edges, onEdgesChange]
   );
 
-  // edges are computed every render with useMemo, form lessonNodes and edges, and deleteEdge + selectedEdgeId
-  // so there is no separate copy fo the data inside react flow it just reders whatever the current props say
+  // edges are computed every render with useMemo, from lessonNodes and edges, and deleteEdge + selectedEdgeId
+  // so there is no separate copy of the data inside react flow it just reders whatever the current props say
   const xyNodes = useMemo(() => toXYNodes(lessonNodes), [lessonNodes]);
   const xyEdges = useMemo(() => toXYEdges(edges, deleteEdge, selectedEdgeId), [edges, deleteEdge, selectedEdgeId]);
 
   // this still uses the react flow convinience hook
-  const [nodesState, , onNodesChange] = useNodesState(xyNodes);
+  const [nodesState, setNodes, onNodesChange] = useNodesState(xyNodes);
+
+  // calls sedNodes(xyNodes) when lessonNodes changes to make sure that the graph updates when the popup closes
+  useEffect(() => {
+    setNodes(xyNodes);
+  }, [xyNodes, setNodes]);
 
   // handles the connection of two nodes
   // if tests pass ita makes new LessonEdgeEntry and pushes it onto the edges array with onEdgesChange
@@ -203,13 +221,35 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
     [edges, onEdgesChange]
   );
 
-  if (lessonNodes.length === 0) {
-    return (
-      <div className={styles.empty}>
-        Add nodes in the &ldquo;Build lesson&rdquo; tab first, then return here to draw the roadmap.
-      </div>
-    );
-  }
+  const handleSelect = useCallback(
+    (node: PaletteNode) => {
+      // keep all existing nodes and append a new LessonNodeEntry
+      onLessonNodesChange([
+        ...lessonNodes,
+        {
+          instanceId: generateClientId('lesson-node'),
+          nodeId: node.id,
+          title: node.title,
+          passingPercent: '',
+          quizQuestionCount: node.quizBankCount > 0 ? String(node.quizBankCount) : '0',
+          isRequired: true,
+          quizBankCount: node.quizBankCount,
+        },
+      ]);
+      setPopupNode(false); // close popup after adding
+    },
+    [lessonNodes, onLessonNodesChange]
+  );
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes); // keep drag/select working
+      const removedIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id));
+      if (removedIds.size === 0) return;
+      onLessonNodesChange(lessonNodes.filter((n) => !removedIds.has(n.instanceId)));
+    },
+    [onNodesChange, lessonNodes, onLessonNodesChange]
+  );
 
   return (
     <>
@@ -219,11 +259,14 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
           edges={xyEdges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
-          onPaneClick={() => setSelectedEdgeId(null)}
+          onPaneClick={() => {
+            setSelectedEdgeId(null);
+            setPopupNode(true);
+          }}
           fitView
           deleteKeyCode="Backspace"
           panOnDrag={[1, 2]}
@@ -233,6 +276,9 @@ export default function LessonRoadmapBuilder({ lessonNodes, edges, onEdgesChange
           <Controls />
           <MiniMap nodeStrokeWidth={3} />
         </ReactFlow>
+        {popupNode && (
+          <NodeSearchPopup nodes={availableNodes} onSelect={handleSelect} onClose={() => setPopupNode(false)} />
+        )}
       </div>
       {connectError && <p className={styles.error}>{connectError}</p>}
       <p className={styles.hint}>
