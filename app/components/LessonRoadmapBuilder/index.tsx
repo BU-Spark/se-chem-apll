@@ -29,6 +29,7 @@ import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
 import { generateClientId } from '@/lib/generateClientId';
 import { wouldCreateCycle } from '@/app/utils/dagValidation';
 import styles from './LessonRoadmapBuilder.module.css';
+import type { NodeSelectPayload } from './NodeSearchPopup';
 
 interface Props {
   availableNodes: PaletteNode[];
@@ -40,6 +41,10 @@ interface Props {
 
 interface RoadmapNodeData {
   label: string;
+  passingPercent: string;
+  quizQuestionCount: string;
+  isRequired: boolean;
+  quizBankCount: number;
   [key: string]: unknown;
 }
 
@@ -48,6 +53,11 @@ function RoadmapNode({ data }: { data: RoadmapNodeData }) {
     <div className={styles.graphNode}>
       <Handle type="target" position={Position.Top} />
       <span className={styles.graphNodeLabel}>{data.label}</span>
+      <div className={styles.graphNodeMeta}>
+        {data.passingPercent !== '' && <span className={styles.graphNodeChip}>{data.passingPercent}%</span>}
+        {data.quizBankCount > 0 && <span className={styles.graphNodeChip}>{data.quizQuestionCount} Q</span>}
+        {data.isRequired && <span className={styles.graphNodeFoundational}>Foundational</span>}
+      </div>
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -114,7 +124,13 @@ function toXYNodes(nodes: LessonNodeEntry[]): XYNode[] {
     id: n.instanceId,
     type: 'roadmapNode',
     position: { x: 220 * (i % 4), y: 130 * Math.floor(i / 4) },
-    data: { label: n.title } as RoadmapNodeData,
+    data: {
+      label: n.title,
+      passingPercent: n.passingPercent,
+      quizQuestionCount: n.quizQuestionCount,
+      isRequired: n.isRequired,
+      quizBankCount: n.quizBankCount,
+    } satisfies RoadmapNodeData,
   }));
 }
 
@@ -222,21 +238,20 @@ export default function LessonRoadmapBuilder({
   );
 
   const handleSelect = useCallback(
-    (node: PaletteNode) => {
-      // keep all existing nodes and append a new LessonNodeEntry
+    ({ node, passingPercent, quizQuestionCount, isRequired }: NodeSelectPayload) => {
       onLessonNodesChange([
         ...lessonNodes,
         {
           instanceId: generateClientId('lesson-node'),
           nodeId: node.id,
           title: node.title,
-          passingPercent: '',
-          quizQuestionCount: node.quizBankCount > 0 ? String(node.quizBankCount) : '0',
-          isRequired: true,
+          passingPercent,
+          quizQuestionCount,
+          isRequired,
           quizBankCount: node.quizBankCount,
         },
       ]);
-      setPopupNode(false); // close popup after adding
+      setPopupNode(false);
     },
     [lessonNodes, onLessonNodesChange]
   );
