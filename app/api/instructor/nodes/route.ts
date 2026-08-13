@@ -50,10 +50,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, checkpoints, quizQuestions } = body as {
+  const { title, summary, videoUrl, learningObjectives, checkpoints, quizQuestions } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
+    learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
   };
@@ -62,21 +63,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
   }
 
+  const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
+  if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
   if (checkpointsTypeError) return checkpointsTypeError;
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
   if (quizQuestionsTypeError) return quizQuestionsTypeError;
+
+  if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
+  }
 
   const contentError = validateNodeContent({ checkpoints, quizQuestions });
   if (contentError) {
     return NextResponse.json({ error: contentError }, { status: 422 });
   }
 
+  const normalizedObjectives = (learningObjectives ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
+
   const node = await prisma.node.create({
     data: {
       title: title.trim(),
       summary: summary?.trim() ?? null,
       videoUrl: videoUrl ?? null,
+      learningObjectives: normalizedObjectives,
       checkpoints: {
         create: (checkpoints ?? []).map(serializeCheckpointCreate),
       },

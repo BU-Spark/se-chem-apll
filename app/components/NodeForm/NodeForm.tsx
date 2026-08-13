@@ -22,12 +22,25 @@ import {
 import styles from './NodeForm.module.css';
 
 type Mode = 'create' | 'edit';
+type WizardStep = 'basics' | 'checkpoints' | 'quiz' | 'review' | 'done';
 
 type Props = {
   mode: Mode;
   nodeId?: string;
   initial?: NodeFormInitial;
 };
+
+const STEPS: Array<{ id: WizardStep; label: string }> = [
+  { id: 'basics', label: 'Basics' },
+  { id: 'checkpoints', label: 'Checkpoints' },
+  { id: 'quiz', label: 'Quiz bank' },
+  { id: 'review', label: 'Review' },
+  { id: 'done', label: 'Done' },
+];
+
+function stepIndex(step: WizardStep): number {
+  return STEPS.findIndex((s) => s.id === step);
+}
 
 function updateQuestionInList(list: FormQuestion[], id: string, patch: Partial<FormQuestion>): FormQuestion[] {
   return list.map((q) => (q.id === id ? { ...q, ...patch } : q));
@@ -57,12 +70,58 @@ function removeChoiceInList(list: FormQuestion[], qId: string, choiceIdx: number
   });
 }
 
+function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
+  return checkpoints.map((checkpoint, idx) => ({
+    sortOrder: idx,
+    timeOffsetSeconds: checkpoint.timeOffsetSeconds,
+    questions: checkpoint.questions.map((q, qIdx) => ({
+      sortOrder: qIdx,
+      prompt: q.prompt,
+      options: serializeQuestionOptions(q),
+      correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
+    })),
+  }));
+}
+
+function buildQuizPayload(quizQuestions: FormQuestion[]) {
+  return quizQuestions.map((q, idx) => ({
+    sortOrder: idx,
+    prompt: q.prompt,
+    options: serializeQuestionOptions(q),
+    correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
+  }));
+}
+
+function validateQuestionPayloads(
+  checkpointPayload: ReturnType<typeof buildCheckpointPayload>,
+  quizPayload: ReturnType<typeof buildQuizPayload>,
+  options: { requireCheckpointQuestions: boolean; includeQuiz: boolean }
+): string | null {
+  const timestampError = validateCheckpointTimestamps(checkpointPayload);
+  if (timestampError) return timestampError;
+
+  if (options.requireCheckpointQuestions && checkpointPayload.some((c) => c.questions.length === 0)) {
+    return 'Each checkpoint must include at least one question.';
+  }
+
+  const questions = [...checkpointPayload.flatMap((c) => c.questions), ...(options.includeQuiz ? quizPayload : [])];
+  const correctAnswersError = validateMultipleChoiceAnswers(questions);
+  if (correctAnswersError) return correctAnswersError;
+  const shortAnswerError = validateShortAnswerOptions(questions);
+  if (shortAnswerError) return shortAnswerError;
+  return null;
+}
+
 export default function NodeForm({ mode, nodeId, initial }: Props) {
   const router = useRouter();
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const quizCsvInputRef = useRef<HTMLInputElement>(null);
 
+  const [step, setStep] = useState<WizardStep>('basics');
+  const [maxReachedStep, setMaxReachedStep] = useState<WizardStep>('basics');
+  const [savedNodeId, setSavedNodeId] = useState<string | null>(nodeId ?? null);
+  const [createdThisSession, setCreatedThisSession] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quizCsvErrors, setQuizCsvErrors] = useState<string[] | null>(null);
@@ -70,6 +129,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
+  const [learningObjectives, setLearningObjectives] = useState<string[]>(initial?.learningObjectives ?? []);
+  const [objectiveDraft, setObjectiveDraft] = useState('');
   const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
@@ -83,6 +144,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   );
 
   const youtubeId = parseYouTubeId(videoUrl.trim());
+  const currentStepIndex = stepIndex(step);
+  const maxReachedIndex = stepIndex(maxReachedStep);
+
+  function goToStep(next: WizardStep) {
+    setStep(next);
+    setMaxReachedStep((prev) => (stepIndex(next) > stepIndex(prev) ? next : prev));
+    setError(null);
+  }
 
   function focusCheckpoint(id: string) {
     setActiveCheckpointId(id);
@@ -130,6 +199,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     addCheckpointAt(Math.max(0, seconds));
   }
 
+  function addLearningObjective(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    const exists = learningObjectives.some((item) => item.toLowerCase() === value.toLowerCase());
+    if (exists) {
+      setObjectiveDraft('');
+      return;
+    }
+    setLearningObjectives((prev) => [...prev, value]);
+    setObjectiveDraft('');
+  }
+
+  function handleObjectiveKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addLearningObjective(objectiveDraft);
+    }
+  }
+
   function handleDownloadSampleQuizCsv() {
     downloadCsvFile('quiz-questions-sample.csv', sampleQuizQuestionsCsv());
   }
@@ -165,70 +253,136 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     }
   }
 
+  function validateBasicsStep(): string | null {
+    if (!title.trim()) return 'Title is required.';
+    return null;
+  }
+
+  function validateCheckpointsStep(): string | null {
+    const checkpointPayload = buildCheckpointPayload(checkpoints);
+    return validateQuestionPayloads(checkpointPayload, [], {
+      requireCheckpointQuestions: true,
+      includeQuiz: false,
+    });
+  }
+
+  function validateQuizStep(): string | null {
+    if (quizQuestions.length === 0) return null;
+    const quizPayload = buildQuizPayload(quizQuestions);
+    return validateQuestionPayloads([], quizPayload, {
+      requireCheckpointQuestions: false,
+      includeQuiz: true,
+    });
+  }
+
+  function validateAll(): string | null {
+    return (
+      validateBasicsStep() ??
+      validateCheckpointsStep() ??
+      validateQuizStep() ??
+      validateQuestionPayloads(buildCheckpointPayload(checkpoints), buildQuizPayload(quizQuestions), {
+        requireCheckpointQuestions: true,
+        includeQuiz: true,
+      })
+    );
+  }
+
+  function handleNext() {
+    let stepError: string | null = null;
+    if (step === 'basics') stepError = validateBasicsStep();
+    if (step === 'checkpoints') stepError = validateCheckpointsStep();
+    if (step === 'quiz') stepError = validateQuizStep();
+
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
+
+    const next = STEPS[currentStepIndex + 1];
+    // Done is only reachable via a successful save, never via Next.
+    if (next && next.id !== 'done') goToStep(next.id);
+  }
+
+  function handleBack() {
+    if (step === 'done') {
+      leaveDoneTo('review');
+      return;
+    }
+    const prev = STEPS[currentStepIndex - 1];
+    if (prev) goToStep(prev.id);
+  }
+
+  function leaveDoneTo(target: WizardStep) {
+    if (target === 'done') return;
+    setError(null);
+    setMaxReachedStep('review');
+    setStep(target);
+  }
+
+  function handleStepTabClick(target: WizardStep) {
+    if (target === 'done') return;
+    if (step === 'done') {
+      leaveDoneTo(target);
+      return;
+    }
+    const targetIdx = stepIndex(target);
+    if (targetIdx > maxReachedIndex) return;
+    if (targetIdx === currentStepIndex) return;
+    if (targetIdx < currentStepIndex) {
+      goToStep(target);
+      return;
+    }
+    // Only allow forward within already-visited steps after re-validating current
+    let stepError: string | null = null;
+    if (step === 'basics') stepError = validateBasicsStep();
+    if (step === 'checkpoints') stepError = validateCheckpointsStep();
+    if (step === 'quiz') stepError = validateQuizStep();
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
+    goToStep(target);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (step !== 'review') return;
+
     setError(null);
-
-    const checkpointPayload = checkpoints.map((checkpoint, idx) => ({
-      sortOrder: idx,
-      timeOffsetSeconds: checkpoint.timeOffsetSeconds,
-      questions: checkpoint.questions.map((q, qIdx) => ({
-        sortOrder: qIdx,
-        prompt: q.prompt,
-        options: serializeQuestionOptions(q),
-        correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
-      })),
-    }));
-
-    const quizPayload = quizQuestions.map((q, idx) => ({
-      sortOrder: idx,
-      prompt: q.prompt,
-      options: serializeQuestionOptions(q),
-      correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
-    }));
-
-    const timestampError = validateCheckpointTimestamps(checkpointPayload);
-    if (timestampError) {
-      setError(timestampError);
+    const allError = validateAll();
+    if (allError) {
+      setError(allError);
       return;
     }
 
-    const allQuestions = [...checkpointPayload.flatMap((c) => c.questions), ...quizPayload];
-    const correctAnswersError = validateMultipleChoiceAnswers(allQuestions);
-    if (correctAnswersError) {
-      setError(correctAnswersError);
-      return;
-    }
-    const shortAnswerError = validateShortAnswerOptions(allQuestions);
-    if (shortAnswerError) {
-      setError(shortAnswerError);
-      return;
-    }
-    if (checkpointPayload.some((c) => c.questions.length === 0)) {
-      setError('Each checkpoint must include at least one question.');
-      return;
-    }
+    const checkpointPayload = buildCheckpointPayload(checkpoints);
+    const quizPayload = buildQuizPayload(quizQuestions);
+    const updatingExisting = Boolean(savedNodeId);
 
     setSaving(true);
     try {
-      const res = await fetch(mode === 'create' ? '/api/instructor/nodes' : `/api/instructor/nodes/${nodeId}`, {
-        method: mode === 'create' ? 'POST' : 'PATCH',
+      const res = await fetch(updatingExisting ? `/api/instructor/nodes/${savedNodeId}` : '/api/instructor/nodes', {
+        method: updatingExisting ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
+          title: title.trim(),
           summary,
           videoUrl: videoUrl || null,
+          learningObjectives,
           checkpoints: checkpointPayload,
           quizQuestions: quizPayload,
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
 
-      router.push('/instructor/nodes');
+      const idFromResponse = typeof data.id === 'string' ? data.id : null;
+      setSavedNodeId(idFromResponse ?? savedNodeId ?? nodeId ?? null);
+      setCreatedThisSession(!updatingExisting && mode === 'create');
+      goToStep('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -236,183 +390,334 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     }
   }
 
+  function renderPreviewSummary() {
+    return (
+      <>
+        <div className={styles.previewBlock}>
+          <h3 className={styles.previewHeading}>Basics</h3>
+          <dl className={styles.previewDl}>
+            <div>
+              <dt>Title</dt>
+              <dd>{title.trim() || '—'}</dd>
+            </div>
+            <div>
+              <dt>Summary</dt>
+              <dd>{summary.trim() || '—'}</dd>
+            </div>
+            <div>
+              <dt>Video URL</dt>
+              <dd className={styles.previewMono}>{videoUrl.trim() || '—'}</dd>
+            </div>
+            <div>
+              <dt>Learning objectives</dt>
+              <dd>
+                {learningObjectives.length === 0 ? (
+                  '—'
+                ) : (
+                  <ul className={styles.tagList}>
+                    {learningObjectives.map((objective) => (
+                      <li key={objective} className={styles.tag}>
+                        <span>{objective}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className={styles.previewBlock}>
+          <h3 className={styles.previewHeading}>Checkpoints ({checkpoints.length})</h3>
+          {checkpoints.length === 0 ? (
+            <p className={styles.sectionNote} style={{ margin: 0 }}>
+              No checkpoints.
+            </p>
+          ) : (
+            <ul className={styles.previewList}>
+              {checkpoints.map((checkpoint, idx) => (
+                <li key={checkpoint.id}>
+                  <strong>
+                    Checkpoint {idx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
+                  </strong>
+                  <span className={styles.previewMeta}>
+                    {checkpoint.questions.length} question
+                    {checkpoint.questions.length === 1 ? '' : 's'}
+                  </span>
+                  <ul className={styles.previewSublist}>
+                    {checkpoint.questions.map((q, qIdx) => (
+                      <li key={q.id}>
+                        Q{qIdx + 1}: {q.prompt.trim() || '(empty prompt)'}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className={styles.previewBlock}>
+          <h3 className={styles.previewHeading}>Quiz bank ({quizQuestions.length})</h3>
+          {quizQuestions.length === 0 ? (
+            <p className={styles.sectionNote} style={{ margin: 0 }}>
+              No quiz questions.
+            </p>
+          ) : (
+            <ul className={styles.previewList}>
+              {quizQuestions.map((q, idx) => (
+                <li key={q.id}>
+                  Q{idx + 1}: {q.prompt.trim() || '(empty prompt)'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>{mode === 'create' ? 'New node' : 'Edit node'}</h1>
         <p className={styles.pageSubtitle}>
-          Nodes are reusable video + question bundles. Add checkpoints while watching the video, then build a quiz
-          question bank.
+          Create the node in steps: basics, in-video checkpoints, quiz bank, then preview and submit.
         </p>
       </header>
 
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Basic info</h2>
-          <div className={styles.fieldRow}>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>
-                Title <span className={styles.required}>*</span>
-              </span>
-              <input
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Bunsen Burner Ignition"
-              />
-            </label>
-            <label className={styles.field}>
-              Summary
-              <input
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                placeholder="One-line description shown in the node library"
-              />
-            </label>
-          </div>
-          <label className={styles.field}>
-            Video URL
-            <input
-              type="url"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=…"
-            />
-          </label>
-        </section>
+      <nav className={styles.tabs} aria-label="Node authoring steps">
+        {STEPS.map((s, idx) => {
+          const isActive = s.id === step;
+          const reachable =
+            s.id === 'done'
+              ? step === 'done'
+              : step === 'done'
+                ? idx <= stepIndex('review')
+                : idx <= maxReachedIndex && s.id !== 'done';
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className={isActive ? styles.tabActive : styles.tab}
+              disabled={!reachable}
+              aria-current={isActive ? 'step' : undefined}
+              onClick={() => handleStepTabClick(s.id)}
+            >
+              <span className={styles.tabNumber}>{idx + 1}</span>
+              {s.label}
+            </button>
+          );
+        })}
+      </nav>
 
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
-          <p className={styles.sectionNote}>
-            Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold multiple
-            questions.
-          </p>
-
-          {youtubeId ? (
-            <>
-              <div className={styles.videoWrap}>
-                <YouTubeAuthoringPlayer
-                  videoId={youtubeId}
-                  onReady={(player) => {
-                    playerRef.current = player;
-                  }}
-                />
-              </div>
-              <div className={styles.checkpointToolbar}>
-                <button type="button" className={styles.addQuestionBtn} onClick={handleAddCheckpointFromVideo}>
-                  + Add checkpoint
-                </button>
-                <span className={styles.sectionNote} style={{ margin: 0 }}>
-                  Pauses the video and uses the current playback time.
+      <form onSubmit={handleSubmit} className={styles.form} noValidate>
+        {step === 'basics' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Basic info</h2>
+            <div className={styles.fieldRow}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>
+                  Title <span className={styles.required}>*</span>
                 </span>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Bunsen Burner Ignition"
+                />
+              </label>
+              <label className={styles.field}>
+                Summary
+                <input
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  placeholder="One-line description shown in the node library"
+                />
+              </label>
+            </div>
+            <label className={styles.field}>
+              Video URL
+              <input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+              />
+            </label>
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Learning objectives</span>
+              <p className={styles.sectionNote} style={{ margin: 0 }}>
+                Add short objectives as tags. Press Enter or click Add.
+              </p>
+              <div className={styles.tagInputRow}>
+                <input
+                  value={objectiveDraft}
+                  onChange={(e) => setObjectiveDraft(e.target.value)}
+                  onKeyDown={handleObjectiveKeyDown}
+                  placeholder="e.g. Identify ignition hazards"
+                  aria-label="New learning objective"
+                />
+                <button type="button" className={styles.tagAddBtn} onClick={() => addLearningObjective(objectiveDraft)}>
+                  Add
+                </button>
               </div>
-            </>
-          ) : (
-            <p className={styles.videoHint}>
-              Enter a YouTube URL above to scrub the video and capture checkpoints at the current playback time. Without
-              a video, add checkpoints manually — each gets the next free offset (0:00, 1:00, 2:00, …).
-            </p>
-          )}
-
-          <div className={styles.questionList}>
-            {checkpoints.map((checkpoint, checkpointIdx) => (
-              <div
-                key={checkpoint.id}
-                ref={(el) => {
-                  checkpointRefs.current[checkpoint.id] = el;
-                }}
-                className={`${styles.checkpointCard} ${
-                  activeCheckpointId === checkpoint.id ? styles.checkpointCardActive : ''
-                }`}
-              >
-                <div className={styles.checkpointHeader}>
-                  <div className={styles.checkpointMeta}>
-                    <span className={styles.questionIndex}>
-                      Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
-                    </span>
-                    {youtubeId && (
+              {learningObjectives.length > 0 && (
+                <ul className={styles.tagList}>
+                  {learningObjectives.map((objective) => (
+                    <li key={objective} className={styles.tag}>
+                      <span>{objective}</span>
                       <button
                         type="button"
-                        className={styles.seekBtn}
-                        onClick={() => playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true)}
+                        className={styles.tagRemove}
+                        aria-label={`Remove ${objective}`}
+                        onClick={() => setLearningObjectives((prev) => prev.filter((item) => item !== objective))}
                       >
-                        Seek to time
+                        ×
                       </button>
-                    )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
+
+        {step === 'checkpoints' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
+            <p className={styles.sectionNote}>
+              Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold
+              multiple questions.
+            </p>
+
+            {youtubeId ? (
+              <>
+                <div className={styles.videoWrap}>
+                  <YouTubeAuthoringPlayer
+                    videoId={youtubeId}
+                    onReady={(player) => {
+                      playerRef.current = player;
+                    }}
+                  />
+                </div>
+                <div className={styles.checkpointToolbar}>
+                  <button type="button" className={styles.addQuestionBtn} onClick={handleAddCheckpointFromVideo}>
+                    + Add checkpoint
+                  </button>
+                  <span className={styles.sectionNote} style={{ margin: 0 }}>
+                    Pauses the video and uses the current playback time. If the player does not load, use Add checkpoint
+                    manually below.
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className={styles.videoHint}>
+                Enter a YouTube URL on the Basics step to scrub the video and capture checkpoints at the current
+                playback time. Without a video, add checkpoints manually — each gets the next free offset (0:00, 1:00,
+                2:00, …).
+              </p>
+            )}
+
+            <div className={styles.questionList}>
+              {checkpoints.map((checkpoint, checkpointIdx) => (
+                <div
+                  key={checkpoint.id}
+                  ref={(el) => {
+                    checkpointRefs.current[checkpoint.id] = el;
+                  }}
+                  className={`${styles.checkpointCard} ${
+                    activeCheckpointId === checkpoint.id ? styles.checkpointCardActive : ''
+                  }`}
+                >
+                  <div className={styles.checkpointHeader}>
+                    <div className={styles.checkpointMeta}>
+                      <span className={styles.questionIndex}>
+                        Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
+                      </span>
+                      {youtubeId && (
+                        <button
+                          type="button"
+                          className={styles.seekBtn}
+                          onClick={() => playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true)}
+                        >
+                          Seek to time
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.removeBtn}
+                      onClick={() => setCheckpoints((prev) => prev.filter((c) => c.id !== checkpoint.id))}
+                    >
+                      Remove checkpoint
+                    </button>
                   </div>
+
+                  {checkpoint.questions.map((q, qIdx) => (
+                    <QuestionEditor
+                      key={q.id}
+                      q={q}
+                      index={qIdx}
+                      onUpdate={(patch) =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id
+                              ? { ...c, questions: updateQuestionInList(c.questions, q.id, patch) }
+                              : c
+                          )
+                        )
+                      }
+                      onRemove={() =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id
+                              ? { ...c, questions: c.questions.filter((question) => question.id !== q.id) }
+                              : c
+                          )
+                        )
+                      }
+                      onUpdateChoice={(ci, v) =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id
+                              ? { ...c, questions: updateChoiceInList(c.questions, q.id, ci, v) }
+                              : c
+                          )
+                        )
+                      }
+                      onAddChoice={() =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id ? { ...c, questions: addChoiceInList(c.questions, q.id) } : c
+                          )
+                        )
+                      }
+                      onRemoveChoice={(ci) =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id ? { ...c, questions: removeChoiceInList(c.questions, q.id, ci) } : c
+                          )
+                        )
+                      }
+                      canRemove={checkpoint.questions.length > 1}
+                    />
+                  ))}
                   <button
                     type="button"
-                    className={styles.removeBtn}
-                    onClick={() => setCheckpoints((prev) => prev.filter((c) => c.id !== checkpoint.id))}
+                    className={styles.addQuestionBtn}
+                    onClick={() =>
+                      setCheckpoints((prev) =>
+                        prev.map((c) =>
+                          c.id === checkpoint.id ? { ...c, questions: [...c.questions, makeQuestion()] } : c
+                        )
+                      )
+                    }
                   >
-                    Remove checkpoint
+                    + Add question to checkpoint
                   </button>
                 </div>
+              ))}
 
-                {checkpoint.questions.map((q, qIdx) => (
-                  <QuestionEditor
-                    key={q.id}
-                    q={q}
-                    index={qIdx}
-                    onUpdate={(patch) =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id
-                            ? { ...c, questions: updateQuestionInList(c.questions, q.id, patch) }
-                            : c
-                        )
-                      )
-                    }
-                    onRemove={() =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id
-                            ? { ...c, questions: c.questions.filter((question) => question.id !== q.id) }
-                            : c
-                        )
-                      )
-                    }
-                    onUpdateChoice={(ci, v) =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id ? { ...c, questions: updateChoiceInList(c.questions, q.id, ci, v) } : c
-                        )
-                      )
-                    }
-                    onAddChoice={() =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id ? { ...c, questions: addChoiceInList(c.questions, q.id) } : c
-                        )
-                      )
-                    }
-                    onRemoveChoice={(ci) =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id ? { ...c, questions: removeChoiceInList(c.questions, q.id, ci) } : c
-                        )
-                      )
-                    }
-                    canRemove={checkpoint.questions.length > 1}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className={styles.addQuestionBtn}
-                  onClick={() =>
-                    setCheckpoints((prev) =>
-                      prev.map((c) =>
-                        c.id === checkpoint.id ? { ...c, questions: [...c.questions, makeQuestion()] } : c
-                      )
-                    )
-                  }
-                >
-                  + Add question to checkpoint
-                </button>
-              </div>
-            ))}
-
-            {!youtubeId && (
               <button
                 type="button"
                 className={styles.addQuestionBtn}
@@ -420,82 +725,132 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               >
                 + Add checkpoint manually
               </button>
-            )}
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Quiz question bank</h2>
-          <p className={styles.sectionNote}>
-            These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
-            timestamps.
-          </p>
-          <div className={styles.quizCsvToolbar}>
-            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadSampleQuizCsv}>
-              Download sample CSV
-            </button>
-            <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadCurrentQuizCsv}>
-              Download current CSV
-            </button>
-            <button type="button" className={styles.quizCsvBtn} onClick={() => quizCsvInputRef.current?.click()}>
-              Upload CSV
-            </button>
-            <input
-              ref={quizCsvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className={styles.quizCsvInput}
-              onChange={handleQuizCsvUpload}
-            />
-          </div>
-          <p className={styles.sectionNote}>Upload replaces the quiz bank below. Save the node to persist.</p>
-          {quizCsvStatus && <p className={styles.quizCsvStatus}>{quizCsvStatus}</p>}
-          {quizCsvErrors && quizCsvErrors.length > 0 && (
-            <div className={styles.quizCsvErrors}>
-              <p className={styles.quizCsvErrorsTitle}>
-                Could not import CSV ({quizCsvErrors.length} error
-                {quizCsvErrors.length === 1 ? '' : 's'}):
-              </p>
-              <ul className={styles.quizCsvErrorList}>
-                {quizCsvErrors.map((message, idx) => (
-                  <li key={`${idx}-${message}`}>{message}</li>
-                ))}
-              </ul>
             </div>
-          )}
-          <div className={styles.questionList}>
-            {quizQuestions.map((q, qIdx) => (
-              <QuestionEditor
-                key={q.id}
-                q={q}
-                index={qIdx}
-                onUpdate={(patch) => setQuizQuestions((prev) => updateQuestionInList(prev, q.id, patch))}
-                onRemove={() => setQuizQuestions((prev) => prev.filter((question) => question.id !== q.id))}
-                onUpdateChoice={(ci, v) => setQuizQuestions((prev) => updateChoiceInList(prev, q.id, ci, v))}
-                onAddChoice={() => setQuizQuestions((prev) => addChoiceInList(prev, q.id))}
-                onRemoveChoice={(ci) => setQuizQuestions((prev) => removeChoiceInList(prev, q.id, ci))}
-                canRemove={quizQuestions.length > 0}
+          </section>
+        )}
+
+        {step === 'quiz' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Quiz question bank</h2>
+            <p className={styles.sectionNote}>
+              These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
+              timestamps.
+            </p>
+            <div className={styles.quizCsvToolbar}>
+              <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadSampleQuizCsv}>
+                Download sample CSV
+              </button>
+              <button type="button" className={styles.quizCsvBtn} onClick={handleDownloadCurrentQuizCsv}>
+                Download current CSV
+              </button>
+              <button type="button" className={styles.quizCsvBtn} onClick={() => quizCsvInputRef.current?.click()}>
+                Upload CSV
+              </button>
+              <input
+                ref={quizCsvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className={styles.quizCsvInput}
+                onChange={handleQuizCsvUpload}
               />
-            ))}
-            <button
-              type="button"
-              className={styles.addQuestionBtn}
-              onClick={() => setQuizQuestions((prev) => [...prev, makeQuestion()])}
-            >
-              + Add quiz question
-            </button>
-          </div>
-        </section>
+            </div>
+            <p className={styles.sectionNote}>Upload replaces the quiz bank below. Save the node to persist.</p>
+            {quizCsvStatus && <p className={styles.quizCsvStatus}>{quizCsvStatus}</p>}
+            {quizCsvErrors && quizCsvErrors.length > 0 && (
+              <div className={styles.quizCsvErrors}>
+                <p className={styles.quizCsvErrorsTitle}>
+                  Could not import CSV ({quizCsvErrors.length} error
+                  {quizCsvErrors.length === 1 ? '' : 's'}):
+                </p>
+                <ul className={styles.quizCsvErrorList}>
+                  {quizCsvErrors.map((message, idx) => (
+                    <li key={`${idx}-${message}`}>{message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className={styles.questionList}>
+              {quizQuestions.map((q, qIdx) => (
+                <QuestionEditor
+                  key={q.id}
+                  q={q}
+                  index={qIdx}
+                  onUpdate={(patch) => setQuizQuestions((prev) => updateQuestionInList(prev, q.id, patch))}
+                  onRemove={() => setQuizQuestions((prev) => prev.filter((question) => question.id !== q.id))}
+                  onUpdateChoice={(ci, v) => setQuizQuestions((prev) => updateChoiceInList(prev, q.id, ci, v))}
+                  onAddChoice={() => setQuizQuestions((prev) => addChoiceInList(prev, q.id))}
+                  onRemoveChoice={(ci) => setQuizQuestions((prev) => removeChoiceInList(prev, q.id, ci))}
+                  canRemove={quizQuestions.length > 0}
+                />
+              ))}
+              <button
+                type="button"
+                className={styles.addQuestionBtn}
+                onClick={() => setQuizQuestions((prev) => [...prev, makeQuestion()])}
+              >
+                + Add quiz question
+              </button>
+            </div>
+          </section>
+        )}
+
+        {step === 'review' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Preview & submit</h2>
+            <p className={styles.sectionNote}>Review the node contents below, then create or save.</p>
+            {renderPreviewSummary()}
+          </section>
+        )}
+
+        {step === 'done' && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>{createdThisSession ? 'Node created' : 'Changes saved'}</h2>
+            <p className={styles.successNote}>
+              {createdThisSession
+                ? 'Your node was created successfully. Review the saved summary below, or go back to make changes.'
+                : 'Your changes were saved successfully. Review the saved summary below, or go back to make changes.'}
+            </p>
+            {renderPreviewSummary()}
+          </section>
+        )}
 
         {error && <p className={styles.error}>{error}</p>}
 
         <div className={styles.actions}>
-          <a href="/instructor/nodes" className={styles.cancelLink}>
-            Cancel
-          </a>
-          <button type="submit" className={styles.submitBtn} disabled={saving}>
-            {saving ? 'Saving…' : mode === 'create' ? 'Create node' : 'Save changes'}
-          </button>
+          {step !== 'done' && (
+            <a href="/instructor/nodes" className={styles.cancelLink}>
+              Cancel
+            </a>
+          )}
+          <div className={styles.actionButtons}>
+            {step === 'done' ? (
+              <>
+                <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
+                  Edit again
+                </button>
+                <button type="button" className={styles.submitBtn} onClick={() => router.push('/instructor/nodes')}>
+                  Back to nodes
+                </button>
+              </>
+            ) : (
+              <>
+                {currentStepIndex > 0 && (
+                  <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
+                    Back
+                  </button>
+                )}
+                {step !== 'review' ? (
+                  <button type="button" className={styles.submitBtn} onClick={handleNext}>
+                    Next
+                  </button>
+                ) : (
+                  <button type="submit" className={styles.submitBtn} disabled={saving}>
+                    {saving ? 'Saving…' : savedNodeId ? 'Save changes' : 'Create node'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </form>
     </div>
