@@ -605,7 +605,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                     + Add checkpoint
                   </button>
                   <span className={styles.sectionNote} style={{ margin: 0 }}>
-                    Pauses the video and uses the current playback time.
+                    Pauses the video and uses the current playback time. If the player does not load, use Add checkpoint
+                    manually below.
                   </span>
                 </div>
               </>
@@ -717,15 +718,13 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                 </div>
               ))}
 
-              {!youtubeId && (
-                <button
-                  type="button"
-                  className={styles.addQuestionBtn}
-                  onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
-                >
-                  + Add checkpoint manually
-                </button>
-              )}
+              <button
+                type="button"
+                className={styles.addQuestionBtn}
+                onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
+              >
+                + Add checkpoint manually
+              </button>
             </div>
           </section>
         )}

@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "Node" ADD COLUMN "learningObjectives" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "Node" ADD COLUMN "learningObjectives" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
