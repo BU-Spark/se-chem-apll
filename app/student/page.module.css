@@ -209,3 +209,8 @@
   background: #f3f4f6;
   border-radius: 0.5rem;
 }
+
+.wasDue {
+  font-weight: 600;
+  color: #b91c1c;
+}
