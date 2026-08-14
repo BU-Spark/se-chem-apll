@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
+import type { PaletteNode } from '@/app/types';
 import styles from './LessonRoadmapBuilder.module.css';
 
 export type NodeSelectPayload = {

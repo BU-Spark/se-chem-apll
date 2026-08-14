@@ -25,10 +25,8 @@ import {
   NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
-import type { LessonEdgeEntry } from '@/app/types';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import NodeSearchPopup from './NodeSearchPopup';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
 import { generateClientId } from '@/lib/generateClientId';
 import { wouldCreateCycle } from '@/app/utils/dagValidation';
 import styles from './LessonRoadmapBuilder.module.css';

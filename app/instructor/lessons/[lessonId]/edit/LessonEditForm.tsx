@@ -4,9 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { Lesson, LessonNode, Node } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
 import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
-import type { LessonEdgeEntry } from '@/app/types';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {

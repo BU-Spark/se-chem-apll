@@ -13,3 +13,4 @@ export * from './roadmap.types';
 // Add other type files here as they are created, e.g.:
 // export * from './product.types';
 // export * from './api.types';
+export * from './lesson.types';
