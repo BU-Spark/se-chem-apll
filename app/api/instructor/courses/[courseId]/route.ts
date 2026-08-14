@@ -52,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       lessonId: string;
       openDate?: string | null;
       dueDate?: string | null;
+      accessibleAfterDue?: boolean;
       sortOrder: number;
     }>;
   };
@@ -114,6 +115,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             lessonId: row.lessonId,
             openDate: row.openDate ? new Date(row.openDate) : null,
             dueDate: row.dueDate ? new Date(row.dueDate) : null,
+            accessibleAfterDue: row.accessibleAfterDue ?? false,
             sortOrder: row.sortOrder,
           })),
         },
