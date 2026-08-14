@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -10,6 +10,8 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  ReactFlowProvider,
+  useReactFlow,
   Position,
   useNodesState,
   type Node as XYNode,
@@ -152,16 +154,14 @@ function toXYEdges(
   }));
 }
 
-export default function LessonRoadmapBuilder({
-  availableNodes,
-  lessonNodes,
-  edges,
-  onEdgesChange,
-  onLessonNodesChange,
-}: Props) {
+function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdgesChange, onLessonNodesChange }: Props) {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null); // sets the edge id of the selected edge
   const [popupNode, setPopupNode] = useState(false);
+  // for storing positions
+  const [pendingPosition, setPendingPosition] = useState<{ x: number; y: number } | null>(null);
+  const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  const { screenToFlowPosition } = useReactFlow();
 
   // `edges` (prop) is the single source of truth; xyNodes/xyEdges are derived from it on
   // every render rather than duplicated into separate ReactFlow-owned state. This keeps
@@ -185,8 +185,28 @@ export default function LessonRoadmapBuilder({
 
   // calls sedNodes(xyNodes) when lessonNodes changes to make sure that the graph updates when the popup closes
   useEffect(() => {
-    setNodes(xyNodes);
-  }, [xyNodes, setNodes]);
+    setNodes((current) => {
+      const prev = new Map(current.map((n) => [n.id, n]));
+      return lessonNodes.map((n, i) => {
+        const existing = prev.get(n.instanceId);
+        const fallback = { x: 220 * (i % 4), y: 130 * Math.floor(i / 4) };
+        const position = positionsRef.current[n.instanceId] ?? existing?.position ?? fallback;
+        positionsRef.current[n.instanceId] = position;
+        return {
+          id: n.instanceId,
+          type: 'roadmapNode' as const,
+          position,
+          data: {
+            label: n.title,
+            passingPercent: n.passingPercent,
+            quizQuestionCount: n.quizQuestionCount,
+            isRequired: n.isRequired,
+            quizBankCount: n.quizBankCount,
+          } satisfies RoadmapNodeData,
+        };
+      });
+    });
+  }, [lessonNodes, setNodes]);
 
   // handles the connection of two nodes
   // if tests pass ita makes new LessonEdgeEntry and pushes it onto the edges array with onEdgesChange
@@ -239,10 +259,14 @@ export default function LessonRoadmapBuilder({
 
   const handleSelect = useCallback(
     ({ node, passingPercent, quizQuestionCount, isRequired }: NodeSelectPayload) => {
+      const instanceId = generateClientId('lesson-node');
+      const i = lessonNodes.length;
+      const fallback = { x: 220 * (i % 4), y: 130 * Math.floor(i / 4) };
+      positionsRef.current[instanceId] = pendingPosition ?? fallback;
       onLessonNodesChange([
         ...lessonNodes,
         {
-          instanceId: generateClientId('lesson-node'),
+          instanceId,
           nodeId: node.id,
           title: node.title,
           passingPercent,
@@ -251,16 +275,25 @@ export default function LessonRoadmapBuilder({
           quizBankCount: node.quizBankCount,
         },
       ]);
+      setPendingPosition(null);
       setPopupNode(false);
     },
-    [lessonNodes, onLessonNodesChange]
+    [lessonNodes, onLessonNodesChange, pendingPosition]
   );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      onNodesChange(changes); // keep drag/select working
+      onNodesChange(changes);
+      for (const change of changes) {
+        if (change.type === 'position' && change.position && change.dragging === false) {
+          positionsRef.current[change.id] = change.position;
+        }
+      }
       const removedIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id));
       if (removedIds.size === 0) return;
+      for (const id of removedIds) {
+        delete positionsRef.current[id];
+      }
       onLessonNodesChange(lessonNodes.filter((n) => !removedIds.has(n.instanceId)));
     },
     [onNodesChange, lessonNodes, onLessonNodesChange]
@@ -278,11 +311,13 @@ export default function LessonRoadmapBuilder({
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
-          onPaneClick={() => {
+          onPaneClick={(event) => {
             setSelectedEdgeId(null);
+            setPendingPosition(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
             setPopupNode(true);
           }}
           fitView
+          fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
           deleteKeyCode="Backspace"
           panOnDrag={[1, 2]}
           panOnScroll
@@ -292,7 +327,14 @@ export default function LessonRoadmapBuilder({
           <MiniMap nodeStrokeWidth={3} />
         </ReactFlow>
         {popupNode && (
-          <NodeSearchPopup nodes={availableNodes} onSelect={handleSelect} onClose={() => setPopupNode(false)} />
+          <NodeSearchPopup
+            nodes={availableNodes}
+            onSelect={handleSelect}
+            onClose={() => {
+              setPopupNode(false);
+              setPendingPosition(null);
+            }}
+          />
         )}
       </div>
       {connectError && <p className={styles.error}>{connectError}</p>}
@@ -301,5 +343,13 @@ export default function LessonRoadmapBuilder({
         <span className={styles.edgeDeleteHintIcon}>×</span> button (or press <kbd>Backspace</kbd>) to delete it.
       </p>
     </>
+  );
+}
+
+export default function LessonRoadmapBuilder(props: Props) {
+  return (
+    <ReactFlowProvider>
+      <LessonRoadmapBuilderInner {...props} />
+    </ReactFlowProvider>
   );
 }
