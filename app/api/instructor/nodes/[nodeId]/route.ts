@@ -20,8 +20,11 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { nodeId } = await params;
-  const node = await prisma.node.findUnique({
-    where: { id: nodeId },
+  const node = await prisma.node.findFirst({
+    where: {
+      id: nodeId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: nodeInclude,
   });
   if (!node) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -57,6 +60,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
   };
+  const owned = await prisma.node.findFirst({
+    where: {
+      id: nodeId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
   if (learningObjectivesTypeError) return learningObjectivesTypeError;
@@ -145,7 +155,13 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { nodeId } = await params;
-  const existing = await prisma.node.findUnique({ where: { id: nodeId }, select: { id: true } });
+  const existing = await prisma.node.findFirst({
+    where: {
+      id: nodeId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+    select: { id: true },
+  });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await prisma.$transaction(async (tx) => {

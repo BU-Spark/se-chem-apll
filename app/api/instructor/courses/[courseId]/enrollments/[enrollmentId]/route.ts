@@ -13,6 +13,14 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   const { courseId, enrollmentId } = await params;
 
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
+  if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
   const enrollment = await prisma.enrollment.findUnique({
     where: { id: enrollmentId },
   });
