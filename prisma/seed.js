@@ -27,6 +27,7 @@ async function createDemoNode(index) {
       summary: '[seed-demo] Example learning node',
       videoUrl: pickRandomYoutube(),
       estimatedMinutes: 8 + index,
+      learningObjectives: [`Identify key concept ${index}`, `Apply procedure ${index}`],
       checkpoints: {
         create: [
           {

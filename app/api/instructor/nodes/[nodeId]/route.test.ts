@@ -8,6 +8,7 @@ const mockCheckpointDeleteMany = jest.fn();
 const mockQuizDeleteMany = jest.fn();
 const mockUpdate = jest.fn();
 const mockTransaction = jest.fn();
+const mockFindFirst = jest.fn();
 
 jest.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
@@ -25,6 +26,9 @@ jest.mock('next/server', () => ({
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     $transaction: (...args: unknown[]) => mockTransaction(...args),
+    node: {
+      findFirst: (...args: unknown[]) => mockFindFirst(...args),
+    },
   },
 }));
 
@@ -38,6 +42,7 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockFindFirst.mockResolvedValue({ id: 'node-1' });
     mockCheckpointFindMany.mockResolvedValue([]);
     mockQuizFindMany.mockResolvedValue([]);
     mockUpdate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
@@ -60,6 +65,7 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   it('replaces checkpoints and quiz questions', async () => {
     const response = await PATCH(
       patchRequest({
+        learningObjectives: ['  Trim me  ', ''],
         checkpoints: [
           {
             sortOrder: 0,
@@ -92,6 +98,7 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          learningObjectives: ['Trim me'],
           checkpoints: {
             create: [
               expect.objectContaining({

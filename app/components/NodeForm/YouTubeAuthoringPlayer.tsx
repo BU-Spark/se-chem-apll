@@ -9,6 +9,8 @@ declare global {
         element: HTMLElement | string,
         options: {
           videoId: string;
+          width?: number | string;
+          height?: number | string;
           playerVars?: Record<string, number | string>;
           events?: {
             onReady?: (event: { target: YTPlayer }) => void;
@@ -88,6 +90,8 @@ export default function YouTubeAuthoringPlayer({ videoId, onReady }: Props) {
         playerRef.current?.destroy();
         playerRef.current = new window.YT.Player(mountRef.current, {
           videoId,
+          width: '100%',
+          height: '100%',
           playerVars: {
             enablejsapi: 1,
             rel: 0,

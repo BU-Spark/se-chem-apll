@@ -1,4 +1,5 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { nodeInclude } from '@/app/utils/nodeContent';
 import NodeEditForm from './NodeEditForm';
@@ -11,9 +12,16 @@ interface Props {
 
 export default async function EditNodePage({ params }: Props) {
   const { nodeId } = await params;
+  const { userId } = await auth();
+  if (!userId) {
+    redirect('/sign-in');
+  }
 
-  const node = await prisma.node.findUnique({
-    where: { id: nodeId },
+  const node = await prisma.node.findFirst({
+    where: {
+      id: nodeId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: nodeInclude,
   });
 
@@ -26,6 +34,7 @@ export default async function EditNodePage({ params }: Props) {
         title: node.title,
         summary: node.summary ?? '',
         videoUrl: node.videoUrl ?? '',
+        learningObjectives: node.learningObjectives,
         checkpoints: node.checkpoints.map((checkpoint) => ({
           id: checkpoint.id,
           timeOffsetSeconds: checkpoint.timeOffsetSeconds,

@@ -11,6 +11,7 @@ type ImportedLesson = {
   title: string;
   openDate: string;
   dueDate: string;
+  accessibleAfterDue: boolean;
 };
 
 interface Props {
@@ -39,7 +40,16 @@ export default function CourseCreateForm({ availableLessons }: Props) {
   });
 
   function addLesson(lesson: AvailableLesson) {
-    setImportedLessons((prev) => [...prev, { lessonId: lesson.id, title: lesson.title, openDate: '', dueDate: '' }]);
+    setImportedLessons((prev) => [
+      ...prev,
+      {
+        lessonId: lesson.id,
+        title: lesson.title,
+        openDate: '',
+        dueDate: '',
+        accessibleAfterDue: false,
+      },
+    ]);
     setLessonQuery('');
   }
   function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
@@ -73,6 +83,7 @@ export default function CourseCreateForm({ availableLessons }: Props) {
             lessonId: row.lessonId,
             openDate: row.openDate || null,
             dueDate: row.dueDate || null,
+            accessibleAfterDue: row.accessibleAfterDue,
             sortOrder: idx,
           })),
         }),
@@ -204,6 +215,14 @@ export default function CourseCreateForm({ availableLessons }: Props) {
                       />
                     </label>
                   </div>
+                  <label className={styles.checkboxField}>
+                    <input
+                      type="checkbox"
+                      checked={row.accessibleAfterDue}
+                      onChange={(e) => updateImported(row.lessonId, { accessibleAfterDue: e.target.checked })}
+                    />
+                    Keep accessible after due date
+                  </label>
                   <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
                     Remove
                   </button>

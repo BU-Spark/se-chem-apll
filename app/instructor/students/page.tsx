@@ -1,11 +1,21 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StudentsPage() {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect('/sign-in');
+  }
+
   const courses = await prisma.course.findMany({
+    where: {
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: {
       enrollments: {
         include: { student: true },

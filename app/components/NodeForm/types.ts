@@ -89,6 +89,7 @@ export type NodeFormInitial = {
   title: string;
   summary: string;
   videoUrl: string;
+  learningObjectives: string[];
   checkpoints: Array<{
     id: string;
     timeOffsetSeconds: number;
