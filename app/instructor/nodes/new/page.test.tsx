@@ -52,7 +52,7 @@ describe('NewNodePage', () => {
     await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByRole('heading', { name: 'Quiz question bank' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
     const prompts = screen.getAllByLabelText(/Question prompt/);
