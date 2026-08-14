@@ -37,6 +37,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         learningObjectives: ['  Identify hazards  ', '', 'Apply procedure'],
         checkpoints: [
           {
@@ -147,6 +148,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         quizQuestions: [
           {
             sortOrder: 0,
@@ -184,6 +186,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         quizQuestions: [{ sortOrder: 0, prompt: 'Estimate', options }],
       }) as never
     );
@@ -208,6 +211,36 @@ describe('POST /api/instructor/nodes', () => {
       }) as never
     );
 
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when video URL is missing or invalid', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://example.com/not-youtube',
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never
+    );
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  it('returns 422 when quiz questions are missing', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        quizQuestions: [],
+      }) as never
+    );
     expect(response.status).toBe(422);
     expect(mockCreate).not.toHaveBeenCalled();
   });

@@ -17,7 +17,7 @@ const node = {
   id: 'node-1',
   title: 'Existing node',
   summary: 'Summary',
-  videoUrl: '',
+  videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   learningObjectives: ['Identify hazards', 'Apply procedure'],
   checkpoints: [
     {
