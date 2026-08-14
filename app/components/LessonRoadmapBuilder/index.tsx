@@ -22,6 +22,7 @@ import {
   type EdgeProps,
   MarkerType,
   type NodeChange,
+  NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
@@ -32,6 +33,7 @@ import { generateClientId } from '@/lib/generateClientId';
 import { wouldCreateCycle } from '@/app/utils/dagValidation';
 import styles from './LessonRoadmapBuilder.module.css';
 import type { NodeSelectPayload } from './NodeSearchPopup';
+import NodeEditPopup from './NodeEditPopup';
 
 interface Props {
   availableNodes: PaletteNode[];
@@ -47,13 +49,25 @@ interface RoadmapNodeData {
   quizQuestionCount: string;
   isRequired: boolean;
   quizBankCount: number;
+  onDelete?: (instanceId: string) => void;
   [key: string]: unknown;
 }
-
-function RoadmapNode({ data }: { data: RoadmapNodeData }) {
+function RoadmapNode({ id, data }: NodeProps & { data: RoadmapNodeData }) {
   return (
     <div className={styles.graphNode}>
       <Handle type="target" position={Position.Top} />
+      <button
+        type="button"
+        className={styles.graphNodeDeleteBtn}
+        aria-label="Delete node"
+        title="Delete node"
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onDelete?.(id);
+        }}
+      >
+        ×
+      </button>
       <span className={styles.graphNodeLabel}>{data.label}</span>
       <div className={styles.graphNodeMeta}>
         {data.passingPercent !== '' && <span className={styles.graphNodeChip}>{data.passingPercent}%</span>}
@@ -158,10 +172,13 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
   const [connectError, setConnectError] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null); // sets the edge id of the selected edge
   const [popupNode, setPopupNode] = useState(false);
+  const [editingInstanceId, setEditingInstanceId] = useState<string | null>(null);
   // for storing positions
   const [pendingPosition, setPendingPosition] = useState<{ x: number; y: number } | null>(null);
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const { screenToFlowPosition } = useReactFlow();
+
+  const editingNode = lessonNodes.find((n) => n.instanceId === editingInstanceId) ?? null;
 
   // `edges` (prop) is the single source of truth; xyNodes/xyEdges are derived from it on
   // every render rather than duplicated into separate ReactFlow-owned state. This keeps
@@ -173,6 +190,15 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
       onEdgesChange(edges.filter((e) => e.edgeId !== edgeId));
     },
     [edges, onEdgesChange]
+  );
+
+  const deleteLessonNode = useCallback(
+    (instanceId: string) => {
+      delete positionsRef.current[instanceId];
+      if (editingInstanceId === instanceId) setEditingInstanceId(null);
+      onLessonNodesChange(lessonNodes.filter((n) => n.instanceId !== instanceId));
+    },
+    [lessonNodes, onLessonNodesChange, editingInstanceId]
   );
 
   // edges are computed every render with useMemo, from lessonNodes and edges, and deleteEdge + selectedEdgeId
@@ -198,6 +224,7 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
           position,
           data: {
             label: n.title,
+            onDelete: deleteLessonNode,
             passingPercent: n.passingPercent,
             quizQuestionCount: n.quizQuestionCount,
             isRequired: n.isRequired,
@@ -206,7 +233,7 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
         };
       });
     });
-  }, [lessonNodes, setNodes]);
+  }, [lessonNodes, setNodes, deleteLessonNode]);
 
   // handles the connection of two nodes
   // if tests pass ita makes new LessonEdgeEntry and pushes it onto the edges array with onEdgesChange
@@ -313,8 +340,15 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
           onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
           onPaneClick={(event) => {
             setSelectedEdgeId(null);
+            setEditingInstanceId(null);
             setPendingPosition(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
             setPopupNode(true);
+          }}
+          onNodeClick={(_, node) => {
+            setSelectedEdgeId(null);
+            setPopupNode(false);
+            setPendingPosition(null);
+            setEditingInstanceId(node.id);
           }}
           fitView
           fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
@@ -333,6 +367,24 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
             onClose={() => {
               setPopupNode(false);
               setPendingPosition(null);
+            }}
+          />
+        )}
+        {editingNode && (
+          <NodeEditPopup
+            title={editingNode.title}
+            quizBankCount={editingNode.quizBankCount}
+            initialPassingPercent={editingNode.passingPercent}
+            initialQuizQuestionCount={editingNode.quizQuestionCount}
+            initialIsRequired={editingNode.isRequired}
+            onClose={() => setEditingInstanceId(null)}
+            onSave={({ passingPercent, quizQuestionCount, isRequired }) => {
+              onLessonNodesChange(
+                lessonNodes.map((n) =>
+                  n.instanceId === editingNode.instanceId ? { ...n, passingPercent, quizQuestionCount, isRequired } : n
+                )
+              );
+              setEditingInstanceId(null);
             }}
           />
         )}
