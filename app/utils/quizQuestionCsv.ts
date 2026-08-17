@@ -1,4 +1,4 @@
-import { makeQuestion, serializeQuestionOptions, type FormQuestion } from '@/app/components/NodeForm/types';
+import { makeQuestion, serializeQuestionOptions, type QuizFormQuestion } from '@/app/components/NodeForm/types';
 import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
 import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import { parseCsv, serializeCsv } from '@/app/utils/csv';
@@ -139,7 +139,7 @@ function rowToFormQuestion(
   row: string[],
   map: Map<string, number>,
   rowNumber: number
-): { question: FormQuestion } | { error: string } {
+): { question: QuizFormQuestion } | { error: string } {
   const rowLabel = `Row ${rowNumber}`;
   const type = cellAt(row, map, 'type').toLowerCase();
   const prompt = cellAt(row, map, 'prompt');
@@ -167,7 +167,7 @@ function rowToFormQuestion(
     const parsed = parseCorrectIndices(correctRaw, choices.length, rowLabel);
     if ('error' in parsed) return parsed;
 
-    const question: FormQuestion = {
+    const question: QuizFormQuestion = {
       ...base,
       prompt,
       questionType: 'multipleChoice',
@@ -191,7 +191,7 @@ function rowToFormQuestion(
     return { error: `${rowLabel}: short-answer answer_mode must be "exact" or "range".` };
   }
 
-  const question: FormQuestion = {
+  const question: QuizFormQuestion = {
     ...base,
     prompt,
     questionType: 'shortAnswer',
@@ -210,7 +210,7 @@ function rowToFormQuestion(
   return { question };
 }
 
-export function formQuestionsToCsv(questions: FormQuestion[]): string {
+export function formQuestionsToCsv(questions: QuizFormQuestion[]): string {
   const dataRows = questions.map((q) => {
     if (q.questionType === 'multipleChoice') {
       return [
@@ -240,7 +240,7 @@ export function formQuestionsToCsv(questions: FormQuestion[]): string {
   return serializeCsv([[...QUIZ_CSV_HEADERS], ...dataRows]);
 }
 
-export type CsvToFormQuestionsResult = { ok: true; questions: FormQuestion[] } | { ok: false; errors: string[] };
+export type CsvToFormQuestionsResult = { ok: true; questions: QuizFormQuestion[] } | { ok: false; errors: string[] };
 
 export function csvToFormQuestions(text: string): CsvToFormQuestionsResult {
   const rows = parseCsv(text).filter((row) => row.some((cell) => cell.trim() !== ''));
@@ -258,7 +258,7 @@ export function csvToFormQuestions(text: string): CsvToFormQuestionsResult {
     return { ok: true, questions: [] };
   }
 
-  const questions: FormQuestion[] = [];
+  const questions: QuizFormQuestion[] = [];
   const errors: string[] = [];
 
   dataRows.forEach((row, idx) => {

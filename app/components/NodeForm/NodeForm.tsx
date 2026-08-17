@@ -12,6 +12,7 @@ import QuestionEditor from './QuestionEditor';
 import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer';
 import {
   dbQuestionToForm,
+  isQuizFormQuestion,
   makeCheckpoint,
   makeQuestion,
   serializeQuestionOptions,
@@ -77,6 +78,7 @@ function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
     questions: checkpoint.questions.map((q, qIdx) => ({
       sortOrder: qIdx,
       prompt: q.prompt,
+      kind: q.questionType === 'note' ? 'note' : 'question',
       options: serializeQuestionOptions(q),
       correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
     })),
@@ -101,8 +103,13 @@ function validateQuestionPayloads(
   if (timestampError) return timestampError;
 
   if (options.requireCheckpointQuestions && checkpointPayload.some((c) => c.questions.length === 0)) {
-    return 'Each checkpoint must include at least one question.';
+    return 'Each checkpoint must include at least one question or note.';
   }
+
+  const emptyNote = checkpointPayload
+    .flatMap((checkpoint) => checkpoint.questions)
+    .find((item) => item.kind === 'note' && item.prompt.trim() === '');
+  if (emptyNote) return 'Each note must have non-empty text.';
 
   const questions = [...checkpointPayload.flatMap((c) => c.questions), ...(options.includeQuiz ? quizPayload : [])];
   const correctAnswersError = validateMultipleChoiceAnswers(questions);
@@ -223,7 +230,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function handleDownloadCurrentQuizCsv() {
-    downloadCsvFile('quiz-questions.csv', formQuestionsToCsv(quizQuestions));
+    const exportableQuestions = quizQuestions.filter(isQuizFormQuestion);
+    if (exportableQuestions.length !== quizQuestions.length) {
+      setQuizCsvErrors(['Notes cannot be exported as quiz questions.']);
+      return;
+    }
+    downloadCsvFile('quiz-questions.csv', formQuestionsToCsv(exportableQuestions));
   }
 
   async function handleQuizCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -441,13 +453,16 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                     Checkpoint {idx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
                   </strong>
                   <span className={styles.previewMeta}>
-                    {checkpoint.questions.length} question
-                    {checkpoint.questions.length === 1 ? '' : 's'}
+                    {checkpoint.questions.filter((item) => item.questionType !== 'note').length} question
+                    {checkpoint.questions.filter((item) => item.questionType !== 'note').length === 1 ? '' : 's'} ·{' '}
+                    {checkpoint.questions.filter((item) => item.questionType === 'note').length} note
+                    {checkpoint.questions.filter((item) => item.questionType === 'note').length === 1 ? '' : 's'}
                   </span>
                   <ul className={styles.previewSublist}>
                     {checkpoint.questions.map((q, qIdx) => (
                       <li key={q.id}>
-                        Q{qIdx + 1}: {q.prompt.trim() || '(empty prompt)'}
+                        {q.questionType === 'note' ? `Note ${qIdx + 1}` : `Q${qIdx + 1}`}:{' '}
+                        {q.prompt.trim() || '(empty prompt)'}
                       </li>
                     ))}
                   </ul>
@@ -490,11 +505,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         {STEPS.map((s, idx) => {
           const isActive = s.id === step;
           const reachable =
-            s.id === 'done'
-              ? step === 'done'
-              : step === 'done'
-                ? idx <= stepIndex('review')
-                : idx <= maxReachedIndex && s.id !== 'done';
+            s.id === 'done' ? step === 'done' : step === 'done' ? idx <= stepIndex('review') : idx <= maxReachedIndex;
           return (
             <button
               key={s.id}
@@ -587,7 +598,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
             <p className={styles.sectionNote}>
               Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold
-              multiple questions.
+              multiple questions or notes.
             </p>
 
             {youtubeId ? (
@@ -700,21 +711,42 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                         )
                       }
                       canRemove={checkpoint.questions.length > 1}
+                      allowNotes
                     />
                   ))}
-                  <button
-                    type="button"
-                    className={styles.addQuestionBtn}
-                    onClick={() =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id ? { ...c, questions: [...c.questions, makeQuestion()] } : c
+                  <div className={styles.checkpointItemActions}>
+                    <button
+                      type="button"
+                      className={styles.addQuestionBtn}
+                      onClick={() =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id ? { ...c, questions: [...c.questions, makeQuestion()] } : c
+                          )
                         )
-                      )
-                    }
-                  >
-                    + Add question to checkpoint
-                  </button>
+                      }
+                    >
+                      + Add question
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.addQuestionBtn}
+                      onClick={() =>
+                        setCheckpoints((prev) =>
+                          prev.map((c) =>
+                            c.id === checkpoint.id
+                              ? {
+                                  ...c,
+                                  questions: [...c.questions, { ...makeQuestion(), questionType: 'note' }],
+                                }
+                              : c
+                          )
+                        )
+                      }
+                    >
+                      + Add note
+                    </button>
+                  </div>
                 </div>
               ))}
 
