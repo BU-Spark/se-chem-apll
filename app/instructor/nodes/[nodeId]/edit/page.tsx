@@ -34,7 +34,8 @@ export default async function EditNodePage({ params }: Props) {
         title: node.title,
         summary: node.summary ?? '',
         videoUrl: node.videoUrl ?? '',
-        learningObjectives: node.learningObjectives,
+        tags: node.tags,
+        learningObjectives: node.learningObjectives ?? '',
         checkpoints: node.checkpoints.map((checkpoint) => ({
           id: checkpoint.id,
           timeOffsetSeconds: checkpoint.timeOffsetSeconds,

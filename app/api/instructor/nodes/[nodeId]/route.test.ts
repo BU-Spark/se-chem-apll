@@ -65,7 +65,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   it('replaces checkpoints and quiz questions', async () => {
     const response = await PATCH(
       patchRequest({
-        learningObjectives: ['  Trim me  ', ''],
+        tags: ['  Safety  ', ''],
+        learningObjectives: '  This node will help you work safely.  ',
         checkpoints: [
           {
             sortOrder: 0,
@@ -98,7 +99,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          learningObjectives: ['Trim me'],
+          tags: ['Safety'],
+          learningObjectives: 'This node will help you work safely.',
           checkpoints: {
             create: [
               expect.objectContaining({

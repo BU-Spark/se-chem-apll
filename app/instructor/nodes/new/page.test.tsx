@@ -37,7 +37,11 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
-    await user.type(screen.getByLabelText('New learning objective'), 'Stay safe{Enter}');
+    await user.type(screen.getByLabelText('New tag'), 'Safety{Enter}');
+    await user.type(
+      screen.getByLabelText('Learning objectives'),
+      'This node will help you understand safe lab practices.'
+    );
     await goToCheckpoints(user);
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
@@ -69,7 +73,8 @@ describe('NewNodePage', () => {
     const request = (global.fetch as jest.Mock).mock.calls[0][1];
     const body = JSON.parse(request.body);
 
-    expect(body.learningObjectives).toEqual(['Stay safe']);
+    expect(body.tags).toEqual(['Safety']);
+    expect(body.learningObjectives).toBe('This node will help you understand safe lab practices.');
     expect(body.checkpoints).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 0,

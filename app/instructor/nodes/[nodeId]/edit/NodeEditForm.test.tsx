@@ -18,7 +18,8 @@ const node = {
   title: 'Existing node',
   summary: 'Summary',
   videoUrl: '',
-  learningObjectives: ['Identify hazards', 'Apply procedure'],
+  tags: ['Safety', 'Procedure'],
+  learningObjectives: 'This node will help you identify hazards and apply the procedure.',
   checkpoints: [
     {
       id: 'cp-1',
@@ -66,8 +67,11 @@ describe('NodeEditForm', () => {
     render(<NodeEditForm node={node} />);
 
     expect(screen.getByDisplayValue('Existing node')).toBeInTheDocument();
-    expect(screen.getByText('Identify hazards')).toBeInTheDocument();
-    expect(screen.getByText('Apply procedure')).toBeInTheDocument();
+    expect(screen.getByText('Safety')).toBeInTheDocument();
+    expect(screen.getByText('Procedure')).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue('This node will help you identify hazards and apply the procedure.')
+    ).toBeInTheDocument();
 
     await advanceToReview(user);
     expect(screen.getByText(/Checkpoint prompt/)).toBeInTheDocument();
@@ -80,7 +84,8 @@ describe('NodeEditForm', () => {
     expect(url).toBe('/api/instructor/nodes/node-1');
     expect(request.method).toBe('PATCH');
     const body = JSON.parse(request.body);
-    expect(body.learningObjectives).toEqual(['Identify hazards', 'Apply procedure']);
+    expect(body.tags).toEqual(['Safety', 'Procedure']);
+    expect(body.learningObjectives).toBe('This node will help you identify hazards and apply the procedure.');
     expect(body.checkpoints[0].timeOffsetSeconds).toBe(90);
     expect(body.checkpoints[0].questions[0]).toEqual(
       expect.objectContaining({
@@ -117,23 +122,25 @@ describe('NodeEditForm', () => {
     await user.click(screen.getByRole('button', { name: 'Back to nodes' }));
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
-  it('adds learning objective tags on the basics step', async () => {
+  it('adds tags on the basics step', async () => {
     const user = userEvent.setup();
-    render(<NodeEditForm node={{ ...node, learningObjectives: [] }} />);
+    render(<NodeEditForm node={{ ...node, tags: [], learningObjectives: '' }} />);
 
-    await user.type(screen.getByLabelText('New learning objective'), 'Measure pressure');
+    await user.type(screen.getByLabelText('New tag'), 'Pressure');
     await user.click(screen.getByRole('button', { name: 'Add' }));
-    expect(screen.getByText('Measure pressure')).toBeInTheDocument();
+    expect(screen.getByText('Pressure')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('New learning objective'), 'measure pressure{Enter}');
-    expect(screen.getAllByText('Measure pressure')).toHaveLength(1);
+    await user.type(screen.getByLabelText('New tag'), 'pressure{Enter}');
+    expect(screen.getAllByText('Pressure')).toHaveLength(1);
+    await user.type(screen.getByLabelText('Learning objectives'), 'Understand how to measure pressure.');
 
     await advanceToReview(user);
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-    expect(body.learningObjectives).toEqual(['Measure pressure']);
+    expect(body.tags).toEqual(['Pressure']);
+    expect(body.learningObjectives).toBe('Understand how to measure pressure.');
   });
 
   it('blocks Next without a title', async () => {

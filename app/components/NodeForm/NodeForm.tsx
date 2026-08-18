@@ -129,8 +129,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
-  const [learningObjectives, setLearningObjectives] = useState<string[]>(initial?.learningObjectives ?? []);
-  const [objectiveDraft, setObjectiveDraft] = useState('');
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [tagDraft, setTagDraft] = useState('');
+  const [learningObjectives, setLearningObjectives] = useState(initial?.learningObjectives ?? '');
   const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
@@ -199,22 +200,22 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     addCheckpointAt(Math.max(0, seconds));
   }
 
-  function addLearningObjective(raw: string) {
+  function addTag(raw: string) {
     const value = raw.trim();
     if (!value) return;
-    const exists = learningObjectives.some((item) => item.toLowerCase() === value.toLowerCase());
+    const exists = tags.some((item) => item.toLowerCase() === value.toLowerCase());
     if (exists) {
-      setObjectiveDraft('');
+      setTagDraft('');
       return;
     }
-    setLearningObjectives((prev) => [...prev, value]);
-    setObjectiveDraft('');
+    setTags((prev) => [...prev, value]);
+    setTagDraft('');
   }
 
-  function handleObjectiveKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      addLearningObjective(objectiveDraft);
+      addTag(tagDraft);
     }
   }
 
@@ -368,6 +369,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           title: title.trim(),
           summary,
           videoUrl: videoUrl || null,
+          tags,
           learningObjectives,
           checkpoints: checkpointPayload,
           quizQuestions: quizPayload,
@@ -409,20 +411,24 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               <dd className={styles.previewMono}>{videoUrl.trim() || '—'}</dd>
             </div>
             <div>
-              <dt>Learning objectives</dt>
+              <dt>Tags</dt>
               <dd>
-                {learningObjectives.length === 0 ? (
+                {tags.length === 0 ? (
                   '—'
                 ) : (
                   <ul className={styles.tagList}>
-                    {learningObjectives.map((objective) => (
-                      <li key={objective} className={styles.tag}>
-                        <span>{objective}</span>
+                    {tags.map((tag) => (
+                      <li key={tag} className={styles.tag}>
+                        <span>{tag}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </dd>
+            </div>
+            <div>
+              <dt>Learning objectives</dt>
+              <dd>{learningObjectives.trim() || '—'}</dd>
             </div>
           </dl>
         </div>
@@ -541,32 +547,32 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               />
             </label>
             <div className={styles.field}>
-              <span className={styles.fieldLabel}>Learning objectives</span>
+              <span className={styles.fieldLabel}>Tags</span>
               <p className={styles.sectionNote} style={{ margin: 0 }}>
-                Add short objectives as tags. Press Enter or click Add.
+                Add short labels to help organize nodes. Press Enter or click Add.
               </p>
               <div className={styles.tagInputRow}>
                 <input
-                  value={objectiveDraft}
-                  onChange={(e) => setObjectiveDraft(e.target.value)}
-                  onKeyDown={handleObjectiveKeyDown}
-                  placeholder="e.g. Identify ignition hazards"
-                  aria-label="New learning objective"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder="e.g. lab safety"
+                  aria-label="New tag"
                 />
-                <button type="button" className={styles.tagAddBtn} onClick={() => addLearningObjective(objectiveDraft)}>
+                <button type="button" className={styles.tagAddBtn} onClick={() => addTag(tagDraft)}>
                   Add
                 </button>
               </div>
-              {learningObjectives.length > 0 && (
+              {tags.length > 0 && (
                 <ul className={styles.tagList}>
-                  {learningObjectives.map((objective) => (
-                    <li key={objective} className={styles.tag}>
-                      <span>{objective}</span>
+                  {tags.map((tag) => (
+                    <li key={tag} className={styles.tag}>
+                      <span>{tag}</span>
                       <button
                         type="button"
                         className={styles.tagRemove}
-                        aria-label={`Remove ${objective}`}
-                        onClick={() => setLearningObjectives((prev) => prev.filter((item) => item !== objective))}
+                        aria-label={`Remove ${tag}`}
+                        onClick={() => setTags((prev) => prev.filter((item) => item !== tag))}
                       >
                         ×
                       </button>
@@ -575,6 +581,19 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                 </ul>
               )}
             </div>
+            <label className={styles.field}>
+              Learning objectives
+              <textarea
+                aria-label="Learning objectives"
+                value={learningObjectives}
+                onChange={(e) => setLearningObjectives(e.target.value)}
+                placeholder="e.g. This node will help you understand the basics of the mole concept."
+                rows={4}
+              />
+              <span className={styles.sectionNote}>
+                A student-facing description of what this node will help them learn.
+              </span>
+            </label>
           </section>
         )}
 
