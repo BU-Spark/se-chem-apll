@@ -490,11 +490,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         {STEPS.map((s, idx) => {
           const isActive = s.id === step;
           const reachable =
-            s.id === 'done'
-              ? step === 'done'
-              : step === 'done'
-                ? idx <= stepIndex('review')
-                : idx <= maxReachedIndex && s.id !== 'done';
+            s.id === 'done' ? step === 'done' : step === 'done' ? idx <= stepIndex('review') : idx <= maxReachedIndex;
           return (
             <button
               key={s.id}
