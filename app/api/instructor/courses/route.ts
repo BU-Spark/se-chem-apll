@@ -8,6 +8,9 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const courses = await prisma.course.findMany({
+    where: {
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: {
       enrollments: true,
       contacts: true,
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
       lessonId: string;
       openDate?: string | null;
       dueDate?: string | null;
+      accessibleAfterDue?: boolean;
       sortOrder: number;
     }>;
   };
@@ -82,12 +86,14 @@ export async function POST(req: NextRequest) {
       code: code.trim().toUpperCase(),
       section: section?.trim() || null,
       title: title.trim(),
+      createdByClerkId: userId,
       description: description?.trim() || null,
       courseLessons: {
         create: lessonInputs.map((row) => ({
           lessonId: row.lessonId,
           openDate: row.openDate ? new Date(row.openDate) : null,
           dueDate: row.dueDate ? new Date(row.dueDate) : null,
+          accessibleAfterDue: row.accessibleAfterDue ?? false,
           sortOrder: row.sortOrder,
         })),
       },

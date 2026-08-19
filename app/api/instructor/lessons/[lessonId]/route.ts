@@ -16,8 +16,11 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { lessonId } = await params;
-  const lesson = await prisma.lesson.findUnique({
-    where: { id: lessonId },
+  const lesson = await prisma.lesson.findFirst({
+    where: {
+      id: lessonId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: {
       lessonNodes: {
         include: { node: { include: nodeInclude } },
@@ -61,6 +64,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
   };
+
+  const owned = await prisma.lesson.findFirst({
+    where: {
+      id: lessonId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (lessonNodes?.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
@@ -152,6 +163,16 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { lessonId } = await params;
+
+  const owned = await prisma.lesson.findFirst({
+    where: {
+      id: lessonId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+    select: { id: true },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
   await prisma.lesson.delete({ where: { id: lessonId } });
   return new NextResponse(null, { status: 204 });
 }

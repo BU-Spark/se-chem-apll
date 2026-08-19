@@ -10,6 +10,9 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const lessons = await prisma.lesson.findMany({
+    where: {
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: {
       lessonNodes: {
         include: { node: true },
@@ -77,6 +80,7 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       slug: slug.trim(),
       summary: summary.trim(),
+      createdByClerkId: userId,
       description: description ?? null,
       estimatedMinutes: estimatedMinutes ?? null,
       lessonNodes: {

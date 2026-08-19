@@ -12,8 +12,11 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { courseId } = await params;
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
     include: {
       courseLessons: {
         include: { lesson: true },
@@ -49,9 +52,18 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       lessonId: string;
       openDate?: string | null;
       dueDate?: string | null;
+      accessibleAfterDue?: boolean;
       sortOrder: number;
     }>;
   };
+
+  const owned = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // If code or section is being updated, check for duplicates
   if (code !== undefined || section !== undefined) {
@@ -103,6 +115,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
             lessonId: row.lessonId,
             openDate: row.openDate ? new Date(row.openDate) : null,
             dueDate: row.dueDate ? new Date(row.dueDate) : null,
+            accessibleAfterDue: row.accessibleAfterDue ?? false,
             sortOrder: row.sortOrder,
           })),
         },
@@ -127,6 +140,16 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { courseId } = await params;
+
+  const owned = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    },
+    select: { id: true },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
   await prisma.course.delete({ where: { id: courseId } });
   return new NextResponse(null, { status: 204 });
 }

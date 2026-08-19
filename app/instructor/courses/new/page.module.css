@@ -229,3 +229,17 @@
 .removeBtn:hover {
   text-decoration: underline;
 }
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.checkboxField input {
+  width: 1rem;
+  height: 1rem;
+}

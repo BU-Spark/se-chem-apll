@@ -14,6 +14,65 @@
   font-size: 0.9rem;
 }
 
+/* ── Steps ── */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+}
+
+.tab,
+.tabActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s ease;
+}
+
+.tabActive {
+  color: #1f5fab;
+  border-bottom-color: #1f5fab;
+  font-weight: 600;
+}
+
+.tab:hover:not(:disabled) {
+  color: #374151;
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tabNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.tabActive .tabNumber {
+  background: #1f5fab;
+  color: #fff;
+}
+
 /* ── Form ── */
 .form {
   display: flex;
@@ -42,6 +101,16 @@
   font-size: 0.85rem;
   color: #6b7280;
   margin: -0.5rem 0 0;
+}
+
+.successNote {
+  font-size: 0.9rem;
+  color: #15803d;
+  margin: -0.5rem 0 0;
+  padding: 0.65rem 0.85rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.5rem;
 }
 
 .toggleRow {
@@ -326,8 +395,16 @@
 .actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.actionButtons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
 }
 
 .cancelLink {
@@ -338,6 +415,23 @@
 
 .cancelLink:hover {
   text-decoration: underline;
+}
+
+.secondaryBtn {
+  padding: 0.6rem 1.2rem;
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.secondaryBtn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .submitBtn {
@@ -359,6 +453,171 @@
 .submitBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ── Tags ── */
+.tagInputRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.tagInputRow input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #111827;
+  background-color: #fff;
+}
+
+.tagInputRow input:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+.tagAddBtn {
+  padding: 0.5rem 0.9rem;
+  background: #eff6ff;
+  color: #1f5fab;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tagAddBtn:hover {
+  background: #dbeafe;
+}
+
+.tagList {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem 0.3rem 0.7rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.tagRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.tagRemove:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+/* ── Preview ── */
+.previewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem 1.1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+}
+
+.previewHeading {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: #111827;
+}
+
+.previewDl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.previewDl > div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.previewDl dt {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.previewDl dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #111827;
+  word-break: break-word;
+}
+
+.previewMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.previewList {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+.previewMeta {
+  margin-left: 0.45rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.previewSublist {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  color: #4b5563;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+@media (max-width: 600px) {
+  .previewDl > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
 }
 
 /* ── Video + checkpoints ── */

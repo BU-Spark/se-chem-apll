@@ -83,10 +83,15 @@ function questionCardFor(prompt: HTMLElement) {
   return prompt.closest('[class*="questionCard"]') as HTMLElement;
 }
 
+async function goToCheckpoints(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('heading', { name: 'Checkpoints (QEV)' })).toBeInTheDocument();
+}
+
 describe('NewNodePage', () => {
   beforeEach(() => {
     push.mockReset();
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'node-created-1' }) });
   });
 
   afterEach(() => {
@@ -98,6 +103,9 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText('New learning objective'), 'Stay safe{Enter}');
+    await goToCheckpoints(user);
+
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
 
@@ -108,18 +116,24 @@ describe('NewNodePage', () => {
     await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'B');
     await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Quiz question bank' })).toBeInTheDocument();
+
     const quizGrid = screen.getByTestId('question-bank-editor');
     await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
     await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'X');
     await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'Y');
     await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
 
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create node' }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
     const request = (global.fetch as jest.Mock).mock.calls[0][1];
     const body = JSON.parse(request.body);
 
+    expect(body.learningObjectives).toEqual(['Stay safe']);
     expect(body.checkpoints).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 0,
@@ -128,6 +142,22 @@ describe('NewNodePage', () => {
     ]);
     expect(body.quizQuestions).toEqual([expect.objectContaining({ prompt: 'Quiz bank question' })]);
     expect(body).not.toHaveProperty('questions');
+    expect(push).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Node created' })).toBeInTheDocument());
+    expect(screen.getByText(/Your node was created successfully/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit again' }));
+    expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe('/api/instructor/nodes/node-created-1');
+    expect((global.fetch as jest.Mock).mock.calls[1][1].method).toBe('PATCH');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Changes saved' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Back to nodes' }));
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
 
@@ -136,6 +166,8 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await goToCheckpoints(user);
+
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     await user.type(screen.getByLabelText(/Question prompt/), 'First');
     await user.click(
