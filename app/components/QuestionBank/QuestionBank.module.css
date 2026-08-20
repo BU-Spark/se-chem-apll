@@ -367,6 +367,90 @@
   border-color: #dc2626;
 }
 
+.richMarkdownEditor {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  overflow: hidden;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.richMarkdownEditor:focus-within {
+  border-color: #1f5fab;
+  box-shadow: 0 0 0 1px #1f5fab;
+}
+
+.richMarkdownEditorInvalid {
+  border-color: #dc2626;
+}
+
+.richMarkdownRoot {
+  color: #111827;
+}
+
+.richMarkdownToolbar {
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0;
+  background: #f9fafb;
+}
+
+.richMarkdownContent,
+.richMarkdownContentCompact {
+  min-height: 5.25rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+
+.richMarkdownContentCompact {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+.richMarkdownContent p,
+.richMarkdownContentCompact p {
+  margin: 0 0 0.5rem;
+}
+
+.richMarkdownContent p:last-child,
+.richMarkdownContentCompact p:last-child {
+  margin-bottom: 0;
+}
+
+.richMarkdownContent ul,
+.richMarkdownContent ol {
+  margin: 0.4rem 0;
+  padding-left: 1.5rem;
+}
+
+.richMarkdownSlot,
+.richMarkdownSlotCompact {
+  min-height: 7.5rem;
+}
+
+.richMarkdownSlotCompact {
+  min-height: 4.5rem;
+}
+
+.richMarkdownLoading {
+  min-height: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
 .markdownPreviewBox,
 .markdownPreviewBoxCompact {
   border: 1px solid #e5e7eb;

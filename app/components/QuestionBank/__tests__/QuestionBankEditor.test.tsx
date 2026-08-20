@@ -1,36 +1,75 @@
 import { useState } from 'react';
+import type { ComponentType } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import QuestionBankEditor from '../QuestionBankEditor';
 import { makeChoice, makeMultipleChoiceQuestion, makeShortAnswerQuestion, type AuthoringQuestion } from '../types';
+
+// MDXEditor is client-only and has its own focused integration tests. Keep
+// these question-bank behavior tests synchronous with a controlled textbox.
+jest.mock('../RichMarkdownEditor', () => ({
+  __esModule: true,
+  default: ({
+    value,
+    onChange,
+    contentEditableId,
+    labelledBy,
+    describedBy,
+    invalid,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    contentEditableId: string;
+    labelledBy: string;
+    describedBy?: string;
+    invalid?: boolean;
+  }) => (
+    <textarea
+      id={contentEditableId}
+      aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      aria-invalid={invalid}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+}));
 
 // The grid is a view over editor state; mock it as a simple list that exposes
 // the same row-click / selection events the real grid emits.
 jest.mock('ag-grid-react', () => ({
   AgGridReact: ({
     rowData,
+    columnDefs,
     onRowClicked,
     onSelectionChanged,
   }: {
     rowData: Array<{ id: string; prompt: string }>;
+    columnDefs?: Array<{
+      field?: string;
+      cellRenderer?: ComponentType<{ data: { id: string; prompt: string }; value: string }>;
+    }>;
     onRowClicked?: (event: { data: { id: string; prompt: string } }) => void;
     onSelectionChanged?: (event: { selectedNodes: Array<{ data: { id: string; prompt: string } }> }) => void;
-  }) => (
-    <div data-testid="ag-grid-mock">
-      {rowData.map((row) => (
-        <div key={row.id}>
-          <input
-            type="checkbox"
-            aria-label={`Select ${row.prompt}`}
-            onChange={(e) => onSelectionChanged?.({ selectedNodes: e.target.checked ? [{ data: row }] : [] })}
-          />
-          <button type="button" onClick={() => onRowClicked?.({ data: row })}>
-            {row.prompt}
-          </button>
-        </div>
-      ))}
-    </div>
-  ),
+  }) => {
+    const PromptCell = columnDefs?.find((column) => column.field === 'prompt')?.cellRenderer;
+    return (
+      <div data-testid="ag-grid-mock">
+        {rowData.map((row) => (
+          <div key={row.id}>
+            <input
+              type="checkbox"
+              aria-label={`Select ${row.prompt}`}
+              onChange={(e) => onSelectionChanged?.({ selectedNodes: e.target.checked ? [{ data: row }] : [] })}
+            />
+            <button type="button" onClick={() => onRowClicked?.({ data: row })}>
+              {PromptCell ? <PromptCell data={row} value={row.prompt} /> : row.prompt}
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 jest.mock('ag-grid-community', () => ({
@@ -99,7 +138,7 @@ describe('QuestionBankEditor', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Multiple choice' }));
     // New questions are immediately active in the detail editor.
-    const promptEditor = screen.getByRole('textbox', { name: /Question prompt/ });
+    const promptEditor = await screen.findByRole('textbox', { name: /Question prompt/ });
     await user.type(promptEditor, 'What is $K_a$?');
 
     let questions = harnessQuestions();
@@ -126,7 +165,7 @@ describe('QuestionBankEditor', () => {
     render(<Harness />);
 
     await user.click(screen.getByRole('button', { name: '+ Short answer' }));
-    await user.type(screen.getByRole('textbox', { name: /Question prompt/ }), 'Square root of 16?');
+    await user.type(await screen.findByRole('textbox', { name: /Question prompt/ }), 'Square root of 16?');
     await user.click(screen.getByRole('button', { name: 'Answer range' }));
     await user.type(screen.getByLabelText('Minimum answer'), '3.9');
     await user.type(screen.getByLabelText('Maximum answer'), '4.1');
