@@ -3,10 +3,10 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 
 /**
- * ESM-only packages (the unified / react-markdown / remark ecosystem) must be
- * listed in `transpilePackages` so that next/jest's SWC transformer processes
- * them in Jest. The list is computed from the installed dependency tree
- * instead of being hardcoded, so it stays correct across upgrades.
+ * ESM-only packages (MDXEditor and the unified / react-markdown ecosystem)
+ * must be listed in `transpilePackages` so that next/jest's SWC transformer
+ * processes them in Jest. The list is computed from the installed dependency
+ * tree instead of being hardcoded, so it stays correct across upgrades.
  */
 function resolvePackageJson(name: string, fromDir: string): string | null {
   try {
@@ -68,7 +68,13 @@ function findEsmDependencyClosure(roots: string[]): string[] {
 }
 
 const nextConfig: NextConfig = {
-  transpilePackages: findEsmDependencyClosure(['react-markdown', 'remark-gfm', 'remark-math', 'rehype-katex']),
+  transpilePackages: findEsmDependencyClosure([
+    '@mdxeditor/editor',
+    'react-markdown',
+    'remark-gfm',
+    'remark-math',
+    'rehype-katex',
+  ]),
 };
 
 export default nextConfig;
