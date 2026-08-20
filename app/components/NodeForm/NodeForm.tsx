@@ -254,7 +254,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function validateBasicsStep(): string | null {
-    if (!title.trim()) return 'Title is required.';
+    if (!title.trim()) {
+      return 'Title is required.';
+    }
+    if (!youtubeId) {
+      return 'A valid YouTube video URL is required.';
+    }
     return null;
   }
 
@@ -267,7 +272,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function validateQuizStep(): string | null {
-    if (quizQuestions.length === 0) return null;
+    if (quizQuestions.length === 0) {
+      return 'Add at least one quiz bank question.';
+    }
     const quizPayload = buildQuizPayload(quizQuestions);
     return validateQuestionPayloads([], quizPayload, {
       requireCheckpointQuestions: false,
@@ -536,7 +543,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </label>
             </div>
             <label className={styles.field}>
-              Video URL
+              <span className={styles.fieldLabel}>
+                Video URL <span className={styles.required}>*</span>
+              </span>
               <input
                 type="url"
                 value={videoUrl}
@@ -731,7 +740,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
         {step === 'quiz' && (
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Quiz question bank</h2>
+            <h2 className={styles.sectionTitle}>
+              Quiz question bank <span className={styles.required}>*</span>
+            </h2>
             <p className={styles.sectionNote}>
               These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
               timestamps.

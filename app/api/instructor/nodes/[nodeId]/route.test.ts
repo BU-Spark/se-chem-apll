@@ -293,4 +293,15 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
       where: { quizQuestionId: { in: ['qq-1'] } },
     });
   });
+
+  it('returns 422 when video URL is empty or invalid', async () => {
+    const response = await PATCH(patchRequest({ videoUrl: '' }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+  it('returns 422 when quiz questions are replaced with an empty list', async () => {
+    const response = await PATCH(patchRequest({ quizQuestions: [] }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
 });

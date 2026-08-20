@@ -37,6 +37,7 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     await user.type(screen.getByLabelText('New learning objective'), 'Stay safe{Enter}');
     await goToCheckpoints(user);
 
@@ -51,7 +52,7 @@ describe('NewNodePage', () => {
     await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByRole('heading', { name: 'Quiz question bank' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
     const prompts = screen.getAllByLabelText(/Question prompt/);
@@ -102,6 +103,7 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     await goToCheckpoints(user);
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
