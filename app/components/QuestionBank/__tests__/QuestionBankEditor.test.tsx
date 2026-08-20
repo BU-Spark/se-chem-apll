@@ -209,18 +209,48 @@ describe('QuestionBankEditor', () => {
     }
   });
 
-  it('resets the editor view when selecting a different question', async () => {
+  it('uses one editor mode for the prompt and every choice and keeps it between questions', async () => {
     const user = userEvent.setup();
     render(<Harness initial={[validMcQuestion('q1', 'First'), validMcQuestion('q2', 'Second')]} />);
 
     await user.click(screen.getByRole('button', { name: 'First' }));
-    const promptViews = screen.getByRole('group', { name: 'Question prompt view' });
-    await user.click(within(promptViews).getByRole('button', { name: 'Markdown' }));
-    expect(within(promptViews).getByRole('button', { name: 'Markdown' })).toHaveAttribute('aria-pressed', 'true');
+    const editorMode = screen.getByRole('group', { name: 'Editor mode' });
+    expect(screen.getAllByRole('button', { name: 'Visual' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Markdown' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Preview' })).toHaveLength(1);
+
+    await user.click(within(editorMode).getByRole('button', { name: 'Markdown' }));
+    expect(screen.getByRole('textbox', { name: /Question prompt/ })).toHaveValue('First');
+    expect(screen.getByRole('textbox', { name: 'Choice 1' })).toHaveValue('A');
+    expect(screen.getByRole('textbox', { name: 'Choice 2' })).toHaveValue('B');
 
     await user.click(screen.getByRole('button', { name: 'Second' }));
-    const nextPromptViews = screen.getByRole('group', { name: 'Question prompt view' });
-    expect(within(nextPromptViews).getByRole('button', { name: 'Visual' })).toHaveAttribute('aria-pressed', 'true');
+    const nextEditorMode = screen.getByRole('group', { name: 'Editor mode' });
+    expect(within(nextEditorMode).getByRole('button', { name: 'Markdown' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('textbox', { name: /Question prompt/ })).toHaveValue('Second');
+    expect(screen.getByRole('textbox', { name: 'Choice 1' })).toHaveValue('A');
+    expect(screen.getByRole('textbox', { name: 'Choice 2' })).toHaveValue('B');
+  });
+
+  it('previews the prompt and every choice with the shared editor mode', async () => {
+    const user = userEvent.setup();
+    const question = validMcQuestion('q1', '**Question** with $K_a$');
+    render(<Harness initial={[question]} />);
+
+    const promptSummary = within(screen.getByTestId('ag-grid-mock')).getByText('Question');
+    await user.click(promptSummary.closest('button')!);
+    await user.click(within(screen.getByLabelText('Editor mode')).getByText('Preview'));
+
+    const detail = screen.getByLabelText('Question editor');
+    expect(within(detail).getAllByTestId('markdown-preview')).toHaveLength(3);
+    expect(within(detail).getByText('Question')).toHaveStyle({ fontWeight: 'bold' });
+    expect(
+      within(detail)
+        .getByLabelText(/Question prompt/)
+        .querySelector('.katex')
+    ).not.toBeNull();
+    expect(within(detail).getByLabelText('Choice 1')).toHaveTextContent('A');
+    expect(within(detail).getByLabelText('Choice 2')).toHaveTextContent('B');
   });
 
   it('shows issue counts in the status bar for incomplete questions', async () => {

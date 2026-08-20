@@ -15,6 +15,7 @@ import { downloadCsvFile } from '@/app/utils/csv';
 import { questionsToCsv } from '@/app/utils/questionBankCsv';
 import CsvImportDialog from './CsvImportDialog';
 import MarkdownPreview from './MarkdownPreview';
+import type { MarkdownFieldMode } from './MarkdownField';
 import QuestionDetailEditor from './QuestionDetailEditor';
 import { countIssuesBySeverity, validateQuestionBank } from './validation';
 import { summarizeAnswer } from './adapters';
@@ -106,6 +107,7 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [importOpen, setImportOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [editorMode, setEditorMode] = useState<MarkdownFieldMode>('visual');
 
   // Retains per-type data so switching types never destroys content.
   const typeStashRef = useRef(
@@ -441,6 +443,8 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
               onMove={(direction) => moveQuestion(editableQuestion.id, direction)}
               canMoveUp={activeIndex > 0}
               canMoveDown={activeIndex >= 0 && activeIndex < questions.length - 1}
+              editorMode={editorMode}
+              onEditorModeChange={setEditorMode}
             />
           ) : (
             <div className={styles.emptyDetail}>

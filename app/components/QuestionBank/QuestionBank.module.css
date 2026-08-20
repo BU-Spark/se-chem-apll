@@ -311,7 +311,6 @@
 .markdownFieldHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
 }
 
@@ -326,7 +325,12 @@
   margin-left: 0.2rem;
 }
 
-.markdownFieldTabs {
+.editorModeRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.editorModeTabs {
   display: inline-flex;
   border: 1px solid #e5e7eb;
   border-radius: 0.4rem;

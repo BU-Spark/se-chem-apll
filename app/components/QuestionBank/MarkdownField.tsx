@@ -11,10 +11,14 @@ const RichMarkdownEditor = dynamic(() => import('./RichMarkdownEditor'), {
   loading: () => <div className={styles.richMarkdownLoading}>Loading visual editor…</div>,
 });
 
+export type MarkdownFieldMode = 'visual' | 'source' | 'preview';
+
 type Props = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  mode: MarkdownFieldMode;
+  onModeChange: (mode: MarkdownFieldMode) => void;
   placeholder?: string;
   rows?: number;
   required?: boolean;
@@ -28,13 +32,14 @@ export default function MarkdownField({
   label,
   value,
   onChange,
+  mode,
+  onModeChange,
   placeholder,
   rows = 3,
   required = false,
   compact = false,
   error,
 }: Props) {
-  const [mode, setMode] = useState<'visual' | 'source' | 'preview'>('visual');
   const [visualError, setVisualError] = useState<string | null>(null);
   const id = useId();
   const labelId = `${id}-label`;
@@ -53,34 +58,6 @@ export default function MarkdownField({
           {label}
           {required && <span className={styles.required}>*</span>}
         </label>
-        <div className={styles.markdownFieldTabs} role="group" aria-label={`${label} view`}>
-          <button
-            type="button"
-            className={mode === 'visual' ? styles.markdownTabActive : styles.markdownTab}
-            onClick={() => setMode('visual')}
-            aria-pressed={mode === 'visual'}
-          >
-            Visual
-          </button>
-          <button
-            type="button"
-            className={mode === 'source' ? styles.markdownTabActive : styles.markdownTab}
-            onClick={() => setMode('source')}
-            aria-pressed={mode === 'source'}
-          >
-            Markdown
-          </button>
-          {!compact && (
-            <button
-              type="button"
-              className={mode === 'preview' ? styles.markdownTabActive : styles.markdownTab}
-              onClick={() => setMode('preview')}
-              aria-pressed={mode === 'preview'}
-            >
-              Preview
-            </button>
-          )}
-        </div>
       </div>
 
       {mode === 'visual' ? (
@@ -96,7 +73,7 @@ export default function MarkdownField({
             invalid={Boolean(error || visualError)}
             onMarkdownError={(message) => {
               setVisualError(message);
-              setMode('source');
+              onModeChange('source');
             }}
           />
         </div>
@@ -112,7 +89,10 @@ export default function MarkdownField({
           aria-describedby={descriptionId}
         />
       ) : (
-        <div className={styles.markdownPreviewBox} aria-labelledby={labelId}>
+        <div
+          className={compact ? styles.markdownPreviewBoxCompact : styles.markdownPreviewBox}
+          aria-labelledby={labelId}
+        >
           {value.trim() === '' ? (
             <span className={styles.markdownPreviewEmpty}>Nothing to preview</span>
           ) : (

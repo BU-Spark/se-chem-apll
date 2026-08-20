@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import MarkdownField from '../MarkdownField';
+
+let mockMarkdownError: ((message: string) => void) | undefined;
 
 jest.mock('../RichMarkdownEditor', () => ({
   __esModule: true,
@@ -11,6 +12,7 @@ jest.mock('../RichMarkdownEditor', () => ({
     labelledBy,
     describedBy,
     invalid,
+    onMarkdownError,
   }: {
     value: string;
     onChange: (value: string) => void;
@@ -18,6 +20,7 @@ jest.mock('../RichMarkdownEditor', () => ({
     labelledBy: string;
     describedBy?: string;
     invalid?: boolean;
+    onMarkdownError: (message: string) => void;
   }) => (
     <textarea
       data-testid="visual-editor"
@@ -26,57 +29,104 @@ jest.mock('../RichMarkdownEditor', () => ({
       aria-describedby={describedBy}
       aria-invalid={invalid}
       value={value}
+      ref={() => {
+        mockMarkdownError = onMarkdownError;
+      }}
       onChange={(event) => onChange(event.target.value)}
     />
   ),
 }));
 
 describe('MarkdownField', () => {
-  it('starts in visual mode and emits Markdown changes', async () => {
+  it('renders the controlled visual mode and emits Markdown changes', async () => {
     const onChange = jest.fn();
-    render(<MarkdownField label="Question prompt" value="" onChange={onChange} required />);
+    render(
+      <MarkdownField
+        label="Question prompt"
+        value=""
+        onChange={onChange}
+        mode="visual"
+        onModeChange={jest.fn()}
+        required
+      />
+    );
 
     const editor = await screen.findByRole('textbox', { name: /Question prompt/ });
     fireEvent.change(editor, { target: { value: '**Bold** and $K_a$' } });
 
     expect(onChange).toHaveBeenLastCalledWith('**Bold** and $K_a$');
-    expect(screen.getByRole('button', { name: 'Visual' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Visual' })).not.toBeInTheDocument();
   });
 
-  it('supports Markdown source and rendered Preview modes', async () => {
-    const user = userEvent.setup();
-    render(<MarkdownField label="Question prompt" value="**Bold** and $K_a$" onChange={jest.fn()} />);
-
-    await user.click(screen.getByRole('button', { name: 'Markdown' }));
+  it('renders controlled Markdown source and Preview modes', () => {
+    const props = {
+      label: 'Question prompt',
+      value: '**Bold** and $K_a$',
+      onChange: jest.fn(),
+      onModeChange: jest.fn(),
+    };
+    const { rerender } = render(<MarkdownField {...props} mode="source" />);
     expect(screen.getByRole('textbox', { name: 'Question prompt' })).toHaveValue('**Bold** and $K_a$');
 
-    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    rerender(<MarkdownField {...props} mode="preview" />);
     expect(screen.getByText('Bold')).toHaveStyle({ fontWeight: 'bold' });
     expect(screen.getByTestId('markdown-preview').querySelector('.katex')).not.toBeNull();
   });
 
-  it('keeps compact fields to Visual and Markdown modes', async () => {
-    render(<MarkdownField label="Choice 1" value="Answer" onChange={jest.fn()} compact />);
+  it('renders a compact preview for an answer choice', () => {
+    render(
+      <MarkdownField
+        label="Choice 1"
+        value="**Answer**"
+        onChange={jest.fn()}
+        mode="preview"
+        onModeChange={jest.fn()}
+        compact
+      />
+    );
 
-    expect(await screen.findByRole('textbox', { name: 'Choice 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Visual' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Markdown' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
+    expect(screen.getByText('Answer')).toHaveStyle({ fontWeight: 'bold' });
+    expect(screen.getByLabelText('Choice 1')).toBeInTheDocument();
   });
 
   it('associates validation errors with both editor modes', async () => {
-    const user = userEvent.setup();
-    render(<MarkdownField label="Question prompt" value="" onChange={jest.fn()} error="Prompt is required." />);
+    const props = {
+      label: 'Question prompt',
+      value: '',
+      onChange: jest.fn(),
+      onModeChange: jest.fn(),
+      error: 'Prompt is required.',
+    };
+    const { rerender } = render(<MarkdownField {...props} mode="visual" />);
 
     const visualEditor = await screen.findByRole('textbox', { name: 'Question prompt' });
     expect(visualEditor).toHaveAccessibleDescription('Prompt is required.');
     expect(visualEditor).toHaveAttribute('aria-invalid', 'true');
 
-    await user.click(screen.getByRole('button', { name: 'Markdown' }));
+    rerender(<MarkdownField {...props} mode="source" />);
     const sourceEditor = screen.getByRole('textbox', { name: 'Question prompt' });
     expect(sourceEditor).toHaveAccessibleDescription('Prompt is required.');
     expect(sourceEditor).toHaveAttribute('aria-invalid', 'true');
 
     fireEvent.change(sourceEditor, { target: { value: 'Fixed' } });
+  });
+
+  it('requests Markdown mode when content cannot be opened visually', async () => {
+    const onModeChange = jest.fn();
+    render(
+      <MarkdownField
+        label="Question prompt"
+        value="Unsupported content"
+        onChange={jest.fn()}
+        mode="visual"
+        onModeChange={onModeChange}
+      />
+    );
+    await screen.findByRole('textbox', { name: 'Question prompt' });
+
+    act(() => mockMarkdownError?.('Parse failed'));
+
+    expect(onModeChange).toHaveBeenCalledWith('source');
+    expect(screen.getByRole('alert')).toHaveTextContent('This content could not be opened visually.');
   });
 });
