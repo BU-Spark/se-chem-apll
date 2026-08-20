@@ -126,10 +126,24 @@ function validMcQuestion(id: string, prompt: string): AuthoringQuestion {
 }
 
 describe('QuestionBankEditor', () => {
-  it('shows an empty state when there are no questions', () => {
+  it('opens an uncommitted blank question when the bank is empty', async () => {
     render(<Harness />);
     expect(screen.getByText('No questions yet.')).toBeInTheDocument();
-    expect(screen.getByText(/Select a question to edit/)).toBeInTheDocument();
+    expect(screen.getByText('New question')).toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: /Question prompt/ })).toHaveValue('');
+    expect(harnessQuestions()).toEqual([]);
+    expect(screen.queryByText(/errors/)).not.toBeInTheDocument();
+  });
+
+  it('adds the blank question to the bank on the first edit', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(await screen.findByRole('textbox', { name: /Question prompt/ }), 'Started typing');
+
+    expect(harnessQuestions()).toHaveLength(1);
+    expect(harnessQuestions()[0].prompt).toBe('Started typing');
+    expect(screen.queryByText('New question')).not.toBeInTheDocument();
   });
 
   it('adds a question via the toolbar and edits it in the detail pane', async () => {
@@ -195,6 +209,20 @@ describe('QuestionBankEditor', () => {
     }
   });
 
+  it('resets the editor view when selecting a different question', async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={[validMcQuestion('q1', 'First'), validMcQuestion('q2', 'Second')]} />);
+
+    await user.click(screen.getByRole('button', { name: 'First' }));
+    const promptViews = screen.getByRole('group', { name: 'Question prompt view' });
+    await user.click(within(promptViews).getByRole('button', { name: 'Markdown' }));
+    expect(within(promptViews).getByRole('button', { name: 'Markdown' })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Second' }));
+    const nextPromptViews = screen.getByRole('group', { name: 'Question prompt view' });
+    expect(within(nextPromptViews).getByRole('button', { name: 'Visual' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows issue counts in the status bar for incomplete questions', async () => {
     const user = userEvent.setup();
     render(<Harness />);
@@ -215,6 +243,16 @@ describe('QuestionBankEditor', () => {
     await user.type(screen.getByLabelText('Search questions'), 'buffer');
     expect(within(grid).queryByText('Acid dissociation')).not.toBeInTheDocument();
     expect(within(grid).getByText('Buffer capacity')).toBeInTheDocument();
+  });
+
+  it('renders formatted question summaries instead of raw Markdown source', () => {
+    render(<Harness initial={[validMcQuestion('q1', '**Question.** What is $K_a$?&#x20;')]} />);
+
+    const grid = screen.getByTestId('ag-grid-mock');
+    expect(within(grid).getByText('Question.')).toHaveStyle({ fontWeight: 'bold' });
+    expect(grid).not.toHaveTextContent('**Question.**');
+    expect(grid).not.toHaveTextContent('&#x20;');
+    expect(grid.querySelector('.katex')).not.toBeNull();
   });
 
   it('duplicates the active question from the detail pane', async () => {

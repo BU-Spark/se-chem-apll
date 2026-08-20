@@ -261,6 +261,16 @@
   cursor: not-allowed;
 }
 
+.draftBadge {
+  color: #1f5fab;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .detailDeleteBtn {
   color: #dc2626 !important;
 }
@@ -477,6 +487,48 @@
 
 .markdownPreview p:last-child {
   margin-bottom: 0;
+}
+
+/* Single-line rendered Markdown used by the question browser grid. */
+.gridPromptPreview {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gridPromptPreview .markdownPreview {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gridPromptPreview .markdownPreview p,
+.gridPromptPreview .markdownPreview ul,
+.gridPromptPreview .markdownPreview ol,
+.gridPromptPreview .markdownPreview li,
+.gridPromptPreview .markdownPreview blockquote,
+.gridPromptPreview .markdownPreview h1,
+.gridPromptPreview .markdownPreview h2,
+.gridPromptPreview .markdownPreview h3,
+.gridPromptPreview .markdownPreview h4,
+.gridPromptPreview .markdownPreview h5,
+.gridPromptPreview .markdownPreview h6 {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.gridPromptPreview .markdownPreview br {
+  display: none;
+}
+
+.gridPromptEmpty {
+  color: #6b7280;
+  font-style: italic;
 }
 
 /* ── Choices ── */

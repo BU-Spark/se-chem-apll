@@ -14,6 +14,8 @@ import styles from './QuestionBank.module.css';
 
 type Props = {
   question: AuthoringQuestion;
+  /** An uncommitted question shown when the bank is empty. */
+  isDraft?: boolean;
   /** Issues for this question only. */
   issues: QuestionIssue[];
   onChange: (next: AuthoringQuestion) => void;
@@ -223,6 +225,7 @@ function ShortAnswerEditor({
  */
 export default function QuestionDetailEditor({
   question,
+  isDraft = false,
   issues,
   onChange,
   onChangeType,
@@ -249,20 +252,24 @@ export default function QuestionDetailEditor({
             <option value="shortAnswer">Numeric short answer</option>
           </select>
         </label>
-        <div className={styles.detailHeaderActions}>
-          <button type="button" onClick={() => onMove(-1)} disabled={!canMoveUp} title="Move question up">
-            ↑
-          </button>
-          <button type="button" onClick={() => onMove(1)} disabled={!canMoveDown} title="Move question down">
-            ↓
-          </button>
-          <button type="button" onClick={onDuplicate} title="Duplicate question">
-            Duplicate
-          </button>
-          <button type="button" className={styles.detailDeleteBtn} onClick={onDelete} title="Delete question">
-            Delete
-          </button>
-        </div>
+        {isDraft ? (
+          <span className={styles.draftBadge}>New question</span>
+        ) : (
+          <div className={styles.detailHeaderActions}>
+            <button type="button" onClick={() => onMove(-1)} disabled={!canMoveUp} title="Move question up">
+              ↑
+            </button>
+            <button type="button" onClick={() => onMove(1)} disabled={!canMoveDown} title="Move question down">
+              ↓
+            </button>
+            <button type="button" onClick={onDuplicate} title="Duplicate question">
+              Duplicate
+            </button>
+            <button type="button" className={styles.detailDeleteBtn} onClick={onDelete} title="Delete question">
+              Delete
+            </button>
+          </div>
+        )}
       </header>
 
       {(errorCount > 0 || warningCount > 0) && (

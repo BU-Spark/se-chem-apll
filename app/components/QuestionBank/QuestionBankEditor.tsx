@@ -14,6 +14,7 @@ import {
 import { downloadCsvFile } from '@/app/utils/csv';
 import { questionsToCsv } from '@/app/utils/questionBankCsv';
 import CsvImportDialog from './CsvImportDialog';
+import MarkdownPreview from './MarkdownPreview';
 import QuestionDetailEditor from './QuestionDetailEditor';
 import { countIssuesBySeverity, validateQuestionBank } from './validation';
 import { summarizeAnswer } from './adapters';
@@ -47,11 +48,6 @@ type BrowserRow = {
 type TypeFilter = 'all' | AuthoringQuestion['type'];
 type StatusFilter = 'all' | 'errors' | 'warnings' | 'valid';
 
-function firstLine(text: string): string {
-  const line = text.split('\n', 1)[0].trim();
-  return line === '' ? '(empty prompt)' : line;
-}
-
 function matchesSearch(q: AuthoringQuestion, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (needle === '') return true;
@@ -73,6 +69,18 @@ function StatusCell(params: ICellRendererParams<BrowserRow>) {
   return <span className={styles.statusDotOk} role="img" aria-label="Valid" title="Valid" />;
 }
 
+/** Render stored Markdown without exposing its source syntax in the browser grid. */
+function PromptCell(params: ICellRendererParams<BrowserRow, string>) {
+  const prompt = params.value?.trim() ?? '';
+  if (prompt === '') return <span className={styles.gridPromptEmpty}>(empty prompt)</span>;
+
+  return (
+    <div className={styles.gridPromptPreview}>
+      <MarkdownPreview content={prompt} />
+    </div>
+  );
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
@@ -91,6 +99,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export default function QuestionBankEditor({ questions, onChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [emptyDraft, setEmptyDraft] = useState<AuthoringQuestion>(() => makeMultipleChoiceQuestion());
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -130,7 +139,7 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
         return {
           id: q.id,
           type: q.type,
-          prompt: firstLine(q.prompt),
+          prompt: q.prompt,
           answer: summarizeAnswer(q),
           hasError: issues.some((issue) => issue.severity === 'error'),
           hasWarning: issues.some((issue) => issue.severity === 'warning'),
@@ -141,6 +150,8 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
 
   const activeQuestion = questions.find((q) => q.id === activeId) ?? null;
   const activeIndex = activeQuestion ? questions.indexOf(activeQuestion) : -1;
+  const draftQuestion = questions.length === 0 ? emptyDraft : null;
+  const editableQuestion = activeQuestion ?? draftQuestion;
 
   const announce = useCallback((message: string) => setStatusMessage(message), []);
 
@@ -161,7 +172,10 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
       if (ids.size === 0) return;
       const next = questions.filter((q) => !ids.has(q.id));
       onChange(next);
-      if (activeId && ids.has(activeId)) setActiveId(null);
+      if (next.length === 0) setEmptyDraft(makeMultipleChoiceQuestion());
+      if (activeId && ids.has(activeId)) {
+        setActiveId(null);
+      }
       setSelectedIds(new Set());
       announce(`Deleted ${ids.size} question${ids.size === 1 ? '' : 's'}.`);
     },
@@ -202,28 +216,35 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
 
   const updateActive = useCallback(
     (next: AuthoringQuestion) => {
+      if (questions.length === 0 && next.id === emptyDraft.id) {
+        setEmptyDraft(next);
+        setActiveId(next.id);
+        onChange([next]);
+        announce('Started a new question.');
+        return;
+      }
       onChange(questions.map((q) => (q.id === next.id ? next : q)));
     },
-    [questions, onChange]
+    [questions, emptyDraft.id, onChange, announce]
   );
 
   const changeActiveType = useCallback(
     (nextType: AuthoringQuestion['type']) => {
-      if (!activeQuestion || activeQuestion.type === nextType) return;
-      const stash = typeStashRef.current.get(activeQuestion.id) ?? {};
-      if (activeQuestion.type === 'multipleChoice') stash.multipleChoice = activeQuestion;
-      else stash.shortAnswer = activeQuestion;
-      typeStashRef.current.set(activeQuestion.id, stash);
+      if (!editableQuestion || editableQuestion.type === nextType) return;
+      const stash = typeStashRef.current.get(editableQuestion.id) ?? {};
+      if (editableQuestion.type === 'multipleChoice') stash.multipleChoice = editableQuestion;
+      else stash.shortAnswer = editableQuestion;
+      typeStashRef.current.set(editableQuestion.id, stash);
 
       const restored = nextType === 'multipleChoice' ? stash.multipleChoice : stash.shortAnswer;
       const next: AuthoringQuestion =
         restored ??
         (nextType === 'multipleChoice'
-          ? { ...makeMultipleChoiceQuestion(activeQuestion.id), prompt: activeQuestion.prompt }
-          : { ...makeShortAnswerQuestion(activeQuestion.id), prompt: activeQuestion.prompt });
+          ? { ...makeMultipleChoiceQuestion(editableQuestion.id), prompt: editableQuestion.prompt }
+          : { ...makeShortAnswerQuestion(editableQuestion.id), prompt: editableQuestion.prompt });
       updateActive(next);
     },
-    [activeQuestion, updateActive]
+    [editableQuestion, updateActive]
   );
 
   const handleImport = useCallback(
@@ -272,10 +293,10 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
 
       if (!mod && event.key.toLowerCase() === 'n') {
         event.preventDefault();
-        addQuestion(activeQuestion?.type ?? 'multipleChoice');
+        addQuestion(editableQuestion?.type ?? 'multipleChoice');
       }
     },
-    [selectedIds, activeId, activeQuestion, duplicateQuestions, moveQuestion, deleteQuestions, addQuestion]
+    [selectedIds, activeId, editableQuestion, duplicateQuestions, moveQuestion, deleteQuestions, addQuestion]
   );
 
   const columnDefs = useMemo<ColDef<BrowserRow>[]>(
@@ -288,7 +309,14 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
         sortable: false,
         valueFormatter: (params) => (params.value === 'multipleChoice' ? 'Multiple choice' : 'Short answer'),
       },
-      { field: 'prompt', headerName: 'Question', flex: 1, minWidth: 220, sortable: false },
+      {
+        field: 'prompt',
+        headerName: 'Question',
+        flex: 1,
+        minWidth: 220,
+        sortable: false,
+        cellRenderer: PromptCell,
+      },
       { field: 'answer', headerName: 'Answer', width: 190, sortable: false },
     ],
     []
@@ -373,7 +401,7 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
           {questions.length === 0 ? (
             <div className={styles.emptyState}>
               <p>No questions yet.</p>
-              <p className={styles.emptyHint}>Add a question or import a CSV to get started.</p>
+              <p className={styles.emptyHint}>Start typing in the editor or import a CSV to get started.</p>
             </div>
           ) : (
             <AgGridReact<BrowserRow>
@@ -400,15 +428,17 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
         </div>
 
         <div className={styles.detail}>
-          {activeQuestion ? (
+          {editableQuestion ? (
             <QuestionDetailEditor
-              question={activeQuestion}
-              issues={issuesByQuestion.get(activeQuestion.id) ?? []}
+              key={editableQuestion.id}
+              question={editableQuestion}
+              issues={draftQuestion ? [] : (issuesByQuestion.get(editableQuestion.id) ?? [])}
+              isDraft={Boolean(draftQuestion)}
               onChange={updateActive}
               onChangeType={changeActiveType}
-              onDuplicate={() => duplicateQuestions(new Set([activeQuestion.id]))}
-              onDelete={() => deleteQuestions(new Set([activeQuestion.id]))}
-              onMove={(direction) => moveQuestion(activeQuestion.id, direction)}
+              onDuplicate={() => duplicateQuestions(new Set([editableQuestion.id]))}
+              onDelete={() => deleteQuestions(new Set([editableQuestion.id]))}
+              onMove={(direction) => moveQuestion(editableQuestion.id, direction)}
               canMoveUp={activeIndex > 0}
               canMoveDown={activeIndex >= 0 && activeIndex < questions.length - 1}
             />
