@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import LessonBuilder from '@/app/components/LessonBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
+import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
@@ -35,8 +34,14 @@ export default function LessonCreateForm({ availableNodes }: Props) {
     );
   }
 
-  // Lesson nodes (drag-and-drop state)
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>([]);
+  const [edges, setEdges] = useState<LessonEdgeEntry[]>([]);
+
+  function handleLessonNodesChange(updated: LessonNodeEntry[]) {
+    const validIds = new Set(updated.map((e) => e.instanceId));
+    setEdges((prev) => prev.filter((e) => validIds.has(e.sourceInstanceId) && validIds.has(e.targetInstanceId)));
+    setLessonNodes(updated);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,6 +81,17 @@ export default function LessonCreateForm({ availableNodes }: Props) {
       return;
     }
 
+    const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
+    const serialisedEdges = edges
+      .map((e) => ({
+        sourceSortOrder: instanceToSortOrder.get(e.sourceInstanceId),
+        targetSortOrder: instanceToSortOrder.get(e.targetInstanceId),
+      }))
+      .filter(
+        (e): e is { sourceSortOrder: number; targetSortOrder: number } =>
+          e.sourceSortOrder !== undefined && e.targetSortOrder !== undefined
+      );
+
     setSaving(true);
     try {
       const res = await fetch('/api/instructor/lessons', {
@@ -94,6 +110,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
             quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
+          edges: serialisedEdges,
         }),
       });
 
@@ -114,9 +131,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New lesson</h1>
-        <p className={styles.pageSubtitle}>
-          Fill in the lesson details, then drag nodes from the library into the lesson canvas below.
-        </p>
+        <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
       </header>
 
       <form onSubmit={handleSubmit} className={styles.form}>
@@ -179,13 +194,22 @@ export default function LessonCreateForm({ availableNodes }: Props) {
           </label>
         </section>
 
-        {/* ── Builder ── */}
+        {/* ── Roadmap ── */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Build lesson</h2>
+          <h2 className={styles.sectionTitle}>Learning roadmap</h2>
           <p className={styles.sectionNote}>
-            Add nodes from the library, choose a pass threshold for each one, and drag to reorder.
+            Click empty space to add a node. Draw prerequisite paths between nodes — no cycles allowed.
           </p>
-          <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={setLessonNodes} />
+          <p className={styles.sectionNote}>
+            Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+          </p>
+          <LessonRoadmapBuilder
+            availableNodes={availableNodes}
+            lessonNodes={lessonNodes}
+            edges={edges}
+            onEdgesChange={setEdges}
+            onLessonNodesChange={handleLessonNodesChange}
+          />
         </section>
 
         {error && <p className={styles.error}>{error}</p>}

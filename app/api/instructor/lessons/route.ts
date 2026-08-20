@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
 import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
+import { isAcyclic } from '@/app/utils/dagValidation';
 
 // GET /api/instructor/lessons
 export async function GET() {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, lessonNodes } = body as {
+  const { title, slug, summary, description, estimatedMinutes, lessonNodes, edges } = body as {
     title?: string;
     slug?: string;
     summary?: string;
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
       quizQuestionCount?: number;
       isRequired?: boolean;
     }>;
+    edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
   };
 
   if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
@@ -68,6 +70,16 @@ export async function POST(req: NextRequest) {
       { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
     );
+  }
+
+  if (edges && edges.length > 0) {
+    const edgesForValidation = edges.map((e) => ({
+      sourceId: String(e.sourceSortOrder),
+      targetId: String(e.targetSortOrder),
+    }));
+    if (!isAcyclic(edgesForValidation)) {
+      return NextResponse.json({ error: 'Edge set contains a cycle' }, { status: 422 });
+    }
   }
 
   // Validate slug format
@@ -97,6 +109,28 @@ export async function POST(req: NextRequest) {
       lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
     },
   });
-
-  return NextResponse.json(lesson, { status: 201 });
+  if (edges && edges.length > 0) {
+    const sortToId = new Map(lesson.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
+    const edgeRows = edges
+      .map(({ sourceSortOrder, targetSortOrder }) => ({
+        lessonId: lesson.id,
+        sourceId: sortToId.get(sourceSortOrder)!,
+        targetId: sortToId.get(targetSortOrder)!,
+      }))
+      .filter((e) => e.sourceId && e.targetId);
+    if (edgeRows.length > 0) {
+      await prisma.lessonNodeEdge.createMany({ data: edgeRows });
+    }
+  }
+  const fullLesson = await prisma.lesson.findUnique({
+    where: { id: lesson.id },
+    include: {
+      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+      lessonNodeEdges: {
+        select: { id: true, sourceId: true, targetId: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+  return NextResponse.json(fullLesson, { status: 201 });
 }
