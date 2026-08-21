@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { parseYouTubeId } from '@/app/utils/youtube';
 import {
   nodeInclude,
   serializeCheckpointCreate,
@@ -94,6 +95,13 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     if (contentError) {
       return NextResponse.json({ error: contentError }, { status: 422 });
     }
+  }
+
+  if (videoUrl !== undefined && !parseYouTubeId((videoUrl ?? '').trim())) {
+    return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
+  }
+  if (quizQuestions !== undefined && quizQuestions.length === 0) {
+    return NextResponse.json({ error: 'At least one quiz bank question is required.' }, { status: 422 });
   }
 
   const node = await prisma.$transaction(async (tx) => {

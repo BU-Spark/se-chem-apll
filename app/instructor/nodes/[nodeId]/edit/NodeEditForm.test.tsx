@@ -17,7 +17,7 @@ const node = {
   id: 'node-1',
   title: 'Existing node',
   summary: 'Summary',
-  videoUrl: '',
+  videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   tags: ['Safety', 'Procedure'],
   learningObjectives: 'This node will help you identify hazards and apply the procedure.',
   checkpoints: [
@@ -48,7 +48,7 @@ async function advanceToReview(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Next' }));
   expect(screen.getByRole('heading', { name: 'Checkpoints (QEV)' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Next' }));
-  expect(screen.getByRole('heading', { name: 'Quiz question bank' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Next' }));
   expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
 }

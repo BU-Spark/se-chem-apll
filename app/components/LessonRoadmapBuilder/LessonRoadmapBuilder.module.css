@@ -117,3 +117,272 @@
   height: 16px;
   background: #1d4ed8;
 }
+
+/* ── Node search popup (canvas-local) ─────────────────────── */
+.popupBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.35);
+  padding: 1rem;
+}
+
+.popupPanel {
+  width: min(360px, 100%);
+  max-height: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.popupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.popupTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.popupClose {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #6b7280;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.popupClose:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.popupSearch {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.popupSearch:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+.popupList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.popupEmpty {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.popupItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #f9fafb;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.popupItem:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.popupItemTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.popupItemMeta {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.popupItemTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.popupSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.popupBackBtn {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #1f5fab;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.popupField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.popupField input {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.popupField input:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+.popupCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.popupAddBtn {
+  margin-top: 0.25rem;
+  padding: 0.55rem 0.9rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: #1f5fab;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.popupAddBtn:hover {
+  filter: brightness(0.92);
+}
+
+.popupHint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.popupHintWarning {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #b45309;
+}
+
+.popupFormError {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+.graphNodeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: center;
+}
+
+.graphNodeChip {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 9999px;
+  padding: 0.1rem 0.35rem;
+}
+
+.graphNodeFoundational {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #1e40af;
+  background: #dbeafe;
+  border-radius: 9999px;
+  padding: 0.1rem 0.35rem;
+}
+
+.graphNodeDeleteBtn {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid #fca5a5;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graphNode {
+  position: relative; /* needed for absolute × */
+  /* ...keep existing styles */
+}
