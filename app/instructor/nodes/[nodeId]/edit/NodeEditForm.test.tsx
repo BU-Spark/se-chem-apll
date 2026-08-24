@@ -144,4 +144,12 @@ describe('NodeEditForm', () => {
     expect(screen.getByText('Title is required.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Basic info' })).toBeInTheDocument();
   });
+
+  it('offers to publish a completed draft', async () => {
+    const user = userEvent.setup();
+    render(<NodeEditForm node={{ ...node, isDraft: true }} />);
+
+    await advanceToReview(user);
+    expect(screen.getByRole('button', { name: 'Publish node' })).toBeInTheDocument();
+  });
 });

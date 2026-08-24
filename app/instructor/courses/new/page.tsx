@@ -11,11 +11,14 @@ export default async function NewCoursePage() {
   }
   const availableLessons = await prisma.lesson.findMany({
     where: {
+      isDraft: false,
       OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
     },
     select: { id: true, title: true, slug: true },
     orderBy: { title: 'asc' },
   });
 
-  return <CourseCreateForm availableLessons={availableLessons} />;
+  return (
+    <CourseCreateForm availableLessons={availableLessons.map((lesson) => ({ ...lesson, slug: lesson.slug ?? '' }))} />
+  );
 }

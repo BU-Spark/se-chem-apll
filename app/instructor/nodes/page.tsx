@@ -18,7 +18,7 @@ export default async function NodesPage() {
     include: {
       _count: { select: { quizQuestions: true, checkpoints: true } },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
   });
 
   return (
@@ -38,7 +38,8 @@ export default async function NodesPage() {
             <li key={node.id} className={styles.card}>
               <div className={styles.cardBody}>
                 <div className={styles.cardTitleRow}>
-                  <p className={styles.cardTitle}>{node.title}</p>
+                  <p className={styles.cardTitle}>{node.title || 'Untitled node'}</p>
+                  {node.isDraft && <span className={styles.draftBadge}>Draft</span>}
                   {node._count.quizQuestions > 0 && <span className={styles.preQuizBadge}>Quiz bank</span>}
                 </div>
                 {node.summary && <p className={styles.cardSummary}>{node.summary}</p>}

@@ -122,6 +122,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [maxReachedStep, setMaxReachedStep] = useState<WizardStep>('basics');
   const [savedNodeId, setSavedNodeId] = useState<string | null>(nodeId ?? null);
   const [createdThisSession, setCreatedThisSession] = useState(false);
+  const [draftStatus, setDraftStatus] = useState(initial?.isDraft ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quizCsvErrors, setQuizCsvErrors] = useState<string[] | null>(null);
@@ -351,15 +352,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     goToStep(target);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (step !== 'review') return;
-
+  async function persistNode(asDraft: boolean) {
     setError(null);
-    const allError = validateAll();
-    if (allError) {
-      setError(allError);
-      return;
+    if (!asDraft) {
+      const allError = validateAll();
+      if (allError) {
+        setError(allError);
+        return;
+      }
     }
 
     const checkpointPayload = buildCheckpointPayload(checkpoints);
@@ -378,6 +378,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           learningObjectives,
           checkpoints: checkpointPayload,
           quizQuestions: quizPayload,
+          isDraft: asDraft,
         }),
       });
 
@@ -388,6 +389,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
       const idFromResponse = typeof data.id === 'string' ? data.id : null;
       setSavedNodeId(idFromResponse ?? savedNodeId ?? nodeId ?? null);
+      if (asDraft) {
+        setDraftStatus(true);
+        router.push('/instructor/nodes');
+        return;
+      }
+      setDraftStatus(false);
       setCreatedThisSession(!updatingExisting && mode === 'create');
       goToStep('done');
     } catch (err) {
@@ -395,6 +402,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (step !== 'review') return;
+    await persistNode(false);
   }
 
   function renderPreviewSummary() {
@@ -497,11 +510,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         {STEPS.map((s, idx) => {
           const isActive = s.id === step;
           const reachable =
-            s.id === 'done'
-              ? step === 'done'
-              : step === 'done'
-                ? idx <= stepIndex('review')
-                : idx <= maxReachedIndex && s.id !== 'done';
+            s.id === 'done' ? step === 'done' : step === 'done' ? idx <= stepIndex('review') : idx <= maxReachedIndex;
           return (
             <button
               key={s.id}
@@ -845,6 +854,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </>
             ) : (
               <>
+                <button type="button" className={styles.draftBtn} onClick={() => persistNode(true)} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save as draft'}
+                </button>
                 {currentStepIndex > 0 && (
                   <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
                     Back
@@ -856,7 +868,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                   </button>
                 ) : (
                   <button type="submit" className={styles.submitBtn} disabled={saving}>
-                    {saving ? 'Saving…' : savedNodeId ? 'Save changes' : 'Create node'}
+                    {saving ? 'Saving…' : draftStatus ? 'Publish node' : savedNodeId ? 'Save changes' : 'Create node'}
                   </button>
                 )}
               </>

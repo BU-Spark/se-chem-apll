@@ -137,6 +137,26 @@
   transition: filter 0.15s ease;
 }
 
+.draftBtn {
+  padding: 0.6rem 1.2rem;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.draftBtn:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.draftBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .submitBtn:hover:not(:disabled) {
   filter: brightness(0.92);
 }

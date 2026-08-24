@@ -42,7 +42,21 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'instructor-1' });
-    mockFindFirst.mockResolvedValue({ id: 'node-1' });
+    mockFindFirst.mockResolvedValue({
+      id: 'node-1',
+      title: 'Existing node',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      isDraft: false,
+      checkpoints: [],
+      quizQuestions: [
+        {
+          sortOrder: 0,
+          prompt: 'Existing quiz',
+          options: { type: 'multipleChoice', choices: ['A', 'B'] },
+          correctIndices: [0],
+        },
+      ],
+    });
     mockCheckpointFindMany.mockResolvedValue([]);
     mockQuizFindMany.mockResolvedValue([]);
     mockUpdate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
@@ -114,6 +128,27 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
           },
         }),
       })
+    );
+  });
+
+  it('allows incomplete content when saving as a draft', async () => {
+    mockFindFirst.mockResolvedValue({
+      id: 'node-1',
+      title: '',
+      videoUrl: null,
+      isDraft: true,
+      checkpoints: [],
+      quizQuestions: [],
+    });
+
+    const response = await PATCH(
+      patchRequest({ title: '', videoUrl: null, checkpoints: [], quizQuestions: [], isDraft: true }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({ title: '', videoUrl: null, isDraft: true })
     );
   });
 

@@ -23,7 +23,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
 
   // Metadata
   const [title, setTitle] = useState(lesson.title);
-  const [slug, setSlug] = useState(lesson.slug);
+  const [slug, setSlug] = useState(lesson.slug ?? '');
   const [summary, setSummary] = useState(lesson.summary);
   const [description, setDescription] = useState(lesson.description || '');
   const [estimatedMinutes, setEstimatedMinutes] = useState(lesson.estimatedMinutes?.toString() || '');
@@ -74,42 +74,55 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
     setLessonNodes(updated);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function persistLesson(asDraft: boolean) {
     setError(null);
 
-    if (lessonNodes.length === 0) {
-      setError('Add at least one node to the lesson before saving.');
-      return;
-    }
+    if (!asDraft) {
+      if (!title.trim()) {
+        setError('Title is required.');
+        return;
+      }
+      if (!slug.trim()) {
+        setError('Slug is required.');
+        return;
+      }
+      if (!summary.trim()) {
+        setError('Summary is required.');
+        return;
+      }
+      if (lessonNodes.length === 0) {
+        setError('Add at least one node to the lesson before saving.');
+        return;
+      }
 
-    if (
-      lessonNodes.some(
-        (entry) =>
-          entry.passingPercent === '' ||
-          !Number.isInteger(Number(entry.passingPercent)) ||
-          Number(entry.passingPercent) < 0 ||
-          Number(entry.passingPercent) > 100
-      )
-    ) {
-      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
-      return;
-    }
+      if (
+        lessonNodes.some(
+          (entry) =>
+            entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100
+        )
+      ) {
+        setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+        return;
+      }
 
-    if (
-      lessonNodes.some((entry) => {
-        if (entry.quizBankCount === 0) {
-          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
-        }
-        return (
-          entry.quizQuestionCount === '' ||
-          !Number.isInteger(Number(entry.quizQuestionCount)) ||
-          Number(entry.quizQuestionCount) < 1
-        );
-      })
-    ) {
-      setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
-      return;
+      if (
+        lessonNodes.some((entry) => {
+          if (entry.quizBankCount === 0) {
+            return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+          }
+          return (
+            entry.quizQuestionCount === '' ||
+            !Number.isInteger(Number(entry.quizQuestionCount)) ||
+            Number(entry.quizQuestionCount) < 1
+          );
+        })
+      ) {
+        setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+        return;
+      }
     }
 
     const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
@@ -142,6 +155,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
             isRequired: entry.isRequired,
           })),
           edges: serialisedEdges,
+          isDraft: asDraft,
         }),
       });
 
@@ -156,6 +170,11 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await persistLesson(false);
   }
 
   async function handleDelete() {
@@ -281,8 +300,16 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
             <a href="/instructor/lessons" className={styles.cancelLink}>
               Cancel
             </a>
+            <button
+              type="button"
+              className={styles.draftBtn}
+              onClick={() => persistLesson(true)}
+              disabled={saving || deleting}
+            >
+              {saving ? 'Saving…' : 'Save as draft'}
+            </button>
             <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {saving ? 'Saving…' : lesson.isDraft ? 'Publish lesson' : 'Save changes'}
             </button>
           </div>
         </div>

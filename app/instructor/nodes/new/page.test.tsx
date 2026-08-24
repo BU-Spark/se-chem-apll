@@ -117,4 +117,24 @@ describe('NewNodePage', () => {
     expect(screen.getByText(/Checkpoint 2 · 1:00/)).toBeInTheDocument();
     expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(2);
   });
+
+  it('saves an incomplete node as a draft from the first step', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(JSON.parse(request.body)).toEqual(
+      expect.objectContaining({
+        title: '',
+        videoUrl: null,
+        checkpoints: [],
+        quizQuestions: [],
+        isDraft: true,
+      })
+    );
+    expect(push).toHaveBeenCalledWith('/instructor/nodes');
+  });
 });

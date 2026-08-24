@@ -71,21 +71,27 @@ export function dbQuestionToForm(q: {
   correctIndices: number[];
 }): FormQuestion {
   const shortAnswer = parseShortAnswerOptions(q.options);
-  const isShortAnswer = shortAnswer !== null;
+  const rawOptions = q.options && typeof q.options === 'object' ? (q.options as Record<string, unknown>) : null;
+  const isShortAnswer = shortAnswer !== null || rawOptions?.type === 'shortAnswer';
+  const answerMode = shortAnswer?.answerMode ?? (rawOptions?.answerMode === 'range' ? 'range' : 'exact');
   return {
     id: q.id,
     prompt: q.prompt,
     questionType: isShortAnswer ? 'shortAnswer' : 'multipleChoice',
     choices: isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
     correctIndices: q.correctIndices,
-    answerMode: shortAnswer?.answerMode ?? 'exact',
-    expectedAnswer: shortAnswer?.answerMode === 'exact' ? String(shortAnswer.expectedAnswer) : '',
-    minimumAnswer: shortAnswer?.answerMode === 'range' ? String(shortAnswer.minimumAnswer) : '',
-    maximumAnswer: shortAnswer?.answerMode === 'range' ? String(shortAnswer.maximumAnswer) : '',
+    answerMode,
+    expectedAnswer:
+      answerMode === 'exact' && typeof rawOptions?.expectedAnswer === 'number' ? String(rawOptions.expectedAnswer) : '',
+    minimumAnswer:
+      answerMode === 'range' && typeof rawOptions?.minimumAnswer === 'number' ? String(rawOptions.minimumAnswer) : '',
+    maximumAnswer:
+      answerMode === 'range' && typeof rawOptions?.maximumAnswer === 'number' ? String(rawOptions.maximumAnswer) : '',
   };
 }
 
 export type NodeFormInitial = {
+  isDraft?: boolean;
   title: string;
   summary: string;
   videoUrl: string;
