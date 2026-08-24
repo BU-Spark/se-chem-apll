@@ -39,7 +39,7 @@ describe('POST /api/instructor/nodes', () => {
         title: 'Safety video',
         videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         tags: ['  safety  ', '', 'Procedure'],
-        learningObjectives: '  This node will help you identify hazards.  ',
+        learningObjectives: ['  Identify hazards.  ', '', 'Apply the safety procedure.'],
         checkpoints: [
           {
             sortOrder: 0,
@@ -67,7 +67,10 @@ describe('POST /api/instructor/nodes', () => {
 
     expect(response.status).toBe(201);
     expect(mockCreate.mock.calls[0][0].data.tags).toEqual(['safety', 'Procedure']);
-    expect(mockCreate.mock.calls[0][0].data.learningObjectives).toBe('This node will help you identify hazards.');
+    expect(mockCreate.mock.calls[0][0].data.learningObjectives).toEqual([
+      'Identify hazards.',
+      'Apply the safety procedure.',
+    ]);
     expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 45,
@@ -93,11 +96,23 @@ describe('POST /api/instructor/nodes', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it('returns 422 when learningObjectives is not text', async () => {
+  it('returns 422 when learningObjectives is not an array', async () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        learningObjectives: ['not text'],
+        learningObjectives: 'not an array',
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when learningObjectives contains a non-string value', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        learningObjectives: ['valid', 12],
       }) as never
     );
 

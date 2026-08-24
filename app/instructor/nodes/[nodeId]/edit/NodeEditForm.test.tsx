@@ -19,7 +19,7 @@ const node = {
   summary: 'Summary',
   videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   tags: ['Safety', 'Procedure'],
-  learningObjectives: 'This node will help you identify hazards and apply the procedure.',
+  learningObjectives: ['Identify hazards.', 'Apply the procedure.'],
   checkpoints: [
     {
       id: 'cp-1',
@@ -69,9 +69,8 @@ describe('NodeEditForm', () => {
     expect(screen.getByDisplayValue('Existing node')).toBeInTheDocument();
     expect(screen.getByText('Safety')).toBeInTheDocument();
     expect(screen.getByText('Procedure')).toBeInTheDocument();
-    expect(
-      screen.getByDisplayValue('This node will help you identify hazards and apply the procedure.')
-    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Identify hazards.')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Apply the procedure.')).toBeInTheDocument();
 
     await advanceToReview(user);
     expect(screen.getByText(/Checkpoint prompt/)).toBeInTheDocument();
@@ -85,7 +84,7 @@ describe('NodeEditForm', () => {
     expect(request.method).toBe('PATCH');
     const body = JSON.parse(request.body);
     expect(body.tags).toEqual(['Safety', 'Procedure']);
-    expect(body.learningObjectives).toBe('This node will help you identify hazards and apply the procedure.');
+    expect(body.learningObjectives).toEqual(['Identify hazards.', 'Apply the procedure.']);
     expect(body.checkpoints[0].timeOffsetSeconds).toBe(90);
     expect(body.checkpoints[0].questions[0]).toEqual(
       expect.objectContaining({
@@ -124,7 +123,7 @@ describe('NodeEditForm', () => {
   });
   it('adds tags on the basics step', async () => {
     const user = userEvent.setup();
-    render(<NodeEditForm node={{ ...node, tags: [], learningObjectives: '' }} />);
+    render(<NodeEditForm node={{ ...node, tags: [], learningObjectives: [] }} />);
 
     await user.type(screen.getByLabelText('New tag'), 'Pressure');
     await user.click(screen.getByRole('button', { name: 'Add' }));
@@ -132,7 +131,7 @@ describe('NodeEditForm', () => {
 
     await user.type(screen.getByLabelText('New tag'), 'pressure{Enter}');
     expect(screen.getAllByText('Pressure')).toHaveLength(1);
-    await user.type(screen.getByLabelText('Learning objectives'), 'Understand how to measure pressure.');
+    await user.type(screen.getByLabelText('Learning objective 1'), 'Understand how to measure pressure.');
 
     await advanceToReview(user);
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -140,7 +139,31 @@ describe('NodeEditForm', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.tags).toEqual(['Pressure']);
-    expect(body.learningObjectives).toBe('Understand how to measure pressure.');
+    expect(body.learningObjectives).toEqual(['Understand how to measure pressure.']);
+  });
+
+  it('adds, edits, and removes learning-objective rows independently from tags', async () => {
+    const user = userEvent.setup();
+    render(<NodeEditForm node={{ ...node, tags: ['Safety'], learningObjectives: ['First objective'] }} />);
+
+    const firstObjective = screen.getByLabelText('Learning objective 1');
+    await user.clear(firstObjective);
+    await user.type(firstObjective, 'Updated first objective');
+    await user.click(screen.getByRole('button', { name: 'Add learning objective' }));
+    await user.type(screen.getByLabelText('Learning objective 2'), 'Second objective');
+    await user.click(screen.getByRole('button', { name: 'Remove learning objective 1' }));
+
+    expect(screen.queryByDisplayValue('Updated first objective')).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('Second objective')).toBeInTheDocument();
+    expect(screen.getByText('Safety')).toBeInTheDocument();
+
+    await advanceToReview(user);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.tags).toEqual(['Safety']);
+    expect(body.learningObjectives).toEqual(['Second objective']);
   });
 
   it('blocks Next without a title', async () => {

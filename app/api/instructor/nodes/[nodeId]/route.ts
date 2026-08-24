@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     summary?: string;
     videoUrl?: string | null;
     tags?: string[];
-    learningObjectives?: string;
+    learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
   };
@@ -72,6 +72,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   const tagsTypeError = rejectIfNotArray(tags, 'tags');
   if (tagsTypeError) return tagsTypeError;
+  const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
+  if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
   if (checkpointsTypeError) return checkpointsTypeError;
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
@@ -80,8 +82,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   if (tags !== undefined && tags.some((item) => typeof item !== 'string')) {
     return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 422 });
   }
-  if (learningObjectives !== undefined && typeof learningObjectives !== 'string') {
-    return NextResponse.json({ error: 'learningObjectives must be a string' }, { status: 422 });
+  if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
 
   const replacingCheckpoints = checkpoints !== undefined;
@@ -134,7 +136,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     const normalizedTags =
       tags === undefined ? undefined : tags.map((item) => item.trim()).filter((item) => item.length > 0);
     const normalizedLearningObjectives =
-      learningObjectives === undefined ? undefined : learningObjectives.trim() || null;
+      learningObjectives === undefined
+        ? undefined
+        : learningObjectives.map((item) => item.trim()).filter((item) => item.length > 0);
 
     return tx.node.update({
       where: { id: nodeId },

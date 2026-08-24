@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     summary?: string;
     videoUrl?: string | null;
     tags?: string[];
-    learningObjectives?: string;
+    learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
   };
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
 
   const tagsTypeError = rejectIfNotArray(tags, 'tags');
   if (tagsTypeError) return tagsTypeError;
+  const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
+  if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
   if (checkpointsTypeError) return checkpointsTypeError;
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
@@ -78,8 +80,8 @@ export async function POST(req: NextRequest) {
   if (tags !== undefined && tags.some((item) => typeof item !== 'string')) {
     return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 422 });
   }
-  if (learningObjectives !== undefined && typeof learningObjectives !== 'string') {
-    return NextResponse.json({ error: 'learningObjectives must be a string' }, { status: 422 });
+  if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
 
   const contentError = validateNodeContent({ checkpoints, quizQuestions });
@@ -95,7 +97,9 @@ export async function POST(req: NextRequest) {
   }
 
   const normalizedTags = (tags ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
-  const normalizedLearningObjectives = learningObjectives?.trim() || null;
+  const normalizedLearningObjectives = (learningObjectives ?? [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 
   const node = await prisma.node.create({
     data: {

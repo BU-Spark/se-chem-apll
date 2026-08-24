@@ -23,6 +23,15 @@ export interface FormCheckpoint {
   questions: FormQuestion[];
 }
 
+export interface FormLearningObjective {
+  id: string;
+  value: string;
+}
+
+export function makeLearningObjective(value = '', id = generateClientId('learning-objective')): FormLearningObjective {
+  return { id, value };
+}
+
 export function makeQuestion(id = generateClientId('question')): FormQuestion {
   return {
     id,
@@ -90,7 +99,7 @@ export type NodeFormInitial = {
   summary: string;
   videoUrl: string;
   tags: string[];
-  learningObjectives: string;
+  learningObjectives: string[];
   checkpoints: Array<{
     id: string;
     timeOffsetSeconds: number;

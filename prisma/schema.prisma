@@ -177,7 +177,7 @@ model Node {
   thumbnailUrl        String?
   estimatedMinutes    Int?
   tags                String[]         @default([])
-  learningObjectives  String?          @map("learningObjectivesText")
+  learningObjectives  String[]         @default([])
   createdByClerkId    String?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt

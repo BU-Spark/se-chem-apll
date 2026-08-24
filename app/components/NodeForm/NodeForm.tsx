@@ -13,6 +13,7 @@ import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer'
 import {
   dbQuestionToForm,
   makeCheckpoint,
+  makeLearningObjective,
   makeQuestion,
   serializeQuestionOptions,
   type FormCheckpoint,
@@ -117,6 +118,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const quizCsvInputRef = useRef<HTMLInputElement>(null);
+  const learningObjectiveRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [step, setStep] = useState<WizardStep>('basics');
   const [maxReachedStep, setMaxReachedStep] = useState<WizardStep>('basics');
@@ -131,7 +133,10 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagDraft, setTagDraft] = useState('');
-  const [learningObjectives, setLearningObjectives] = useState(initial?.learningObjectives ?? '');
+  const [learningObjectives, setLearningObjectives] = useState(() => {
+    const initialValues = initial?.learningObjectives ?? [];
+    return (initialValues.length > 0 ? initialValues : ['']).map((value) => makeLearningObjective(value));
+  });
   const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
@@ -145,6 +150,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   );
 
   const youtubeId = parseYouTubeId(videoUrl.trim());
+  const objectiveValues = learningObjectives.map((objective) => objective.value.trim()).filter(Boolean);
   const currentStepIndex = stepIndex(step);
   const maxReachedIndex = stepIndex(maxReachedStep);
 
@@ -217,6 +223,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       e.preventDefault();
       addTag(tagDraft);
     }
+  }
+
+  function addLearningObjective() {
+    const objective = makeLearningObjective();
+    setLearningObjectives((prev) => [...prev, objective]);
+    requestAnimationFrame(() => learningObjectiveRefs.current[objective.id]?.focus());
+  }
+
+  function updateLearningObjective(id: string, value: string) {
+    setLearningObjectives((prev) =>
+      prev.map((objective) => (objective.id === id ? { ...objective, value } : objective))
+    );
+  }
+
+  function removeLearningObjective(id: string) {
+    setLearningObjectives((prev) => {
+      const remaining = prev.filter((objective) => objective.id !== id);
+      return remaining.length > 0 ? remaining : [makeLearningObjective()];
+    });
   }
 
   function handleDownloadSampleQuizCsv() {
@@ -377,7 +402,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           summary,
           videoUrl: videoUrl || null,
           tags,
-          learningObjectives,
+          learningObjectives: objectiveValues,
           checkpoints: checkpointPayload,
           quizQuestions: quizPayload,
         }),
@@ -435,7 +460,17 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             </div>
             <div>
               <dt>Learning objectives</dt>
-              <dd>{learningObjectives.trim() || '—'}</dd>
+              <dd>
+                {objectiveValues.length === 0 ? (
+                  '—'
+                ) : (
+                  <ol className={styles.objectivePreviewList}>
+                    {objectiveValues.map((objective, index) => (
+                      <li key={`${index}-${objective}`}>{objective}</li>
+                    ))}
+                  </ol>
+                )}
+              </dd>
             </div>
           </dl>
         </div>
@@ -590,19 +625,46 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                 </ul>
               )}
             </div>
-            <label className={styles.field}>
-              Learning objectives
-              <textarea
-                aria-label="Learning objectives"
-                value={learningObjectives}
-                onChange={(e) => setLearningObjectives(e.target.value)}
-                placeholder="e.g. This node will help you understand the basics of the mole concept."
-                rows={4}
-              />
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Learning objectives</span>
               <span className={styles.sectionNote}>
-                A student-facing description of what this node will help them learn.
+                Add student-facing statements describing what this node will help them learn.
               </span>
-            </label>
+              <div className={styles.objectiveList}>
+                {learningObjectives.map((objective, index) => (
+                  <div key={objective.id} className={styles.objectiveRow}>
+                    <input
+                      ref={(element) => {
+                        learningObjectiveRefs.current[objective.id] = element;
+                      }}
+                      aria-label={`Learning objective ${index + 1}`}
+                      value={objective.value}
+                      onChange={(event) => updateLearningObjective(objective.id, event.target.value)}
+                      placeholder={`Learning objective ${index + 1}`}
+                    />
+                    {learningObjectives.length > 1 && (
+                      <button
+                        type="button"
+                        className={styles.objectiveRemoveBtn}
+                        aria-label={`Remove learning objective ${index + 1}`}
+                        onClick={() => removeLearningObjective(objective.id)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={styles.objectiveAddBtn}
+                aria-label="Add learning objective"
+                onClick={addLearningObjective}
+              >
+                <span aria-hidden="true">+</span>
+                <span>Add objective</span>
+              </button>
+            </div>
           </section>
         )}
 
