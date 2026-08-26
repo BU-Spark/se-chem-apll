@@ -88,6 +88,10 @@ describe('POST /api/instructor/lessons', () => {
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Draft nodes cannot be added to a lesson.' });
+    expect(mockNodeFindFirst).toHaveBeenCalledWith({
+      where: { id: { in: ['node-draft'] }, isDraft: true },
+      select: { id: true },
+    });
     expect(mockLessonCreate).not.toHaveBeenCalled();
   });
 });

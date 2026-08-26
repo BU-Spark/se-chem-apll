@@ -54,6 +54,10 @@ describe('POST /api/instructor/courses', () => {
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Draft lessons cannot be added to a course.' });
+    expect(mockLessonFindFirst).toHaveBeenCalledWith({
+      where: { id: { in: ['lesson-draft'] }, isDraft: true },
+      select: { id: true },
+    });
     expect(mockCourseCreate).not.toHaveBeenCalled();
   });
 });
