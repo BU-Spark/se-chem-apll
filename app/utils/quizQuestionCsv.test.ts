@@ -6,10 +6,10 @@ import {
   sampleQuizQuestionsCsv,
   trimTrailingEmptyChoices,
 } from './quizQuestionCsv';
-import type { FormQuestion } from '@/app/components/NodeForm/types';
+import type { QuizFormQuestion } from '@/app/components/NodeForm/types';
 import { serializeCsv } from './csv';
 
-function mcQuestion(overrides: Partial<FormQuestion> = {}): FormQuestion {
+function mcQuestion(overrides: Partial<QuizFormQuestion> = {}): QuizFormQuestion {
   return {
     id: 'q-mc',
     prompt: 'Pick one',
@@ -24,7 +24,7 @@ function mcQuestion(overrides: Partial<FormQuestion> = {}): FormQuestion {
   };
 }
 
-function saExact(overrides: Partial<FormQuestion> = {}): FormQuestion {
+function saExact(overrides: Partial<QuizFormQuestion> = {}): QuizFormQuestion {
   return {
     id: 'q-sa',
     prompt: 'Value?',

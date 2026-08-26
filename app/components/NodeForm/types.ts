@@ -3,12 +3,13 @@ import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
 import { parseShortAnswerOptions } from '@/app/utils/shortAnswer';
 
 export type QuestionType = 'multipleChoice' | 'shortAnswer';
+export type CheckpointItemType = QuestionType | 'note';
 export type ShortAnswerMode = 'exact' | 'range';
 
 export interface FormQuestion {
   id: string;
   prompt: string;
-  questionType: QuestionType;
+  questionType: CheckpointItemType;
   choices: string[];
   correctIndices: number[];
   answerMode: ShortAnswerMode;
@@ -17,13 +18,19 @@ export interface FormQuestion {
   maximumAnswer: string;
 }
 
+export type QuizFormQuestion = FormQuestion & { questionType: QuestionType };
+
+export function isQuizFormQuestion(question: FormQuestion): question is QuizFormQuestion {
+  return question.questionType !== 'note';
+}
+
 export interface FormCheckpoint {
   id: string;
   timeOffsetSeconds: number;
   questions: FormQuestion[];
 }
 
-export function makeQuestion(id = generateClientId('question')): FormQuestion {
+export function makeQuestion(id = generateClientId('question')): QuizFormQuestion {
   return {
     id,
     prompt: '',
@@ -46,6 +53,9 @@ export function makeCheckpoint(timeOffsetSeconds = 0, id = generateClientId('che
 }
 
 export function serializeQuestionOptions(q: FormQuestion) {
+  if (q.questionType === 'note') {
+    return { type: 'note' as const };
+  }
   if (q.questionType === 'multipleChoice') {
     return { type: 'multipleChoice' as const, choices: q.choices };
   }
@@ -69,14 +79,21 @@ export function dbQuestionToForm(q: {
   prompt: string;
   options: unknown;
   correctIndices: number[];
+  kind?: 'QUESTION' | 'NOTE';
 }): FormQuestion {
+  const isNote =
+    q.kind === 'NOTE' ||
+    (q.options !== null &&
+      typeof q.options === 'object' &&
+      !Array.isArray(q.options) &&
+      (q.options as { type?: unknown }).type === 'note');
   const shortAnswer = parseShortAnswerOptions(q.options);
   const isShortAnswer = shortAnswer !== null;
   return {
     id: q.id,
     prompt: q.prompt,
-    questionType: isShortAnswer ? 'shortAnswer' : 'multipleChoice',
-    choices: isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
+    questionType: isNote ? 'note' : isShortAnswer ? 'shortAnswer' : 'multipleChoice',
+    choices: isNote || isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
     correctIndices: q.correctIndices,
     answerMode: shortAnswer?.answerMode ?? 'exact',
     expectedAnswer: shortAnswer?.answerMode === 'exact' ? String(shortAnswer.expectedAnswer) : '',
@@ -98,6 +115,7 @@ export type NodeFormInitial = {
       prompt: string;
       options: unknown;
       correctIndices: number[];
+      kind?: 'QUESTION' | 'NOTE';
     }>;
   }>;
   quizQuestions: Array<{

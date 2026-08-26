@@ -79,6 +79,55 @@ describe('POST /api/instructor/nodes', () => {
     ]);
   });
 
+  it('persists checkpoint notes without answer data', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                kind: 'note',
+                prompt: 'Notice how the flame changes color.',
+              },
+            ],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create[0].questions.create).toEqual([
+      expect.objectContaining({
+        kind: 'NOTE',
+        prompt: 'Notice how the flame changes color.',
+        options: { type: 'note' },
+        correctIndices: [],
+      }),
+    ]);
+  });
+
+  it('rejects blank checkpoint notes', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, kind: 'note', prompt: '' }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('returns 422 when learningObjectives is not an array of strings', async () => {
     const response = await POST(
       postRequest({
