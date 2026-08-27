@@ -12,6 +12,7 @@ export default async function NewLessonPage() {
   }
   const nodes = await prisma.node.findMany({
     where: {
+      isDraft: false,
       OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
     },
     include: {

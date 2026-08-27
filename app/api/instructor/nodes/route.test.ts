@@ -84,6 +84,29 @@ describe('POST /api/instructor/nodes', () => {
     ]);
   });
 
+  it('persists an incomplete draft without publish validation', async () => {
+    const response = await POST(
+      postRequest({
+        title: '',
+        videoUrl: null,
+        checkpoints: [],
+        quizQuestions: [],
+        isDraft: true,
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: '',
+          videoUrl: null,
+          isDraft: true,
+        }),
+      })
+    );
+  });
+
   it('returns 422 when tags is not an array of strings', async () => {
     const response = await POST(
       postRequest({

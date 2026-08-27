@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, tags, learningObjectives, checkpoints, quizQuestions } = body as {
+  const { title, summary, videoUrl, tags, learningObjectives, checkpoints, quizQuestions, isDraft } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
@@ -61,14 +61,20 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
+    isDraft?: boolean;
   };
   const owned = await prisma.node.findFirst({
     where: {
       id: nodeId,
       OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
     },
+    include: nodeInclude,
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  if (isDraft !== undefined && typeof isDraft !== 'boolean') {
+    return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
+  }
 
   const tagsTypeError = rejectIfNotArray(tags, 'tags');
   if (tagsTypeError) return tagsTypeError;
@@ -89,21 +95,28 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const replacingCheckpoints = checkpoints !== undefined;
   const replacingQuizQuestions = quizQuestions !== undefined;
 
-  if (replacingCheckpoints || replacingQuizQuestions) {
+  const savingAsDraft = isDraft ?? owned.isDraft;
+  if (!savingAsDraft) {
+    const effectiveCheckpoints = checkpoints ?? owned.checkpoints;
+    const effectiveQuizQuestions = quizQuestions ?? owned.quizQuestions;
     const contentError = validateNodeContent({
-      ...(replacingCheckpoints ? { checkpoints } : {}),
-      ...(replacingQuizQuestions ? { quizQuestions } : {}),
+      checkpoints: effectiveCheckpoints,
+      quizQuestions: effectiveQuizQuestions,
     });
     if (contentError) {
       return NextResponse.json({ error: contentError }, { status: 422 });
     }
-  }
 
-  if (videoUrl !== undefined && !parseYouTubeId((videoUrl ?? '').trim())) {
-    return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
-  }
-  if (quizQuestions !== undefined && quizQuestions.length === 0) {
-    return NextResponse.json({ error: 'At least one quiz bank question is required.' }, { status: 422 });
+    if (!(title ?? owned.title).trim()) {
+      return NextResponse.json({ error: 'title is required' }, { status: 422 });
+    }
+    const effectiveVideoUrl = videoUrl === undefined ? owned.videoUrl : videoUrl;
+    if (!parseYouTubeId((effectiveVideoUrl ?? '').trim())) {
+      return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
+    }
+    if (effectiveQuizQuestions.length === 0) {
+      return NextResponse.json({ error: 'At least one quiz bank question is required.' }, { status: 422 });
+    }
   }
 
   const node = await prisma.$transaction(async (tx) => {
@@ -145,9 +158,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(summary !== undefined && { summary: summary.trim() || null }),
-        ...(videoUrl !== undefined && { videoUrl: videoUrl || null }),
+        ...(videoUrl !== undefined && { videoUrl: (videoUrl ?? '').trim() || null }),
         ...(normalizedTags !== undefined && { tags: normalizedTags }),
         ...(normalizedLearningObjectives !== undefined && { learningObjectives: normalizedLearningObjectives }),
+        ...(isDraft !== undefined && { isDraft }),
         ...(replacingCheckpoints && {
           checkpoints: {
             create: checkpoints!.map(serializeCheckpointCreate),

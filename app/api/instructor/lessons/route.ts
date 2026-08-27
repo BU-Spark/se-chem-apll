@@ -20,7 +20,7 @@ export async function GET() {
         orderBy: { sortOrder: 'asc' },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
   });
   return NextResponse.json(lessons);
 }
@@ -37,7 +37,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, lessonNodes, edges } = body as {
+  const {
+    title,
+    slug,
+    summary,
+    description,
+    estimatedMinutes,
+    lessonNodes,
+    edges,
+    isDraft = false,
+  } = body as {
     title?: string;
     slug?: string;
     summary?: string;
@@ -51,13 +60,29 @@ export async function POST(req: NextRequest) {
       isRequired?: boolean;
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
+    isDraft?: boolean;
   };
 
-  if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
-  if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
-  if (!summary?.trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
+  if (typeof isDraft !== 'boolean') {
+    return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
+  }
+  if (lessonNodes !== undefined && !Array.isArray(lessonNodes)) {
+    return NextResponse.json({ error: 'lessonNodes must be an array' }, { status: 422 });
+  }
+  if (edges !== undefined && !Array.isArray(edges)) {
+    return NextResponse.json({ error: 'edges must be an array' }, { status: 422 });
+  }
 
-  if ((lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
+  if (!isDraft) {
+    if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
+    if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
+    if (!summary?.trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
+    if (!lessonNodes || lessonNodes.length === 0) {
+      return NextResponse.json({ error: 'At least one node is required.' }, { status: 422 });
+    }
+  }
+
+  if (!isDraft && (lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a passingPercent between 0 and 100' },
       { status: 422 }
@@ -65,7 +90,7 @@ export async function POST(req: NextRequest) {
   }
 
   // same check as above, but for quizQuestionCount
-  if ((lessonNodes ?? []).some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
+  if (!isDraft && (lessonNodes ?? []).some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
@@ -82,25 +107,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Validate slug format
-  if (!/^[a-z0-9-]+$/.test(slug)) {
+  // Validate slug format when publishing. Drafts may contain a partial slug.
+  if (!isDraft && !/^[a-z0-9-]+$/.test(slug!)) {
     return NextResponse.json({ error: 'slug must be lowercase letters, numbers, and hyphens only' }, { status: 422 });
+  }
+
+  const nodeIds = [...new Set((lessonNodes ?? []).map((ln) => ln.nodeId))];
+  if (nodeIds.length > 0) {
+    const draftNode = await prisma.node.findFirst({
+      where: { id: { in: nodeIds }, isDraft: true },
+      select: { id: true },
+    });
+    if (draftNode) {
+      return NextResponse.json({ error: 'Draft nodes cannot be added to a lesson.' }, { status: 422 });
+    }
   }
 
   const lesson = await prisma.lesson.create({
     data: {
-      title: title.trim(),
-      slug: slug.trim(),
-      summary: summary.trim(),
+      title: title?.trim() ?? '',
+      slug: slug?.trim() || null,
+      summary: summary?.trim() ?? '',
       createdByClerkId: userId,
+      isDraft,
       description: description ?? null,
       estimatedMinutes: estimatedMinutes ?? null,
       lessonNodes: {
         create: (lessonNodes ?? []).map((ln) => ({
           nodeId: ln.nodeId,
           sortOrder: ln.sortOrder,
-          passingPercent: ln.passingPercent!,
-          quizQuestionCount: ln.quizQuestionCount!,
+          passingPercent: ln.passingPercent ?? 0,
+          quizQuestionCount: ln.quizQuestionCount ?? 0,
           isRequired: ln.isRequired ?? true,
         })),
       },

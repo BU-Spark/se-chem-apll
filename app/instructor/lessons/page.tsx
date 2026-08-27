@@ -18,7 +18,7 @@ export default async function LessonsPage() {
     include: {
       lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
   });
 
   return (
@@ -37,11 +37,14 @@ export default async function LessonsPage() {
           {lessons.map((lesson) => (
             <li key={lesson.id} className={styles.card}>
               <div className={styles.cardBody}>
-                <p className={styles.cardTitle}>{lesson.title}</p>
+                <div className={styles.cardTitleRow}>
+                  <p className={styles.cardTitle}>{lesson.title || 'Untitled lesson'}</p>
+                  {lesson.isDraft && <span className={styles.draftBadge}>Draft</span>}
+                </div>
                 <p className={styles.cardMeta}>
                   {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
                 </p>
-                <p className={styles.cardSlug}>/lessons/{lesson.slug}</p>
+                <p className={styles.cardSlug}>{lesson.slug ? `/lessons/${lesson.slug}` : 'Slug not set'}</p>
               </div>
               <Link href={`/instructor/lessons/${lesson.id}/edit`} className={styles.editLink}>
                 Edit

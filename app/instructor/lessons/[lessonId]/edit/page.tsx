@@ -35,6 +35,7 @@ export default async function EditLessonPage({ params }: Props) {
     }),
     prisma.node.findMany({
       where: {
+        isDraft: false,
         OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
       },
       include: {

@@ -43,11 +43,13 @@ export default async function StudentHomePage() {
       course: {
         include: {
           courseLessons: {
+            where: { lesson: { isDraft: false } },
             orderBy: { sortOrder: 'asc' },
             include: {
               lesson: {
                 include: {
                   lessonNodes: {
+                    where: { node: { isDraft: false } },
                     orderBy: { sortOrder: 'asc' },
                     include: {
                       node: {

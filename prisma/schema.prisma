@@ -127,13 +127,14 @@ enum CourseRole {
 
 model Lesson {
   id                String             @id @default(cuid())
-  slug              String             @unique
+  slug              String?            @unique
   title             String
   summary           String
   description       String?
   thumbnailUrl      String?
   estimatedMinutes  Int?
   createdByClerkId  String?
+  isDraft           Boolean            @default(false)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   courseLessons     CourseLesson[]
@@ -179,6 +180,7 @@ model Node {
   tags                String[]         @default([])
   learningObjectives  String[]         @default([])
   createdByClerkId    String?
+  isDraft             Boolean          @default(false)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   checkpoints         NodeCheckpoint[]
