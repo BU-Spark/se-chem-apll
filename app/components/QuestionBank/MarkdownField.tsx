@@ -3,7 +3,6 @@
 import dynamic from 'next/dynamic';
 import { useId, useState } from 'react';
 import '@mdxeditor/editor/style.css';
-import MarkdownPreview from './MarkdownPreview';
 import styles from './QuestionBank.module.css';
 
 const RichMarkdownEditor = dynamic(() => import('./RichMarkdownEditor'), {
@@ -11,14 +10,10 @@ const RichMarkdownEditor = dynamic(() => import('./RichMarkdownEditor'), {
   loading: () => <div className={styles.richMarkdownLoading}>Loading visual editor…</div>,
 });
 
-export type MarkdownFieldMode = 'visual' | 'source' | 'preview';
-
 type Props = {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  mode: MarkdownFieldMode;
-  onModeChange: (mode: MarkdownFieldMode) => void;
   placeholder?: string;
   rows?: number;
   required?: boolean;
@@ -27,13 +22,11 @@ type Props = {
   error?: string;
 };
 
-/** Markdown-backed visual editor with source and rendered preview modes. */
+/** Visual editor backed by Markdown, with a source repair fallback for unsupported content. */
 export default function MarkdownField({
   label,
   value,
   onChange,
-  mode,
-  onModeChange,
   placeholder,
   rows = 3,
   required = false,
@@ -41,6 +34,7 @@ export default function MarkdownField({
   error,
 }: Props) {
   const [visualError, setVisualError] = useState<string | null>(null);
+  const [isRepairingSource, setIsRepairingSource] = useState(false);
   const id = useId();
   const labelId = `${id}-label`;
   const errorId = `${id}-error`;
@@ -60,7 +54,7 @@ export default function MarkdownField({
         </label>
       </div>
 
-      {mode === 'visual' ? (
+      {!isRepairingSource ? (
         <div className={compact ? styles.richMarkdownSlotCompact : styles.richMarkdownSlot}>
           <RichMarkdownEditor
             value={value}
@@ -73,37 +67,38 @@ export default function MarkdownField({
             invalid={Boolean(error || visualError)}
             onMarkdownError={(message) => {
               setVisualError(message);
-              onModeChange('source');
+              setIsRepairingSource(true);
             }}
           />
         </div>
-      ) : mode === 'source' ? (
-        <textarea
-          id={id}
-          className={compact ? styles.markdownInputCompact : styles.markdownInput}
-          rows={compact ? 1 : rows}
-          value={value}
-          onChange={(e) => updateValue(e.target.value)}
-          placeholder={placeholder}
-          aria-invalid={Boolean(error || visualError)}
-          aria-describedby={descriptionId}
-        />
       ) : (
-        <div
-          className={compact ? styles.markdownPreviewBoxCompact : styles.markdownPreviewBox}
-          aria-labelledby={labelId}
-        >
-          {value.trim() === '' ? (
-            <span className={styles.markdownPreviewEmpty}>Nothing to preview</span>
-          ) : (
-            <MarkdownPreview content={value} />
-          )}
+        <div className={styles.markdownRepair}>
+          <textarea
+            id={id}
+            className={compact ? styles.markdownInputCompact : styles.markdownInput}
+            rows={compact ? 1 : rows}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            aria-invalid={Boolean(error || visualError)}
+            aria-describedby={descriptionId}
+          />
+          <button
+            type="button"
+            className={styles.markdownRepairButton}
+            onClick={() => {
+              setVisualError(null);
+              setIsRepairingSource(false);
+            }}
+          >
+            Try visual editor again
+          </button>
         </div>
       )}
 
       {(error || visualError) && (
         <p className={styles.fieldError} id={descriptionId ?? errorId} role="alert">
-          {error ?? 'This content could not be opened visually. Edit the Markdown and try Visual mode again.'}
+          {error ?? 'This content could not be opened visually. Edit the source, then try the visual editor again.'}
         </p>
       )}
     </div>

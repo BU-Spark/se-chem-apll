@@ -7,6 +7,7 @@ import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
 import { validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import QuestionBankEditor from '@/app/components/QuestionBank/QuestionBankEditor';
+import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
 import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
 import { countIssuesBySeverity, validateQuestionBank } from '@/app/components/QuestionBank/validation';
 import type { AuthoringQuestion } from '@/app/components/QuestionBank/types';
@@ -364,10 +365,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     goToStep(target);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (step !== 'review') return;
-
+  async function saveNode() {
+    if (saving) return;
     setError(null);
     const allError = validateAll();
     if (allError) {
@@ -408,6 +407,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (step !== 'review') return;
+    await saveNode();
   }
 
   function renderPreviewSummary() {
@@ -487,7 +492,39 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <ul className={styles.previewList}>
               {quizQuestions.map((q, idx) => (
                 <li key={q.id}>
-                  Q{idx + 1}: {q.prompt.trim() || '(empty prompt)'}
+                  <div className={styles.previewQuestionPrompt}>
+                    <strong>Q{idx + 1}</strong>
+                    {q.prompt.trim() === '' ? (
+                      <span>(empty prompt)</span>
+                    ) : (
+                      <div className={styles.previewRenderedContent}>
+                        <MarkdownPreview content={q.prompt} />
+                      </div>
+                    )}
+                  </div>
+                  {q.type === 'multipleChoice' ? (
+                    <ul className={styles.previewSublist}>
+                      {q.choices.map((choice, choiceIdx) => (
+                        <li key={choice.id} className={styles.previewChoice}>
+                          <span>{choiceIdx + 1}.</span>
+                          <div className={styles.previewRenderedContent}>
+                            {choice.content.trim() === '' ? (
+                              <span>(empty choice)</span>
+                            ) : (
+                              <MarkdownPreview content={choice.content} />
+                            )}
+                          </div>
+                          {choice.correct && <span className={styles.previewCorrect}>Correct</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={styles.previewAnswer}>
+                      {q.answer.mode === 'exact'
+                        ? `Expected answer: ${q.answer.expected.trim() || '—'}`
+                        : `Accepted range: ${q.answer.minimum.trim() || '—'}–${q.answer.maximum.trim() || '—'}`}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -772,9 +809,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <h2 className={styles.sectionTitle}>Quiz question bank</h2>
             <p className={styles.sectionNote}>
               These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
-              timestamps. Markdown, LaTeX math, and mhchem chemistry notation are supported.
+              timestamps. Rich text, LaTeX math, and mhchem chemistry notation are supported.
             </p>
-            <QuestionBankEditor questions={quizQuestions} onChange={setQuizQuestions} />
+            <QuestionBankEditor
+              questions={quizQuestions}
+              onChange={setQuizQuestions}
+              onSave={saveNode}
+              saving={saving}
+            />
           </section>
         )}
 

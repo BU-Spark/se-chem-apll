@@ -19,9 +19,11 @@ jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
     default: function MockQuestionBankEditor({
       questions,
       onChange,
+      onSave,
     }: {
       questions: Array<{ id: string; type: string; prompt: string }>;
       onChange: (next: typeof questions) => void;
+      onSave: () => void | Promise<void>;
     }) {
       return (
         <div data-testid="question-bank-editor">
@@ -37,6 +39,9 @@ jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
               />
             </label>
           ))}
+          <button type="button" onClick={() => void onSave()}>
+            Mock save node command
+          </button>
         </div>
       );
     },
@@ -147,6 +152,46 @@ describe('NodeEditForm', () => {
     await user.click(screen.getByRole('button', { name: 'Back to nodes' }));
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
+
+  it('saves directly from the quiz-bank command without visiting Review', async () => {
+    const user = userEvent.setup();
+    render(<NodeEditForm node={node} />);
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Quiz question bank' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Mock save node command' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe('/api/instructor/nodes/node-1');
+    expect((global.fetch as jest.Mock).mock.calls[0][1].method).toBe('PATCH');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Changes saved' })).toBeInTheDocument());
+  });
+
+  it('renders formatted quiz prompts and choices in the Review step', async () => {
+    const user = userEvent.setup();
+    const formattedNode = {
+      ...node,
+      quizQuestions: [
+        {
+          id: 'qq-formatted',
+          prompt: '**Water** contains $\\ce{H2O}$.',
+          options: { type: 'multipleChoice', choices: ['$2$ atoms', '$3$ atoms'] },
+          correctIndices: [1],
+        },
+      ],
+    };
+    render(<NodeEditForm node={formattedNode} />);
+
+    await advanceToReview(user);
+
+    expect(screen.getByText('Water')).toHaveStyle({ fontWeight: 'bold' });
+    expect(screen.getAllByTestId('markdown-preview')).toHaveLength(3);
+    expect(screen.getAllByTestId('markdown-preview').some((preview) => preview.querySelector('.katex'))).toBe(true);
+    expect(screen.getByText('Correct')).toBeInTheDocument();
+  });
+
   it('adds learning objective tags on the basics step', async () => {
     const user = userEvent.setup();
     render(<NodeEditForm node={{ ...node, learningObjectives: [] }} />);

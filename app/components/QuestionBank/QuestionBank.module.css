@@ -136,6 +136,26 @@
   background: #fff;
 }
 
+.browserPanel {
+  min-width: 0;
+}
+
+.selectionHint {
+  margin: 0.45rem 0 0;
+  color: #64748b;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.selectionHint kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.3rem;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+}
+
 .detail {
   border: 1px solid #e5e7eb;
   border-radius: 0.6rem;
@@ -325,33 +345,6 @@
   margin-left: 0.2rem;
 }
 
-.editorModeRow {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.editorModeTabs {
-  display: inline-flex;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.4rem;
-  overflow: hidden;
-}
-
-.markdownTab,
-.markdownTabActive {
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  border: none;
-  cursor: pointer;
-  background: #fff;
-  color: #6b7280;
-}
-
-.markdownTabActive {
-  background: #1f5fab;
-  color: #fff;
-}
-
 .markdownInput,
 .markdownInputCompact {
   width: 100%;
@@ -465,24 +458,25 @@
   font-size: 0.82rem;
 }
 
-.markdownPreviewBox,
-.markdownPreviewBoxCompact {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+.markdownRepair {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.markdownRepairButton {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.markdownRepairButton:hover {
   background: #f9fafb;
-  padding: 0.5rem 0.7rem;
-  min-height: 3.5rem;
-  font-size: 0.875rem;
-}
-
-.markdownPreviewBoxCompact {
-  min-height: 2.2rem;
-  padding: 0.4rem 0.6rem;
-}
-
-.markdownPreviewEmpty {
-  color: #9ca3af;
-  font-size: 0.82rem;
 }
 
 .markdownPreview p:first-child {
@@ -693,6 +687,19 @@
   color: #9ca3af;
 }
 
+.statusBarHint button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.statusBarHint button:hover {
+  color: #1f5fab;
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -703,6 +710,261 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ── Command palette ── */
+.commandOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.commandPalette {
+  width: min(58rem, 100%);
+  max-height: min(88vh, 52rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 0.8rem;
+  background: #fff;
+  color: #111827;
+}
+
+.commandHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem 0.75rem;
+}
+
+.commandHeader h3,
+.commandHeader p,
+.commandReference h4,
+.commandReference p {
+  margin: 0;
+}
+
+.commandHeader h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.commandHeader p {
+  margin-top: 0.2rem;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.commandSearch {
+  margin: 0 1.15rem 0.85rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.commandSearch:focus {
+  outline: 2px solid #1f5fab;
+  outline-offset: 1px;
+}
+
+.commandContent {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.commandResults {
+  min-height: 18rem;
+  overflow-y: auto;
+  padding: 0.55rem;
+}
+
+.commandGroup + .commandGroup {
+  margin-top: 0.45rem;
+}
+
+.commandGroupLabel {
+  padding: 0.35rem 0.55rem 0.25rem;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.commandItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commandItem:hover,
+.commandItemSelected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.commandItem[aria-disabled='true'] {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.commandItemMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.commandItemTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.commandItemDescription {
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commandItemMeta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+.commandItemMeta kbd,
+.commandFooter kbd {
+  padding: 0.08rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.3rem;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.commandReference {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border-left: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.commandReference h4 {
+  font-size: 0.9rem;
+}
+
+.commandReference p {
+  margin-top: 0.25rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.commandReferenceEmpty {
+  align-self: stretch;
+  margin: auto 0;
+  text-align: center;
+}
+
+.commandExample {
+  align-self: stretch;
+  overflow-x: auto;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.commandPreview {
+  align-self: stretch;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.commandPreview > span {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commandCopyStatus {
+  color: #166534 !important;
+}
+
+.commandEmpty {
+  margin: 2rem 1rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.commandFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.15rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 720px) {
+  .commandContent {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .commandResults {
+    min-height: 14rem;
+    overflow-y: visible;
+  }
+
+  .commandReference {
+    border-top: 1px solid #e5e7eb;
+    border-left: 0;
+  }
 }
 
 /* ── Import dialog ── */

@@ -1,7 +1,6 @@
 'use client';
 
 import MarkdownField from './MarkdownField';
-import type { MarkdownFieldMode } from './MarkdownField';
 import type { QuestionIssue } from './validation';
 import {
   MAX_CHOICES,
@@ -26,8 +25,6 @@ type Props = {
   onMove: (direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  editorMode: MarkdownFieldMode;
-  onEditorModeChange: (mode: MarkdownFieldMode) => void;
 };
 
 function issuesForField(issues: QuestionIssue[], field: string): string | undefined {
@@ -38,14 +35,10 @@ function MultipleChoiceEditor({
   question,
   issues,
   onChange,
-  editorMode,
-  onEditorModeChange,
 }: {
   question: MultipleChoiceQuestion;
   issues: QuestionIssue[];
   onChange: (next: AuthoringQuestion) => void;
-  editorMode: MarkdownFieldMode;
-  onEditorModeChange: (mode: MarkdownFieldMode) => void;
 }) {
   function updateChoice(choiceId: string, patch: Partial<(typeof question.choices)[number]>) {
     onChange({
@@ -89,9 +82,7 @@ function MultipleChoiceEditor({
               compact
               value={choice.content}
               onChange={(content) => updateChoice(choice.id, { content })}
-              mode={editorMode}
-              onModeChange={onEditorModeChange}
-              placeholder={`Choice ${idx + 1} — Markdown and $\\ce{...}$ supported`}
+              placeholder={`Choice ${idx + 1} — formatting, LaTeX, and mhchem supported`}
               error={issuesForField(issues, `choice:${choice.id}`)}
             />
           </div>
@@ -243,8 +234,6 @@ export default function QuestionDetailEditor({
   onMove,
   canMoveUp,
   canMoveDown,
-  editorMode,
-  onEditorModeChange,
 }: Props) {
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.length - errorCount;
@@ -283,35 +272,6 @@ export default function QuestionDetailEditor({
         )}
       </header>
 
-      <div className={styles.editorModeRow}>
-        <div className={styles.editorModeTabs} role="group" aria-label="Editor mode">
-          <button
-            type="button"
-            className={editorMode === 'visual' ? styles.markdownTabActive : styles.markdownTab}
-            onClick={() => onEditorModeChange('visual')}
-            aria-pressed={editorMode === 'visual'}
-          >
-            Visual
-          </button>
-          <button
-            type="button"
-            className={editorMode === 'source' ? styles.markdownTabActive : styles.markdownTab}
-            onClick={() => onEditorModeChange('source')}
-            aria-pressed={editorMode === 'source'}
-          >
-            Markdown
-          </button>
-          <button
-            type="button"
-            className={editorMode === 'preview' ? styles.markdownTabActive : styles.markdownTab}
-            onClick={() => onEditorModeChange('preview')}
-            aria-pressed={editorMode === 'preview'}
-          >
-            Preview
-          </button>
-        </div>
-      </div>
-
       {(errorCount > 0 || warningCount > 0) && (
         <p className={errorCount > 0 ? styles.detailIssueError : styles.detailIssueWarning} role="status">
           {errorCount > 0 ? `${errorCount} error${errorCount === 1 ? '' : 's'}` : ''}
@@ -325,21 +285,13 @@ export default function QuestionDetailEditor({
         required
         value={question.prompt}
         onChange={(prompt) => onChange({ ...question, prompt })}
-        mode={editorMode}
-        onModeChange={onEditorModeChange}
         placeholder={'What is the $K_a$ of $\\ce{CH3COOH}$?'}
         rows={3}
         error={issuesForField(issues, 'prompt')}
       />
 
       {question.type === 'multipleChoice' ? (
-        <MultipleChoiceEditor
-          question={question}
-          issues={issues}
-          onChange={onChange}
-          editorMode={editorMode}
-          onEditorModeChange={onEditorModeChange}
-        />
+        <MultipleChoiceEditor question={question} issues={issues} onChange={onChange} />
       ) : (
         <ShortAnswerEditor question={question} issues={issues} onChange={onChange} />
       )}

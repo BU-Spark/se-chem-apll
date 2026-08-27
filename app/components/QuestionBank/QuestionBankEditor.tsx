@@ -7,16 +7,26 @@ import {
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type GridApi,
+  type GridReadyEvent,
   type ICellRendererParams,
+  type RowDataUpdatedEvent,
   type RowClickedEvent,
   type SelectionChangedEvent,
 } from 'ag-grid-community';
 import { downloadCsvFile } from '@/app/utils/csv';
 import { questionsToCsv } from '@/app/utils/questionBankCsv';
+import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import CsvImportDialog from './CsvImportDialog';
 import MarkdownPreview from './MarkdownPreview';
-import type { MarkdownFieldMode } from './MarkdownField';
 import QuestionDetailEditor from './QuestionDetailEditor';
+import {
+  QUESTION_BANK_COMMANDS,
+  commandShortcutLabel,
+  matchesCommandShortcut,
+  type CommandAvailability,
+  type QuestionBankCommandId,
+} from './commands';
 import { countIssuesBySeverity, validateQuestionBank } from './validation';
 import { summarizeAnswer } from './adapters';
 import {
@@ -34,6 +44,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 type Props = {
   questions: AuthoringQuestion[];
   onChange: (next: AuthoringQuestion[]) => void;
+  onSave: () => void | Promise<void>;
+  saving?: boolean;
 };
 
 /** Read-only view row for the browser grid. */
@@ -82,14 +94,10 @@ function PromptCell(params: ICellRendererParams<BrowserRow, string>) {
   );
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
+function isFormEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT'
-  );
+  if (target.isContentEditable || target.closest('[contenteditable="true"]')) return true;
+  return Boolean(target.closest('input, textarea, select, [role="textbox"]'));
 }
 
 /**
@@ -97,8 +105,9 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * filtering, and selecting, plus a focused detail editor for the active
  * question. Bulk operations work on multi-selected rows.
  */
-export default function QuestionBankEditor({ questions, onChange }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function QuestionBankEditor({ questions, onChange, onSave, saving = false }: Props) {
+  const gridApiRef = useRef<GridApi<BrowserRow> | null>(null);
+  const pendingSingleSelectionRef = useRef<string | null | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [emptyDraft, setEmptyDraft] = useState<AuthoringQuestion>(() => makeMultipleChoiceQuestion());
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
@@ -106,8 +115,8 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [importOpen, setImportOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const [editorMode, setEditorMode] = useState<MarkdownFieldMode>('visual');
 
   // Retains per-type data so switching types never destroys content.
   const typeStashRef = useRef(
@@ -154,8 +163,45 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
   const activeIndex = activeQuestion ? questions.indexOf(activeQuestion) : -1;
   const draftQuestion = questions.length === 0 ? emptyDraft : null;
   const editableQuestion = activeQuestion ?? draftQuestion;
+  const commandTargetIds = useMemo<ReadonlySet<string>>(() => {
+    if (selectedIds.size > 1) return selectedIds;
+    if (activeId) return new Set([activeId]);
+    return selectedIds;
+  }, [selectedIds, activeId]);
 
   const announce = useCallback((message: string) => setStatusMessage(message), []);
+
+  const applySingleGridSelection = useCallback((api: GridApi<BrowserRow>, id: string | null) => {
+    api.deselectAll();
+    if (!id) return;
+    const node = api.getRowNode(id);
+    if (node) api.setNodesSelected({ nodes: [node], newValue: true, source: 'api' });
+  }, []);
+
+  const flushPendingSingleSelection = useCallback(
+    (api: GridApi<BrowserRow>, discardIfMissing = false) => {
+      const id = pendingSingleSelectionRef.current;
+      if (id === undefined) return;
+      if (id && !api.getRowNode(id)) {
+        if (discardIfMissing) pendingSingleSelectionRef.current = undefined;
+        return;
+      }
+      applySingleGridSelection(api, id);
+      pendingSingleSelectionRef.current = undefined;
+    },
+    [applySingleGridSelection]
+  );
+
+  const selectSingleQuestion = useCallback(
+    (id: string | null) => {
+      setActiveId(id);
+      setSelectedIds(id ? new Set([id]) : new Set());
+      pendingSingleSelectionRef.current = id;
+      const api = gridApiRef.current;
+      if (api) flushPendingSingleSelection(api);
+    },
+    [flushPendingSingleSelection]
+  );
 
   const addQuestion = useCallback(
     (type: AuthoringQuestion['type']) => {
@@ -163,25 +209,26 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
       const insertAt = activeIndex >= 0 ? activeIndex + 1 : questions.length;
       const next = [...questions.slice(0, insertAt), question, ...questions.slice(insertAt)];
       onChange(next);
-      setActiveId(question.id);
+      selectSingleQuestion(question.id);
       announce(`Added a new ${type === 'multipleChoice' ? 'multiple-choice' : 'short-answer'} question.`);
     },
-    [questions, activeIndex, onChange, announce]
+    [questions, activeIndex, onChange, selectSingleQuestion, announce]
   );
 
   const deleteQuestions = useCallback(
     (ids: ReadonlySet<string>) => {
       if (ids.size === 0) return;
       const next = questions.filter((q) => !ids.has(q.id));
+      const firstDeletedIndex = questions.findIndex((question) => ids.has(question.id));
+      const survivingActiveId = activeId && !ids.has(activeId) ? activeId : null;
+      const fallbackIndex = Math.min(Math.max(firstDeletedIndex, 0), Math.max(next.length - 1, 0));
+      const nextActiveId = survivingActiveId ?? next[fallbackIndex]?.id ?? null;
       onChange(next);
       if (next.length === 0) setEmptyDraft(makeMultipleChoiceQuestion());
-      if (activeId && ids.has(activeId)) {
-        setActiveId(null);
-      }
-      setSelectedIds(new Set());
+      selectSingleQuestion(nextActiveId);
       announce(`Deleted ${ids.size} question${ids.size === 1 ? '' : 's'}.`);
     },
-    [questions, onChange, activeId, announce]
+    [questions, onChange, activeId, selectSingleQuestion, announce]
   );
 
   const duplicateQuestions = useCallback(
@@ -198,10 +245,10 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
         }
       }
       onChange(next);
-      if (firstCopyId) setActiveId(firstCopyId);
+      if (firstCopyId) selectSingleQuestion(firstCopyId);
       announce(`Duplicated ${ids.size} question${ids.size === 1 ? '' : 's'}.`);
     },
-    [questions, onChange, announce]
+    [questions, onChange, selectSingleQuestion, announce]
   );
 
   const moveQuestion = useCallback(
@@ -220,14 +267,14 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
     (next: AuthoringQuestion) => {
       if (questions.length === 0 && next.id === emptyDraft.id) {
         setEmptyDraft(next);
-        setActiveId(next.id);
         onChange([next]);
+        selectSingleQuestion(next.id);
         announce('Started a new question.');
         return;
       }
       onChange(questions.map((q) => (q.id === next.id ? next : q)));
     },
-    [questions, emptyDraft.id, onChange, announce]
+    [questions, emptyDraft.id, onChange, selectSingleQuestion, announce]
   );
 
   const changeActiveType = useCallback(
@@ -252,53 +299,124 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
   const handleImport = useCallback(
     (imported: AuthoringQuestion[], mode: 'append' | 'replace') => {
       onChange(mode === 'append' ? [...questions, ...imported] : imported);
+      if (imported[0]) selectSingleQuestion(imported[0].id);
       announce(
         `Imported ${imported.length} question${imported.length === 1 ? '' : 's'} (${mode === 'append' ? 'appended' : 'replaced bank'}).`
       );
     },
-    [questions, onChange, announce]
+    [questions, onChange, selectSingleQuestion, announce]
+  );
+
+  const getCommandAvailability = useCallback(
+    (availability: CommandAvailability, commandId?: QuestionBankCommandId): { enabled: boolean; reason?: string } => {
+      if (commandId === 'save-node' && saving) {
+        return { enabled: false, reason: 'The node is already being saved.' };
+      }
+      switch (availability) {
+        case 'question-target':
+          return commandTargetIds.size > 0
+            ? { enabled: true }
+            : { enabled: false, reason: 'Select or open a question first.' };
+        case 'active-question':
+          return activeQuestion ? { enabled: true } : { enabled: false, reason: 'Open a question first.' };
+        case 'move-up':
+          return activeIndex > 0
+            ? { enabled: true }
+            : { enabled: false, reason: 'The active question is already first.' };
+        case 'move-down':
+          return activeIndex >= 0 && activeIndex < questions.length - 1
+            ? { enabled: true }
+            : { enabled: false, reason: 'The active question is already last.' };
+        case 'has-questions':
+          return questions.length > 0
+            ? { enabled: true }
+            : { enabled: false, reason: 'Add a question before exporting.' };
+        default:
+          return { enabled: true };
+      }
+    },
+    [commandTargetIds, activeQuestion, activeIndex, questions.length, saving]
+  );
+
+  const runCommand = useCallback(
+    (commandId: QuestionBankCommandId) => {
+      switch (commandId) {
+        case 'open-commands':
+          setPaletteOpen(true);
+          return;
+        case 'new-question':
+          addQuestion(editableQuestion?.type ?? 'multipleChoice');
+          return;
+        case 'new-multiple-choice':
+          addQuestion('multipleChoice');
+          return;
+        case 'new-short-answer':
+          addQuestion('shortAnswer');
+          return;
+        case 'duplicate-questions':
+          duplicateQuestions(commandTargetIds);
+          return;
+        case 'delete-questions':
+          deleteQuestions(commandTargetIds);
+          return;
+        case 'move-question-up':
+          if (activeId) moveQuestion(activeId, -1);
+          return;
+        case 'move-question-down':
+          if (activeId) moveQuestion(activeId, 1);
+          return;
+        case 'import-csv':
+          setImportOpen(true);
+          return;
+        case 'export-csv':
+          downloadCsvFile('quiz-questions.csv', questionsToCsv(questions));
+          return;
+        case 'save-node':
+          if (!saving) void onSave();
+          return;
+        default:
+          return;
+      }
+    },
+    [
+      editableQuestion,
+      addQuestion,
+      commandTargetIds,
+      duplicateQuestions,
+      deleteQuestions,
+      activeId,
+      moveQuestion,
+      questions,
+      onSave,
+      saving,
+    ]
+  );
+
+  const paletteItems = useMemo<CommandPaletteItem[]>(
+    () =>
+      QUESTION_BANK_COMMANDS.filter((command) => command.showInPalette).map((command) => {
+        const availability = getCommandAvailability(command.availability, command.id);
+        return {
+          command,
+          enabled: availability.enabled,
+          disabledReason: availability.reason,
+          execute: command.kind === 'action' ? () => runCommand(command.id) : undefined,
+        };
+      }),
+    [getCommandAvailability, runCommand]
   );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const mod = event.metaKey || event.ctrlKey;
-
-      if (mod && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        containerRef.current?.closest('form')?.requestSubmit();
-        return;
-      }
-
-      if (isEditableTarget(event.target)) return;
-
-      if (mod && event.key.toLowerCase() === 'd') {
-        event.preventDefault();
-        duplicateQuestions(selectedIds.size > 0 ? selectedIds : new Set(activeId ? [activeId] : []));
-        return;
-      }
-
-      if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-        if (activeId) {
-          event.preventDefault();
-          moveQuestion(activeId, event.key === 'ArrowUp' ? -1 : 1);
-        }
-        return;
-      }
-
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (selectedIds.size > 0) {
-          event.preventDefault();
-          deleteQuestions(selectedIds);
-        }
-        return;
-      }
-
-      if (!mod && event.key.toLowerCase() === 'n') {
-        event.preventDefault();
-        addQuestion(editableQuestion?.type ?? 'multipleChoice');
-      }
+      if (paletteOpen) return;
+      const command = QUESTION_BANK_COMMANDS.find((candidate) => matchesCommandShortcut(event, candidate));
+      if (!command) return;
+      if (isFormEditingTarget(event.target) && !command.allowInTextEditor) return;
+      if (!getCommandAvailability(command.availability, command.id).enabled) return;
+      event.preventDefault();
+      runCommand(command.id);
     },
-    [selectedIds, activeId, editableQuestion, duplicateQuestions, moveQuestion, deleteQuestions, addQuestion]
+    [paletteOpen, getCommandAvailability, runCommand]
   );
 
   const columnDefs = useMemo<ColDef<BrowserRow>[]>(
@@ -325,12 +443,40 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
   );
 
   const rowSelection = useMemo(
-    () => ({ mode: 'multiRow' as const, checkboxes: true, headerCheckbox: true, enableClickSelection: false }),
+    () => ({
+      mode: 'multiRow' as const,
+      checkboxes: false,
+      headerCheckbox: false,
+      enableClickSelection: true,
+      enableSelectionWithoutKeys: false,
+    }),
     []
   );
 
+  const handleSelectionChanged = useCallback(
+    (event: SelectionChangedEvent<BrowserRow>) => {
+      const selectedNodes = event.selectedNodes ?? [];
+      const ids = new Set(
+        selectedNodes.map((node) => node.data?.id).filter((id): id is string => typeof id === 'string')
+      );
+      if (event.source !== 'api' && event.source !== 'rowDataChanged') {
+        pendingSingleSelectionRef.current = undefined;
+      }
+      setSelectedIds(ids);
+      setActiveId((current) => {
+        if (event.source === 'rowDataChanged' && current && questions.some((question) => question.id === current)) {
+          return current;
+        }
+        if (ids.size === 0) return null;
+        if (current && ids.has(current)) return current;
+        return selectedNodes.at(-1)?.data?.id ?? null;
+      });
+    },
+    [questions]
+  );
+
   return (
-    <div ref={containerRef} className={styles.editor} onKeyDown={handleKeyDown}>
+    <div className={styles.editor} onKeyDownCapture={handleKeyDown}>
       <div className={styles.toolbar}>
         <input
           type="search"
@@ -364,68 +510,87 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
 
         <span className={styles.toolbarSpacer} />
 
-        <button type="button" className={styles.toolbarBtn} onClick={() => addQuestion('multipleChoice')}>
+        <button
+          type="button"
+          className={styles.toolbarBtn}
+          onClick={() => runCommand('open-commands')}
+          aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+        >
+          Commands
+        </button>
+        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-multiple-choice')}>
           + Multiple choice
         </button>
-        <button type="button" className={styles.toolbarBtn} onClick={() => addQuestion('shortAnswer')}>
+        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-short-answer')}>
           + Short answer
         </button>
-        <button type="button" className={styles.toolbarBtn} onClick={() => setImportOpen(true)}>
+        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('import-csv')}>
           Import CSV
         </button>
         <button
           type="button"
           className={styles.toolbarBtn}
           disabled={questions.length === 0}
-          onClick={() => downloadCsvFile('quiz-questions.csv', questionsToCsv(questions))}
+          onClick={() => runCommand('export-csv')}
         >
           Export CSV
         </button>
       </div>
 
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 1 && (
         <div className={styles.bulkBar} role="status">
           <span>{selectedIds.size} selected</span>
-          <button type="button" className={styles.toolbarBtn} onClick={() => duplicateQuestions(selectedIds)}>
+          <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('duplicate-questions')}>
             Duplicate
           </button>
-          <button type="button" className={styles.toolbarBtnDanger} onClick={() => deleteQuestions(selectedIds)}>
+          <button type="button" className={styles.toolbarBtnDanger} onClick={() => runCommand('delete-questions')}>
             Delete
           </button>
-          <button type="button" className={styles.toolbarBtn} onClick={() => setSelectedIds(new Set())}>
+          <button type="button" className={styles.toolbarBtn} onClick={() => selectSingleQuestion(null)}>
             Clear selection
           </button>
         </div>
       )}
 
       <div className={styles.workspace}>
-        <div className={styles.browser} data-testid="question-browser">
-          {questions.length === 0 ? (
-            <div className={styles.emptyState}>
-              <p>No questions yet.</p>
-              <p className={styles.emptyHint}>Start typing in the editor or import a CSV to get started.</p>
-            </div>
-          ) : (
-            <AgGridReact<BrowserRow>
-              theme={themeQuartz}
-              rowData={rowData}
-              columnDefs={columnDefs}
-              getRowId={(params) => params.data.id}
-              rowSelection={rowSelection}
-              suppressCellFocus={false}
-              animateRows={false}
-              onRowClicked={(event: RowClickedEvent<BrowserRow>) => {
-                if (event.data) setActiveId(event.data.id);
-              }}
-              onSelectionChanged={(event: SelectionChangedEvent<BrowserRow>) => {
-                const ids = new Set(
-                  (event.selectedNodes ?? [])
-                    .map((node) => node.data?.id)
-                    .filter((id): id is string => typeof id === 'string')
-                );
-                setSelectedIds(ids);
-              }}
-            />
+        <div className={styles.browserPanel}>
+          <div className={styles.browser} data-testid="question-browser">
+            {questions.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p>No questions yet.</p>
+                <p className={styles.emptyHint}>Start typing in the editor or import a CSV to get started.</p>
+              </div>
+            ) : (
+              <AgGridReact<BrowserRow>
+                theme={themeQuartz}
+                rowData={rowData}
+                columnDefs={columnDefs}
+                getRowId={(params) => params.data.id}
+                rowSelection={rowSelection}
+                suppressCellFocus={false}
+                animateRows={false}
+                onGridReady={(event: GridReadyEvent<BrowserRow>) => {
+                  gridApiRef.current = event.api;
+                  flushPendingSingleSelection(event.api, true);
+                }}
+                onGridPreDestroyed={() => {
+                  gridApiRef.current = null;
+                }}
+                onRowDataUpdated={(event: RowDataUpdatedEvent<BrowserRow>) => {
+                  flushPendingSingleSelection(event.api, true);
+                }}
+                onRowClicked={(event: RowClickedEvent<BrowserRow>) => {
+                  pendingSingleSelectionRef.current = undefined;
+                  if (event.data && event.node.isSelected()) setActiveId(event.data.id);
+                }}
+                onSelectionChanged={handleSelectionChanged}
+              />
+            )}
+          </div>
+          {questions.length > 1 && (
+            <p className={styles.selectionHint}>
+              <kbd>⌘/Ctrl-click</kbd> to select multiple · <kbd>Shift-click</kbd> to select a range
+            </p>
           )}
         </div>
 
@@ -443,21 +608,19 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
               onMove={(direction) => moveQuestion(editableQuestion.id, direction)}
               canMoveUp={activeIndex > 0}
               canMoveDown={activeIndex >= 0 && activeIndex < questions.length - 1}
-              editorMode={editorMode}
-              onEditorModeChange={setEditorMode}
             />
           ) : (
             <div className={styles.emptyDetail}>
               <p>Select a question to edit it.</p>
               <p className={styles.emptyHint}>
-                Press <kbd>N</kbd> for a new question. Select rows with checkboxes for bulk actions.
+                Press <kbd>N</kbd> for a new question. Use modifier-click to select rows for bulk actions.
               </p>
             </div>
           )}
         </div>
       </div>
 
-      <div className={styles.statusBar}>
+      <div className={styles.statusBar} data-testid="question-bank-status">
         <span>
           {questions.length} question{questions.length === 1 ? '' : 's'}
           {visibleQuestions.length !== questions.length ? ` · ${visibleQuestions.length} shown` : ''}
@@ -465,14 +628,20 @@ export default function QuestionBankEditor({ questions, onChange }: Props) {
           {totalWarnings > 0 ? ` · ${totalWarnings} warning${totalWarnings === 1 ? '' : 's'}` : ''}
         </span>
         <span className={styles.statusBarHint}>
-          <kbd>N</kbd> new · <kbd>⌘/Ctrl+D</kbd> duplicate · <kbd>Del</kbd> delete selected · <kbd>Alt+↑/↓</kbd> move ·{' '}
-          <kbd>⌘/Ctrl+S</kbd> save
+          {QUESTION_BANK_COMMANDS.filter((command) => command.showInStatusBar).map((command, index) => (
+            <span key={command.id}>
+              {index > 0 && ' · '}
+              <kbd>{commandShortcutLabel(command)}</kbd> {command.statusText}
+            </span>
+          ))}
         </span>
       </div>
 
       <p className={styles.srOnly} role="status" aria-live="polite">
         {statusMessage}
       </p>
+
+      {paletteOpen && <CommandPalette items={paletteItems} onClose={() => setPaletteOpen(false)} />}
 
       {importOpen && (
         <CsvImportDialog

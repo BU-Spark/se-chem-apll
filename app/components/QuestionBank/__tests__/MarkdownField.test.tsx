@@ -38,95 +38,42 @@ jest.mock('../RichMarkdownEditor', () => ({
 }));
 
 describe('MarkdownField', () => {
-  it('renders the controlled visual mode and emits Markdown changes', async () => {
+  beforeEach(() => {
+    mockMarkdownError = undefined;
+  });
+
+  it('renders the visual editor and emits Markdown-backed changes', async () => {
     const onChange = jest.fn();
-    render(
-      <MarkdownField
-        label="Question prompt"
-        value=""
-        onChange={onChange}
-        mode="visual"
-        onModeChange={jest.fn()}
-        required
-      />
-    );
+    render(<MarkdownField label="Question prompt" value="" onChange={onChange} required />);
 
     const editor = await screen.findByRole('textbox', { name: /Question prompt/ });
     fireEvent.change(editor, { target: { value: '**Bold** and $K_a$' } });
 
     expect(onChange).toHaveBeenLastCalledWith('**Bold** and $K_a$');
-    expect(screen.queryByRole('button', { name: 'Visual' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Editor mode' })).not.toBeInTheDocument();
   });
 
-  it('renders controlled Markdown source and Preview modes', () => {
-    const props = {
-      label: 'Question prompt',
-      value: '**Bold** and $K_a$',
-      onChange: jest.fn(),
-      onModeChange: jest.fn(),
-    };
-    const { rerender } = render(<MarkdownField {...props} mode="source" />);
-    expect(screen.getByRole('textbox', { name: 'Question prompt' })).toHaveValue('**Bold** and $K_a$');
-
-    rerender(<MarkdownField {...props} mode="preview" />);
-    expect(screen.getByText('Bold')).toHaveStyle({ fontWeight: 'bold' });
-    expect(screen.getByTestId('markdown-preview').querySelector('.katex')).not.toBeNull();
-  });
-
-  it('renders a compact preview for an answer choice', () => {
-    render(
-      <MarkdownField
-        label="Choice 1"
-        value="**Answer**"
-        onChange={jest.fn()}
-        mode="preview"
-        onModeChange={jest.fn()}
-        compact
-      />
-    );
-
-    expect(screen.getByText('Answer')).toHaveStyle({ fontWeight: 'bold' });
-    expect(screen.getByLabelText('Choice 1')).toBeInTheDocument();
-  });
-
-  it('associates validation errors with both editor modes', async () => {
-    const props = {
-      label: 'Question prompt',
-      value: '',
-      onChange: jest.fn(),
-      onModeChange: jest.fn(),
-      error: 'Prompt is required.',
-    };
-    const { rerender } = render(<MarkdownField {...props} mode="visual" />);
+  it('associates validation errors with the visual editor', async () => {
+    render(<MarkdownField label="Question prompt" value="" onChange={jest.fn()} error="Prompt is required." />);
 
     const visualEditor = await screen.findByRole('textbox', { name: 'Question prompt' });
     expect(visualEditor).toHaveAccessibleDescription('Prompt is required.');
     expect(visualEditor).toHaveAttribute('aria-invalid', 'true');
-
-    rerender(<MarkdownField {...props} mode="source" />);
-    const sourceEditor = screen.getByRole('textbox', { name: 'Question prompt' });
-    expect(sourceEditor).toHaveAccessibleDescription('Prompt is required.');
-    expect(sourceEditor).toHaveAttribute('aria-invalid', 'true');
-
-    fireEvent.change(sourceEditor, { target: { value: 'Fixed' } });
   });
 
-  it('requests Markdown mode when content cannot be opened visually', async () => {
-    const onModeChange = jest.fn();
-    render(
-      <MarkdownField
-        label="Question prompt"
-        value="Unsupported content"
-        onChange={jest.fn()}
-        mode="visual"
-        onModeChange={onModeChange}
-      />
-    );
+  it('offers a field-level source repair fallback when content cannot be opened visually', async () => {
+    const onChange = jest.fn();
+    render(<MarkdownField label="Question prompt" value="Unsupported content" onChange={onChange} />);
     await screen.findByRole('textbox', { name: 'Question prompt' });
 
     act(() => mockMarkdownError?.('Parse failed'));
 
-    expect(onModeChange).toHaveBeenCalledWith('source');
     expect(screen.getByRole('alert')).toHaveTextContent('This content could not be opened visually.');
+    const repairEditor = screen.getByRole('textbox', { name: 'Question prompt' });
+    fireEvent.change(repairEditor, { target: { value: 'Repaired content' } });
+    expect(onChange).toHaveBeenLastCalledWith('Repaired content');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try visual editor again' }));
+    expect(await screen.findByTestId('visual-editor')).toBeInTheDocument();
   });
 });

@@ -673,6 +673,36 @@
   gap: 0.15rem;
 }
 
+.previewQuestionPrompt,
+.previewChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.previewRenderedContent {
+  min-width: 0;
+}
+
+.previewRenderedContent p {
+  margin: 0;
+}
+
+.previewCorrect {
+  flex: none;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.previewAnswer {
+  margin: 0.3rem 0 0 1.55rem;
+  color: #4b5563;
+}
+
 @media (max-width: 600px) {
   .previewDl > div {
     grid-template-columns: 1fr;
