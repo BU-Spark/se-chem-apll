@@ -176,6 +176,7 @@ model Node {
   muxPlaybackId       String?
   thumbnailUrl        String?
   estimatedMinutes    Int?
+  tags                String[]         @default([])
   learningObjectives  String[]         @default([])
   createdByClerkId    String?
   createdAt           DateTime         @default(now())

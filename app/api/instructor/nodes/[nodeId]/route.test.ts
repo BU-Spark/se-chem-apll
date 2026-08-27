@@ -65,7 +65,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   it('replaces checkpoints and quiz questions', async () => {
     const response = await PATCH(
       patchRequest({
-        learningObjectives: ['  Trim me  ', ''],
+        tags: ['  Safety  ', ''],
+        learningObjectives: ['  Work safely.  ', '', 'Recognize hazards.'],
         checkpoints: [
           {
             sortOrder: 0,
@@ -98,7 +99,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          learningObjectives: ['Trim me'],
+          tags: ['Safety'],
+          learningObjectives: ['Work safely.', 'Recognize hazards.'],
           checkpoints: {
             create: [
               expect.objectContaining({
@@ -224,6 +226,27 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('checkpoints');
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
+  });
+
+  it('clears learning objectives when given an empty array', async () => {
+    const response = await PATCH(patchRequest({ learningObjectives: [] }) as never, context);
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { learningObjectives: [] },
+      })
+    );
+  });
+
+  it.each([
+    ['a non-array value', 'not an array'],
+    ['a non-string array item', ['valid', 12]],
+  ])('returns 422 when learningObjectives contains %s', async (_label, learningObjectives) => {
+    const response = await PATCH(patchRequest({ learningObjectives }) as never, context);
+
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 
   it('replaces only quiz questions when checkpoints are omitted', async () => {

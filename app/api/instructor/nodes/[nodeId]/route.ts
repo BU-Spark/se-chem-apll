@@ -53,10 +53,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, learningObjectives, checkpoints, quizQuestions } = body as {
+  const { title, summary, videoUrl, tags, learningObjectives, checkpoints, quizQuestions } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
+    tags?: string[];
     learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
@@ -69,6 +70,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  const tagsTypeError = rejectIfNotArray(tags, 'tags');
+  if (tagsTypeError) return tagsTypeError;
   const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
   if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
@@ -76,6 +79,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
   if (quizQuestionsTypeError) return quizQuestionsTypeError;
 
+  if (tags !== undefined && tags.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 422 });
+  }
   if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
     return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
@@ -127,7 +133,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       await tx.quizQuestion.deleteMany({ where: { nodeId } });
     }
 
-    const normalizedObjectives =
+    const normalizedTags =
+      tags === undefined ? undefined : tags.map((item) => item.trim()).filter((item) => item.length > 0);
+    const normalizedLearningObjectives =
       learningObjectives === undefined
         ? undefined
         : learningObjectives.map((item) => item.trim()).filter((item) => item.length > 0);
@@ -138,7 +146,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         ...(title !== undefined && { title: title.trim() }),
         ...(summary !== undefined && { summary: summary.trim() || null }),
         ...(videoUrl !== undefined && { videoUrl: videoUrl || null }),
-        ...(normalizedObjectives !== undefined && { learningObjectives: normalizedObjectives }),
+        ...(normalizedTags !== undefined && { tags: normalizedTags }),
+        ...(normalizedLearningObjectives !== undefined && { learningObjectives: normalizedLearningObjectives }),
         ...(replacingCheckpoints && {
           checkpoints: {
             create: checkpoints!.map(serializeCheckpointCreate),
