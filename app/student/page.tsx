@@ -59,7 +59,7 @@ export default async function StudentHomePage() {
                           },
                           checkpoints: {
                             select: {
-                              _count: { select: { questions: true } },
+                              _count: { select: { questions: { where: { kind: 'QUESTION' } } } },
                             },
                           },
                         },
@@ -222,7 +222,7 @@ export default async function StudentHomePage() {
                               );
                               const access = getFoundationalAccess({
                                 isFoundational: ln.isRequired,
-                                hasCheckpoints: checkpointQuestionCount > 0,
+                                hasCheckpoints: ln.node.checkpoints.length > 0,
                                 hasQuizBank: quizBankCount > 0,
                               });
 

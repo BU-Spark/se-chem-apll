@@ -152,6 +152,50 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
   });
 
+  it('replaces checkpoints with informational notes', async () => {
+    const response = await PATCH(
+      patchRequest({
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 125,
+            questions: [
+              {
+                sortOrder: 0,
+                kind: 'note',
+                prompt: 'Pause and observe the safety gauge.',
+              },
+            ],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          checkpoints: {
+            create: [
+              expect.objectContaining({
+                questions: {
+                  create: [
+                    expect.objectContaining({
+                      kind: 'NOTE',
+                      prompt: 'Pause and observe the safety gauge.',
+                      correctIndices: [],
+                    }),
+                  ],
+                },
+              }),
+            ],
+          },
+        }),
+      })
+    );
+  });
+
   it.each([
     ['negative', -1],
     ['fractional', 1.5],

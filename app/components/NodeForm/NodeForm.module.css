@@ -670,6 +670,12 @@
   gap: 0.75rem;
 }
 
+.checkpointItemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .checkpointCard {
   border: 1px solid #dbe3ef;
   border-radius: 0.75rem;
