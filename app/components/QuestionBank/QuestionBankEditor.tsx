@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import {
   AllCommunityModule,
@@ -22,6 +22,7 @@ import MarkdownPreview from './MarkdownPreview';
 import QuestionDetailEditor from './QuestionDetailEditor';
 import {
   QUESTION_BANK_COMMANDS,
+  commandById,
   commandShortcutLabel,
   matchesCommandShortcut,
   type CommandAvailability,
@@ -60,6 +61,8 @@ type BrowserRow = {
 
 type TypeFilter = 'all' | AuthoringQuestion['type'];
 type StatusFilter = 'all' | 'errors' | 'warnings' | 'valid';
+
+const OPEN_COMMANDS_COMMAND = commandById('open-commands');
 
 function matchesSearch(q: AuthoringQuestion, search: string): boolean {
   const needle = search.trim().toLowerCase();
@@ -418,6 +421,20 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
     },
     [paletteOpen, getCommandAvailability, runCommand]
   );
+
+  useEffect(() => {
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      // Events originating inside the editor are handled by handleKeyDown.
+      // This listener makes the palette shortcut work when wizard controls or
+      // other elements outside the question bank currently have focus.
+      if (event.defaultPrevented || paletteOpen || !matchesCommandShortcut(event, OPEN_COMMANDS_COMMAND)) return;
+      event.preventDefault();
+      setPaletteOpen(true);
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
+  }, [paletteOpen]);
 
   const columnDefs = useMemo<ColDef<BrowserRow>[]>(
     () => [

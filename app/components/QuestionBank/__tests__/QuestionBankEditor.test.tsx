@@ -593,6 +593,25 @@ describe('QuestionBankEditor', () => {
     expect(prompt).toHaveFocus();
   });
 
+  it.each([
+    ['Control', { ctrlKey: true }],
+    ['Command', { metaKey: true }],
+  ])('opens the command palette with %s+Shift+P when focus is outside the editor', (_, modifier) => {
+    render(
+      <>
+        <button type="button">Outside editor</button>
+        <Harness initial={[validMcQuestion('q1', 'First')]} />
+      </>
+    );
+
+    const outsideButton = screen.getByRole('button', { name: 'Outside editor' });
+    outsideButton.focus();
+    fireEvent.keyDown(outsideButton, { key: 'p', shiftKey: true, ...modifier });
+
+    expect(screen.getByRole('dialog', { name: 'Commands and formatting help' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Search commands and formatting help' })).toHaveFocus();
+  });
+
   it('runs the real save callback from both the shortcut and command palette', async () => {
     const user = userEvent.setup();
     const onSave = jest.fn();
