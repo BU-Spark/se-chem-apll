@@ -38,7 +38,10 @@ describe('NewNodePage', () => {
 
     await user.type(screen.getByLabelText(/Title/), 'Safety video');
     await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    await user.type(screen.getByLabelText('New learning objective'), 'Stay safe{Enter}');
+    await user.type(screen.getByLabelText('New tag'), 'Safety{Enter}');
+    await user.type(screen.getByLabelText('Learning objective 1'), 'Understand safe lab practices.');
+    await user.click(screen.getByRole('button', { name: 'Add learning objective' }));
+    await user.type(screen.getByLabelText('Learning objective 2'), 'Apply the lab safety procedure.');
     await goToCheckpoints(user);
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
@@ -70,7 +73,8 @@ describe('NewNodePage', () => {
     const request = (global.fetch as jest.Mock).mock.calls[0][1];
     const body = JSON.parse(request.body);
 
-    expect(body.learningObjectives).toEqual(['Stay safe']);
+    expect(body.tags).toEqual(['Safety']);
+    expect(body.learningObjectives).toEqual(['Understand safe lab practices.', 'Apply the lab safety procedure.']);
     expect(body.checkpoints).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 0,

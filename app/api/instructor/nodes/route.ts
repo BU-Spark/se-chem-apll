@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     title,
     summary,
     videoUrl,
+    tags,
     learningObjectives,
     checkpoints,
     quizQuestions,
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
+    tags?: string[];
     learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
@@ -81,6 +83,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
   }
 
+  const tagsTypeError = rejectIfNotArray(tags, 'tags');
+  if (tagsTypeError) return tagsTypeError;
   const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
   if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
@@ -88,6 +92,9 @@ export async function POST(req: NextRequest) {
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
   if (quizQuestionsTypeError) return quizQuestionsTypeError;
 
+  if (tags !== undefined && tags.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 422 });
+  }
   if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
     return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
@@ -106,14 +113,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const normalizedObjectives = (learningObjectives ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
+  const normalizedTags = (tags ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
+  const normalizedLearningObjectives = (learningObjectives ?? [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 
   const node = await prisma.node.create({
     data: {
       title: title?.trim() ?? '',
       summary: summary?.trim() ?? null,
       videoUrl: videoUrl?.trim() || null,
-      learningObjectives: normalizedObjectives,
+      tags: normalizedTags,
+      learningObjectives: normalizedLearningObjectives,
       createdByClerkId: userId,
       isDraft,
       checkpoints: {
