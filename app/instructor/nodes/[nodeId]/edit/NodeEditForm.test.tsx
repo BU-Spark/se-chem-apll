@@ -31,6 +31,13 @@ const node = {
           options: { type: 'multipleChoice', choices: ['A', 'B'] },
           correctIndices: [0],
         },
+        {
+          id: 'cq-2',
+          kind: 'NOTE' as const,
+          prompt: 'Observe the flame before proceeding.',
+          options: { type: 'note' },
+          correctIndices: [],
+        },
       ],
     },
   ],
@@ -91,6 +98,14 @@ describe('NodeEditForm', () => {
         prompt: 'Checkpoint prompt',
         options: { type: 'multipleChoice', choices: ['A', 'B'] },
         correctIndices: [0],
+      })
+    );
+    expect(body.checkpoints[0].questions[1]).toEqual(
+      expect.objectContaining({
+        kind: 'note',
+        prompt: 'Observe the flame before proceeding.',
+        options: { type: 'note' },
+        correctIndices: [],
       })
     );
     expect(body.quizQuestions[0]).toEqual(

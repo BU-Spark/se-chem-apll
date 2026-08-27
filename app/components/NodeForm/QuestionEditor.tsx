@@ -1,6 +1,6 @@
 'use client';
 
-import type { FormQuestion, QuestionType, ShortAnswerMode } from './types';
+import type { CheckpointItemType, FormQuestion, ShortAnswerMode } from './types';
 import styles from './NodeForm.module.css';
 
 interface QuestionEditorProps {
@@ -12,6 +12,7 @@ interface QuestionEditorProps {
   onAddChoice: () => void;
   onRemoveChoice: (idx: number) => void;
   canRemove: boolean;
+  allowNotes?: boolean;
 }
 
 export default function QuestionEditor({
@@ -23,20 +24,24 @@ export default function QuestionEditor({
   onAddChoice,
   onRemoveChoice,
   canRemove,
+  allowNotes = false,
 }: QuestionEditorProps) {
   return (
     <div className={styles.questionCard}>
       <div className={styles.questionHeader}>
-        <span className={styles.questionIndex}>Q{index + 1}</span>
+        <span className={styles.questionIndex}>
+          {q.questionType === 'note' ? `Note ${index + 1}` : `Q${index + 1}`}
+        </span>
         <div className={styles.questionHeaderRight}>
           <label className={styles.typeSelect}>
             Type:
             <select
               value={q.questionType}
-              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndices: [] })}
+              onChange={(e) => onUpdate({ questionType: e.target.value as CheckpointItemType, correctIndices: [] })}
             >
               <option value="multipleChoice">Multiple choice</option>
               <option value="shortAnswer">Numeric short answer</option>
+              {allowNotes && <option value="note">Note</option>}
             </select>
           </label>
           {canRemove && (
@@ -49,17 +54,22 @@ export default function QuestionEditor({
 
       <label className={styles.field}>
         <span className={styles.fieldLabel}>
-          Question prompt <span className={styles.required}>*</span>
+          {q.questionType === 'note' ? 'Note' : 'Question prompt'} <span className={styles.required}>*</span>
         </span>
         <textarea
           rows={2}
           value={q.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="What happens if the gas flow is too high?"
+          aria-label={q.questionType === 'note' ? 'Note text' : 'Question prompt'}
+          placeholder={
+            q.questionType === 'note'
+              ? 'Explain what learners should notice here.'
+              : 'What happens if the gas flow is too high?'
+          }
         />
       </label>
 
-      {q.questionType === 'multipleChoice' ? (
+      {q.questionType === 'note' ? null : q.questionType === 'multipleChoice' ? (
         <div className={styles.choiceList}>
           <p className={styles.choiceLabel}>Answer choices (select all correct answers)</p>
           {q.choices.map((choice, ci) => (

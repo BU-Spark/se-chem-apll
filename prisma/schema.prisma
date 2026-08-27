@@ -207,6 +207,7 @@ model CheckpointQuestion {
   id             String   @id @default(cuid())
   checkpointId   String
   sortOrder      Int
+  kind           CheckpointQuestionKind @default(QUESTION)
   prompt         String
   // For multiple-choice: { type: "multipleChoice", choices: string[] } or legacy string[]
   // For short answer:    { type: "shortAnswer", answerMode: "exact"|"range", ... }
@@ -219,6 +220,11 @@ model CheckpointQuestion {
   responses  NodeResponse[]
 
   @@unique([checkpointId, sortOrder])
+}
+
+enum CheckpointQuestionKind {
+  QUESTION
+  NOTE
 }
 
 // Post-video (or foundational first-attempt) quiz bank; sampled via LessonNode.quizQuestionCount.

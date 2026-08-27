@@ -102,6 +102,44 @@ describe('NewNodePage', () => {
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
 
+  it('submits an informational note at a checkpoint without answer controls', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    await user.selectOptions(screen.getByLabelText('Type:'), 'note');
+
+    const note = screen.getByLabelText('Note text');
+    await user.type(note, 'Watch the flame color closely.');
+    expect(screen.queryByPlaceholderText('Choice 1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
+    const quizPrompt = screen.getByLabelText(/Question prompt/);
+    const quizCard = questionCardFor(quizPrompt);
+    await user.type(quizPrompt, 'Quiz bank question');
+    await user.type(within(quizCard).getByPlaceholderText('Choice 1'), 'A');
+    await user.type(within(quizCard).getByPlaceholderText('Choice 2'), 'B');
+    await user.click(within(quizCard).getAllByTitle('Mark as correct')[0]);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Create node' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const body = JSON.parse(request.body);
+    expect(body.checkpoints[0].questions).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        prompt: 'Watch the flame color closely.',
+        options: { type: 'note' },
+        correctIndices: [],
+      }),
+    ]);
+  });
+
   it('assigns the next free offset when adding checkpoints manually', async () => {
     const user = userEvent.setup();
     render(<NewNodePage />);

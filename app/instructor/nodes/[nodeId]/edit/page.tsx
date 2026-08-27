@@ -44,6 +44,7 @@ export default async function EditNodePage({ params }: Props) {
             prompt: q.prompt,
             options: q.options,
             correctIndices: q.correctIndices,
+            kind: q.kind,
           })),
         })),
         quizQuestions: node.quizQuestions.map((q) => ({

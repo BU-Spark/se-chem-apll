@@ -275,7 +275,9 @@ async function main() {
     if (!primaryLessonNode) continue;
 
     const quizQuestions = primaryLessonNode.node.quizQuestions;
-    const checkpointQuestions = primaryLessonNode.node.checkpoints.flatMap((c) => c.questions);
+    const checkpointQuestions = primaryLessonNode.node.checkpoints
+      .flatMap((c) => c.questions)
+      .filter((question) => question.kind === 'QUESTION');
 
     if (quizQuestions.length > 0) {
       const shouldFail = i % 2 === 0;
