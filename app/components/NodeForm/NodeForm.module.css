@@ -234,19 +234,44 @@
 
 .questionCard {
   border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
+  border-radius: 0.65rem;
+  padding: 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
   background: #f9fafb;
+  overflow: hidden;
 }
 
 .questionHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.questionToggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.questionToggle:hover {
+  background: #f1f5f9;
+}
+
+.questionToggle:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 2px;
 }
 
 .questionIndex {
@@ -259,11 +284,45 @@
   line-height: 1.2;
 }
 
-.questionHeaderRight {
+.questionSummary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.questionTypeBadge {
+  flex: none;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.questionChevron {
+  flex: none;
+  width: 1.25rem;
+  color: #64748b;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+}
+
+.questionBody {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.75rem 0.55rem 0.55rem;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 0.45rem;
 }
 
 .typeSelect {
@@ -274,6 +333,7 @@
   font-weight: 500;
   color: #374151;
   margin: 0;
+  align-self: flex-start;
 }
 
 .typeSelect select {
@@ -621,6 +681,32 @@
 }
 
 /* ── Video + checkpoints ── */
+.checkpointSection {
+  container-name: checkpoint-authoring;
+  container-type: inline-size;
+}
+
+.checkpointWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(26rem, 0.85fr);
+  align-items: start;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.checkpointWorkspaceWithoutVideo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.videoPane {
+  position: sticky;
+  top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .videoWrap {
   position: relative;
   width: 100%;
@@ -646,19 +732,64 @@
   gap: 0.75rem;
 }
 
+.videoHelp {
+  flex: 1;
+  min-width: 14rem;
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.checkpointPane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  max-height: calc(100vh - 10rem);
+  overflow: hidden;
+}
+
+.checkpointPaneHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.checkpointPaneHeader h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.checkpointPaneHeader span {
+  color: #6b7280;
+  font-size: 0.78rem;
+}
+
+.checkpointPane .questionList {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.4rem;
+  scrollbar-gutter: stable;
+}
+
+.checkpointPane .questionList:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
 .checkpointCard {
   border: 1px solid #dbe3ef;
   border-radius: 0.75rem;
-  padding: 1rem 1.15rem;
+  padding: 0.75rem 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   background: #f8fafc;
-}
-
-.checkpointCardActive {
-  border-color: #1f5fab;
-  box-shadow: 0 0 0 1px #1f5fab;
 }
 
 .checkpointHeader {
@@ -668,13 +799,43 @@
   gap: 0.75rem;
 }
 
-.checkpointMeta {
+.checkpointToggle {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.65rem;
   flex: 1;
   min-width: 0;
+  gap: 0.6rem;
+  padding: 0.15rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkpointToggle:hover {
+  background: #eef2f7;
+}
+
+.checkpointToggle:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 2px;
+}
+
+.checkpointQuestionCount {
+  flex: 1;
+  min-width: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.checkpointBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 
 .seekBtn {
@@ -700,4 +861,48 @@
   padding: 0.75rem 1rem;
   background: #f3f4f6;
   border-radius: 0.6rem;
+}
+
+@container checkpoint-authoring (max-width: 72rem) {
+  .checkpointWorkspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .videoPane {
+    position: static;
+  }
+
+  .checkpointPane {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .checkpointPane .questionList {
+    overflow-y: visible;
+    padding-right: 0;
+    scrollbar-gutter: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .checkpointSection {
+    padding: 1.1rem;
+  }
+
+  .questionTypeBadge {
+    display: none;
+  }
+
+  .checkpointQuestionCount {
+    display: none;
+  }
+
+  .checkpointHeader,
+  .checkpointPaneHeader {
+    align-items: flex-start;
+  }
+
+  .checkpointHeader .removeBtn {
+    margin-left: auto;
+  }
 }

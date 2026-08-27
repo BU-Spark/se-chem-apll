@@ -125,13 +125,18 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
   const [learningObjectives, setLearningObjectives] = useState<string[]>(initial?.learningObjectives ?? []);
   const [objectiveDraft, setObjectiveDraft] = useState('');
-  const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
+  const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(initial?.checkpoints[0]?.id ?? null);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
       id: checkpoint.id,
       timeOffsetSeconds: checkpoint.timeOffsetSeconds,
       questions: checkpoint.questions.map(dbQuestionToForm),
     }))
+  );
+  const [expandedQuestionByCheckpoint, setExpandedQuestionByCheckpoint] = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(
+      (initial?.checkpoints ?? []).map((checkpoint) => [checkpoint.id, checkpoint.questions[0]?.id ?? null])
+    )
   );
   const [quizQuestions, setQuizQuestions] = useState<AuthoringQuestion[]>(() =>
     (initial?.quizQuestions ?? []).map(dbQuestionToAuthoring)
@@ -157,12 +162,68 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   function addCheckpointAt(timeOffsetSeconds: number) {
     const existing = checkpoints.find((c) => c.timeOffsetSeconds === timeOffsetSeconds);
     if (existing) {
+      setExpandedQuestionByCheckpoint((prev) =>
+        prev[existing.id] === undefined ? { ...prev, [existing.id]: existing.questions[0]?.id ?? null } : prev
+      );
       focusCheckpoint(existing.id);
       return;
     }
     const checkpoint = makeCheckpoint(timeOffsetSeconds);
     setCheckpoints((prev) => [...prev, checkpoint].sort((a, b) => a.timeOffsetSeconds - b.timeOffsetSeconds));
+    setExpandedQuestionByCheckpoint((prev) => ({
+      ...prev,
+      [checkpoint.id]: checkpoint.questions[0]?.id ?? null,
+    }));
     focusCheckpoint(checkpoint.id);
+  }
+
+  function removeCheckpoint(checkpointId: string) {
+    const removedIndex = checkpoints.findIndex((checkpoint) => checkpoint.id === checkpointId);
+    const remaining = checkpoints.filter((checkpoint) => checkpoint.id !== checkpointId);
+    const fallbackId = remaining[Math.min(Math.max(removedIndex, 0), remaining.length - 1)]?.id ?? null;
+
+    setCheckpoints(remaining);
+    setExpandedQuestionByCheckpoint((prev) => {
+      const next = { ...prev };
+      delete next[checkpointId];
+      return next;
+    });
+    setActiveCheckpointId((prev) => (prev === checkpointId ? fallbackId : prev));
+  }
+
+  function toggleCheckpoint(checkpointId: string) {
+    setActiveCheckpointId((prev) => (prev === checkpointId ? null : checkpointId));
+  }
+
+  function toggleCheckpointQuestion(checkpointId: string, questionId: string) {
+    setExpandedQuestionByCheckpoint((prev) => ({
+      ...prev,
+      [checkpointId]: prev[checkpointId] === questionId ? null : questionId,
+    }));
+  }
+
+  function addQuestionToCheckpoint(checkpointId: string) {
+    const question = makeQuestion();
+    setCheckpoints((prev) =>
+      prev.map((checkpoint) =>
+        checkpoint.id === checkpointId ? { ...checkpoint, questions: [...checkpoint.questions, question] } : checkpoint
+      )
+    );
+    setExpandedQuestionByCheckpoint((prev) => ({ ...prev, [checkpointId]: question.id }));
+  }
+
+  function removeQuestionFromCheckpoint(checkpointId: string, questionId: string) {
+    const checkpoint = checkpoints.find((item) => item.id === checkpointId);
+    if (!checkpoint) return;
+
+    const removedIndex = checkpoint.questions.findIndex((question) => question.id === questionId);
+    const remaining = checkpoint.questions.filter((question) => question.id !== questionId);
+    const fallbackId = remaining[Math.min(Math.max(removedIndex, 0), remaining.length - 1)]?.id ?? null;
+
+    setCheckpoints((prev) => prev.map((item) => (item.id === checkpointId ? { ...item, questions: remaining } : item)));
+    setExpandedQuestionByCheckpoint((prev) =>
+      prev[checkpointId] === questionId ? { ...prev, [checkpointId]: fallbackId } : prev
+    );
   }
 
   function nextManualCheckpointOffset(): number {
@@ -537,34 +598,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         )}
 
         {step === 'checkpoints' && (
-          <section className={styles.section}>
+          <section className={`${styles.section} ${styles.checkpointSection}`}>
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
             <p className={styles.sectionNote}>
               Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold
               multiple questions.
             </p>
 
-            {youtubeId ? (
-              <>
-                <div className={styles.videoWrap}>
-                  <YouTubeAuthoringPlayer
-                    videoId={youtubeId}
-                    onReady={(player) => {
-                      playerRef.current = player;
-                    }}
-                  />
-                </div>
-                <div className={styles.checkpointToolbar}>
-                  <button type="button" className={styles.addQuestionBtn} onClick={handleAddCheckpointFromVideo}>
-                    + Add checkpoint
-                  </button>
-                  <span className={styles.sectionNote} style={{ margin: 0 }}>
-                    Pauses the video and uses the current playback time. If the player does not load, use Add checkpoint
-                    manually below.
-                  </span>
-                </div>
-              </>
-            ) : (
+            {!youtubeId && (
               <p className={styles.videoHint}>
                 Enter a YouTube URL on the Basics step to scrub the video and capture checkpoints at the current
                 playback time. Without a video, add checkpoints manually — each gets the next free offset (0:00, 1:00,
@@ -572,113 +613,156 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </p>
             )}
 
-            <div className={styles.questionList}>
-              {checkpoints.map((checkpoint, checkpointIdx) => (
-                <div
-                  key={checkpoint.id}
-                  ref={(el) => {
-                    checkpointRefs.current[checkpoint.id] = el;
-                  }}
-                  className={`${styles.checkpointCard} ${
-                    activeCheckpointId === checkpoint.id ? styles.checkpointCardActive : ''
-                  }`}
-                >
-                  <div className={styles.checkpointHeader}>
-                    <div className={styles.checkpointMeta}>
-                      <span className={styles.questionIndex}>
-                        Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
-                      </span>
-                      {youtubeId && (
+            <div className={`${styles.checkpointWorkspace} ${youtubeId ? '' : styles.checkpointWorkspaceWithoutVideo}`}>
+              {youtubeId && (
+                <aside className={styles.videoPane} aria-label="Checkpoint video controls">
+                  <div className={styles.videoWrap}>
+                    <YouTubeAuthoringPlayer
+                      videoId={youtubeId}
+                      onReady={(player) => {
+                        playerRef.current = player;
+                      }}
+                    />
+                  </div>
+                  <div className={styles.checkpointToolbar}>
+                    <button type="button" className={styles.addQuestionBtn} onClick={handleAddCheckpointFromVideo}>
+                      + Add checkpoint
+                    </button>
+                    <span className={styles.videoHelp}>
+                      Pauses the video and uses the current playback time. If the player does not load, add a checkpoint
+                      manually.
+                    </span>
+                  </div>
+                </aside>
+              )}
+
+              <div className={styles.checkpointPane}>
+                <div className={styles.checkpointPaneHeader}>
+                  <h3>Checkpoint questions</h3>
+                  <span>
+                    {checkpoints.length} checkpoint{checkpoints.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className={styles.questionList} role="region" aria-label="Checkpoint list" tabIndex={0}>
+                  {checkpoints.map((checkpoint, checkpointIdx) => (
+                    <div
+                      key={checkpoint.id}
+                      ref={(el) => {
+                        checkpointRefs.current[checkpoint.id] = el;
+                      }}
+                      className={styles.checkpointCard}
+                    >
+                      <div className={styles.checkpointHeader}>
                         <button
                           type="button"
-                          className={styles.seekBtn}
-                          onClick={() => playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true)}
+                          className={styles.checkpointToggle}
+                          onClick={() => toggleCheckpoint(checkpoint.id)}
+                          aria-expanded={activeCheckpointId === checkpoint.id}
+                          aria-controls={`checkpoint-${checkpoint.id}-questions`}
+                          aria-label={`Checkpoint ${checkpointIdx + 1} at ${formatTimeOffsetSeconds(
+                            checkpoint.timeOffsetSeconds
+                          )}`}
                         >
-                          Seek to time
+                          <span className={styles.questionIndex}>
+                            Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
+                          </span>
+                          <span className={styles.checkpointQuestionCount}>
+                            {checkpoint.questions.length} question{checkpoint.questions.length === 1 ? '' : 's'}
+                          </span>
+                          <span className={styles.questionChevron} aria-hidden="true">
+                            {activeCheckpointId === checkpoint.id ? '−' : '+'}
+                          </span>
                         </button>
+                        {youtubeId && (
+                          <button
+                            type="button"
+                            className={styles.seekBtn}
+                            onClick={() => {
+                              setActiveCheckpointId(checkpoint.id);
+                              playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true);
+                            }}
+                          >
+                            Seek to time
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={styles.removeBtn}
+                          onClick={() => removeCheckpoint(checkpoint.id)}
+                        >
+                          Remove checkpoint
+                        </button>
+                      </div>
+
+                      {activeCheckpointId === checkpoint.id && (
+                        <div className={styles.checkpointBody} id={`checkpoint-${checkpoint.id}-questions`}>
+                          {checkpoint.questions.map((q, qIdx) => (
+                            <QuestionEditor
+                              key={q.id}
+                              q={q}
+                              index={qIdx}
+                              expanded={expandedQuestionByCheckpoint[checkpoint.id] === q.id}
+                              onToggle={() => toggleCheckpointQuestion(checkpoint.id, q.id)}
+                              onUpdate={(patch) =>
+                                setCheckpoints((prev) =>
+                                  prev.map((c) =>
+                                    c.id === checkpoint.id
+                                      ? { ...c, questions: updateQuestionInList(c.questions, q.id, patch) }
+                                      : c
+                                  )
+                                )
+                              }
+                              onRemove={() => removeQuestionFromCheckpoint(checkpoint.id, q.id)}
+                              onUpdateChoice={(ci, v) =>
+                                setCheckpoints((prev) =>
+                                  prev.map((c) =>
+                                    c.id === checkpoint.id
+                                      ? { ...c, questions: updateChoiceInList(c.questions, q.id, ci, v) }
+                                      : c
+                                  )
+                                )
+                              }
+                              onAddChoice={() =>
+                                setCheckpoints((prev) =>
+                                  prev.map((c) =>
+                                    c.id === checkpoint.id ? { ...c, questions: addChoiceInList(c.questions, q.id) } : c
+                                  )
+                                )
+                              }
+                              onRemoveChoice={(ci) =>
+                                setCheckpoints((prev) =>
+                                  prev.map((c) =>
+                                    c.id === checkpoint.id
+                                      ? { ...c, questions: removeChoiceInList(c.questions, q.id, ci) }
+                                      : c
+                                  )
+                                )
+                              }
+                              canRemove={checkpoint.questions.length > 1}
+                            />
+                          ))}
+                          <button
+                            type="button"
+                            className={styles.addQuestionBtn}
+                            onClick={() => addQuestionToCheckpoint(checkpoint.id)}
+                          >
+                            + Add question to checkpoint
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className={styles.removeBtn}
-                      onClick={() => setCheckpoints((prev) => prev.filter((c) => c.id !== checkpoint.id))}
-                    >
-                      Remove checkpoint
-                    </button>
-                  </div>
-
-                  {checkpoint.questions.map((q, qIdx) => (
-                    <QuestionEditor
-                      key={q.id}
-                      q={q}
-                      index={qIdx}
-                      onUpdate={(patch) =>
-                        setCheckpoints((prev) =>
-                          prev.map((c) =>
-                            c.id === checkpoint.id
-                              ? { ...c, questions: updateQuestionInList(c.questions, q.id, patch) }
-                              : c
-                          )
-                        )
-                      }
-                      onRemove={() =>
-                        setCheckpoints((prev) =>
-                          prev.map((c) =>
-                            c.id === checkpoint.id
-                              ? { ...c, questions: c.questions.filter((question) => question.id !== q.id) }
-                              : c
-                          )
-                        )
-                      }
-                      onUpdateChoice={(ci, v) =>
-                        setCheckpoints((prev) =>
-                          prev.map((c) =>
-                            c.id === checkpoint.id
-                              ? { ...c, questions: updateChoiceInList(c.questions, q.id, ci, v) }
-                              : c
-                          )
-                        )
-                      }
-                      onAddChoice={() =>
-                        setCheckpoints((prev) =>
-                          prev.map((c) =>
-                            c.id === checkpoint.id ? { ...c, questions: addChoiceInList(c.questions, q.id) } : c
-                          )
-                        )
-                      }
-                      onRemoveChoice={(ci) =>
-                        setCheckpoints((prev) =>
-                          prev.map((c) =>
-                            c.id === checkpoint.id ? { ...c, questions: removeChoiceInList(c.questions, q.id, ci) } : c
-                          )
-                        )
-                      }
-                      canRemove={checkpoint.questions.length > 1}
-                    />
                   ))}
+
                   <button
                     type="button"
                     className={styles.addQuestionBtn}
-                    onClick={() =>
-                      setCheckpoints((prev) =>
-                        prev.map((c) =>
-                          c.id === checkpoint.id ? { ...c, questions: [...c.questions, makeQuestion()] } : c
-                        )
-                      )
-                    }
+                    onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
                   >
-                    + Add question to checkpoint
+                    + Add checkpoint manually
                   </button>
                 </div>
-              ))}
-
-              <button
-                type="button"
-                className={styles.addQuestionBtn}
-                onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
-              >
-                + Add checkpoint manually
-              </button>
+              </div>
             </div>
           </section>
         )}
