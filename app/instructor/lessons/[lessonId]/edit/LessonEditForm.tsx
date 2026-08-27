@@ -3,11 +3,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Lesson, LessonNode, Node } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
-import LessonBuilder from '@/app/components/LessonBuilder';
 import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
-import type { LessonEdgeEntry } from '@/app/types';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
@@ -18,18 +15,15 @@ interface Props {
   availableNodes: PaletteNode[];
 }
 
-type TabId = 'builder' | 'roadmap';
-
 export default function LessonEditForm({ lesson, availableNodes }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('builder');
 
   // Metadata
   const [title, setTitle] = useState(lesson.title);
-  const [slug, setSlug] = useState(lesson.slug);
+  const [slug, setSlug] = useState(lesson.slug ?? '');
   const [summary, setSummary] = useState(lesson.summary);
   const [description, setDescription] = useState(lesson.description || '');
   const [estimatedMinutes, setEstimatedMinutes] = useState(lesson.estimatedMinutes?.toString() || '');
@@ -80,42 +74,55 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
     setLessonNodes(updated);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function persistLesson(asDraft: boolean) {
     setError(null);
 
-    if (lessonNodes.length === 0) {
-      setError('Add at least one node to the lesson before saving.');
-      return;
-    }
+    if (!asDraft) {
+      if (!title.trim()) {
+        setError('Title is required.');
+        return;
+      }
+      if (!slug.trim()) {
+        setError('Slug is required.');
+        return;
+      }
+      if (!summary.trim()) {
+        setError('Summary is required.');
+        return;
+      }
+      if (lessonNodes.length === 0) {
+        setError('Add at least one node to the lesson before saving.');
+        return;
+      }
 
-    if (
-      lessonNodes.some(
-        (entry) =>
-          entry.passingPercent === '' ||
-          !Number.isInteger(Number(entry.passingPercent)) ||
-          Number(entry.passingPercent) < 0 ||
-          Number(entry.passingPercent) > 100
-      )
-    ) {
-      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
-      return;
-    }
+      if (
+        lessonNodes.some(
+          (entry) =>
+            entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100
+        )
+      ) {
+        setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+        return;
+      }
 
-    if (
-      lessonNodes.some((entry) => {
-        if (entry.quizBankCount === 0) {
-          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
-        }
-        return (
-          entry.quizQuestionCount === '' ||
-          !Number.isInteger(Number(entry.quizQuestionCount)) ||
-          Number(entry.quizQuestionCount) < 1
-        );
-      })
-    ) {
-      setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
-      return;
+      if (
+        lessonNodes.some((entry) => {
+          if (entry.quizBankCount === 0) {
+            return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+          }
+          return (
+            entry.quizQuestionCount === '' ||
+            !Number.isInteger(Number(entry.quizQuestionCount)) ||
+            Number(entry.quizQuestionCount) < 1
+          );
+        })
+      ) {
+        setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+        return;
+      }
     }
 
     const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
@@ -148,6 +155,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
             isRequired: entry.isRequired,
           })),
           edges: serialisedEdges,
+          isDraft: asDraft,
         }),
       });
 
@@ -162,6 +170,11 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await persistLesson(false);
   }
 
   async function handleDelete() {
@@ -259,48 +272,23 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
           </label>
         </section>
 
-        {/* ── Tabs ── */}
-        <div className={styles.tabs}>
-          <button
-            type="button"
-            className={activeTab === 'builder' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('builder')}
-          >
-            Build lesson
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'roadmap' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('roadmap')}
-          >
-            Roadmap
-          </button>
-        </div>
-
-        {/* ── Builder tab ── */}
-        {activeTab === 'builder' && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Build lesson</h2>
-            <p className={styles.sectionNote}>
-              Add nodes from the library, choose a pass threshold for each one, and drag to reorder.
-            </p>
-            <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={handleLessonNodesChange} />
-          </section>
-        )}
-
-        {/* ── Roadmap tab ── */}
-        {activeTab === 'roadmap' && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Learning roadmap</h2>
-            <p className={styles.sectionNote}>
-              Draw prerequisite paths between nodes. Connections must form a directed acyclic graph — no cycles allowed.
-            </p>
-            <p className={styles.sectionNote}>
-              Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
-            </p>
-            <LessonRoadmapBuilder lessonNodes={lessonNodes} edges={edges} onEdgesChange={setEdges} />
-          </section>
-        )}
+        {/* ── Roadmap ── */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Learning roadmap</h2>
+          <p className={styles.sectionNote}>
+            Click empty space to add a node. Draw prerequisite paths between nodes — no cycles allowed.
+          </p>
+          <p className={styles.sectionNote}>
+            Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+          </p>
+          <LessonRoadmapBuilder
+            availableNodes={availableNodes}
+            lessonNodes={lessonNodes}
+            edges={edges}
+            onEdgesChange={setEdges}
+            onLessonNodesChange={handleLessonNodesChange}
+          />
+        </section>
 
         {error && <p className={styles.error}>{error}</p>}
 
@@ -312,8 +300,16 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
             <a href="/instructor/lessons" className={styles.cancelLink}>
               Cancel
             </a>
+            <button
+              type="button"
+              className={styles.draftBtn}
+              onClick={() => persistLesson(true)}
+              disabled={saving || deleting}
+            >
+              {saving ? 'Saving…' : 'Save as draft'}
+            </button>
             <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {saving ? 'Saving…' : lesson.isDraft ? 'Publish lesson' : 'Save changes'}
             </button>
           </div>
         </div>

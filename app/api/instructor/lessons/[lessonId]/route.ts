@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, lessonNodes, edges } = body as {
+  const { title, slug, summary, description, estimatedMinutes, lessonNodes, edges, isDraft } = body as {
     title?: string;
     slug?: string;
     summary?: string;
@@ -63,6 +63,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       isRequired?: boolean;
     }>;
     edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
+    isDraft?: boolean;
   };
 
   const owned = await prisma.lesson.findFirst({
@@ -70,17 +71,44 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       id: lessonId,
       OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
     },
+    include: { lessonNodes: true },
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (lessonNodes?.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
+  if (isDraft !== undefined && typeof isDraft !== 'boolean') {
+    return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
+  }
+  if (lessonNodes !== undefined && !Array.isArray(lessonNodes)) {
+    return NextResponse.json({ error: 'lessonNodes must be an array' }, { status: 422 });
+  }
+  if (edges !== undefined && !Array.isArray(edges)) {
+    return NextResponse.json({ error: 'edges must be an array' }, { status: 422 });
+  }
+
+  const savingAsDraft = isDraft ?? owned.isDraft;
+  const effectiveLessonNodes = lessonNodes ?? owned.lessonNodes;
+
+  if (!savingAsDraft) {
+    if (!(title ?? owned.title).trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
+    const effectiveSlug = slug === undefined ? owned.slug : slug;
+    if (!effectiveSlug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
+    if (!(summary ?? owned.summary).trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
+    if (effectiveLessonNodes.length === 0) {
+      return NextResponse.json({ error: 'At least one node is required.' }, { status: 422 });
+    }
+    if (!/^[a-z0-9-]+$/.test(effectiveSlug)) {
+      return NextResponse.json({ error: 'slug must be lowercase letters, numbers, and hyphens only' }, { status: 422 });
+    }
+  }
+
+  if (!savingAsDraft && effectiveLessonNodes.some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a passingPercent between 0 and 100' },
       { status: 422 }
     );
   }
 
-  if (lessonNodes?.some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
+  if (!savingAsDraft && effectiveLessonNodes.some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
@@ -98,6 +126,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  if (lessonNodes && lessonNodes.length > 0) {
+    const nodeIds = [...new Set(lessonNodes.map((ln) => ln.nodeId))];
+    const draftNode = await prisma.node.findFirst({
+      where: { id: { in: nodeIds }, isDraft: true },
+      select: { id: true },
+    });
+    if (draftNode) {
+      return NextResponse.json({ error: 'Draft nodes cannot be added to a lesson.' }, { status: 422 });
+    }
+  }
+
   // Use nested write instead of $transaction — pgBouncer (transaction pooling mode)
   // doesn't support Prisma's interactive transaction callback form reliably.
   // deleteMany + create on the nested relation is atomic at the Prisma level;
@@ -106,18 +145,19 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     where: { id: lessonId },
     data: {
       ...(title !== undefined && { title: title.trim() }),
-      ...(slug !== undefined && { slug: slug.trim() }),
+      ...(slug !== undefined && { slug: slug.trim() || null }),
       ...(summary !== undefined && { summary: summary.trim() }),
       ...(description !== undefined && { description: description ?? null }),
       ...(estimatedMinutes !== undefined && { estimatedMinutes: estimatedMinutes ?? null }),
+      ...(isDraft !== undefined && { isDraft }),
       ...(lessonNodes !== undefined && {
         lessonNodes: {
           deleteMany: {},
           create: lessonNodes.map((ln) => ({
             nodeId: ln.nodeId,
             sortOrder: ln.sortOrder,
-            passingPercent: ln.passingPercent!,
-            quizQuestionCount: ln.quizQuestionCount!,
+            passingPercent: ln.passingPercent ?? 0,
+            quizQuestionCount: ln.quizQuestionCount ?? 0,
             isRequired: ln.isRequired ?? true,
           })),
         },

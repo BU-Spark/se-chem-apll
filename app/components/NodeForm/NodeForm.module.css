@@ -225,6 +225,67 @@
   color: #ef4444;
 }
 
+.objectiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.objectiveRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.objectiveRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+.objectiveAddBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+  cursor: pointer;
+}
+
+.objectiveAddBtn:hover {
+  border-color: #1f5fab;
+  color: #1f5fab;
+}
+
+.objectiveRemoveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #6b7280;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.objectiveRemoveBtn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.objectivePreviewList {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
 /* ── Questions ── */
 .questionList {
   display: flex;
@@ -492,6 +553,26 @@
 .secondaryBtn:hover {
   background: #f9fafb;
   border-color: #9ca3af;
+}
+
+.draftBtn {
+  padding: 0.6rem 1.2rem;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.draftBtn:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.draftBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .submitBtn {
@@ -810,6 +891,12 @@
   outline: 2px solid #1f5fab;
   outline-offset: 3px;
   border-radius: 0.5rem;
+}
+
+.checkpointItemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .checkpointCard {

@@ -42,7 +42,21 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'instructor-1' });
-    mockFindFirst.mockResolvedValue({ id: 'node-1' });
+    mockFindFirst.mockResolvedValue({
+      id: 'node-1',
+      title: 'Existing node',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      isDraft: false,
+      checkpoints: [],
+      quizQuestions: [
+        {
+          sortOrder: 0,
+          prompt: 'Existing quiz',
+          options: { type: 'multipleChoice', choices: ['A', 'B'] },
+          correctIndices: [0],
+        },
+      ],
+    });
     mockCheckpointFindMany.mockResolvedValue([]);
     mockQuizFindMany.mockResolvedValue([]);
     mockUpdate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
@@ -65,7 +79,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   it('replaces checkpoints and quiz questions', async () => {
     const response = await PATCH(
       patchRequest({
-        learningObjectives: ['  Trim me  ', ''],
+        tags: ['  Safety  ', ''],
+        learningObjectives: ['  Work safely.  ', '', 'Recognize hazards.'],
         checkpoints: [
           {
             sortOrder: 0,
@@ -98,7 +113,8 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          learningObjectives: ['Trim me'],
+          tags: ['Safety'],
+          learningObjectives: ['Work safely.', 'Recognize hazards.'],
           checkpoints: {
             create: [
               expect.objectContaining({
@@ -111,6 +127,71 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
           },
           quizQuestions: {
             create: [expect.objectContaining({ prompt: 'Quiz', correctIndices: [0, 2] })],
+          },
+        }),
+      })
+    );
+  });
+
+  it('allows incomplete content when saving as a draft', async () => {
+    mockFindFirst.mockResolvedValue({
+      id: 'node-1',
+      title: '',
+      videoUrl: null,
+      isDraft: true,
+      checkpoints: [],
+      quizQuestions: [],
+    });
+
+    const response = await PATCH(
+      patchRequest({ title: '', videoUrl: null, checkpoints: [], quizQuestions: [], isDraft: true }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({ title: '', videoUrl: null, isDraft: true })
+    );
+  });
+
+  it('replaces checkpoints with informational notes', async () => {
+    const response = await PATCH(
+      patchRequest({
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 125,
+            questions: [
+              {
+                sortOrder: 0,
+                kind: 'note',
+                prompt: 'Pause and observe the safety gauge.',
+              },
+            ],
+          },
+        ],
+      }) as never,
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          checkpoints: {
+            create: [
+              expect.objectContaining({
+                questions: {
+                  create: [
+                    expect.objectContaining({
+                      kind: 'NOTE',
+                      prompt: 'Pause and observe the safety gauge.',
+                      correctIndices: [],
+                    }),
+                  ],
+                },
+              }),
+            ],
           },
         }),
       })
@@ -180,6 +261,27 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('checkpoints');
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
+  });
+
+  it('clears learning objectives when given an empty array', async () => {
+    const response = await PATCH(patchRequest({ learningObjectives: [] }) as never, context);
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { learningObjectives: [] },
+      })
+    );
+  });
+
+  it.each([
+    ['a non-array value', 'not an array'],
+    ['a non-string array item', ['valid', 12]],
+  ])('returns 422 when learningObjectives contains %s', async (_label, learningObjectives) => {
+    const response = await PATCH(patchRequest({ learningObjectives }) as never, context);
+
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 
   it('replaces only quiz questions when checkpoints are omitted', async () => {
@@ -292,5 +394,16 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(mockResponseDeleteMany).toHaveBeenCalledWith({
       where: { quizQuestionId: { in: ['qq-1'] } },
     });
+  });
+
+  it('returns 422 when video URL is empty or invalid', async () => {
+    const response = await PATCH(patchRequest({ videoUrl: '' }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+  it('returns 422 when quiz questions are replaced with an empty list', async () => {
+    const response = await PATCH(patchRequest({ quizQuestions: [] }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });

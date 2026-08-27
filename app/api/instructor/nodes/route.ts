@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { parseYouTubeId } from '@/app/utils/youtube';
 import {
   nodeInclude,
   serializeCheckpointCreate,
@@ -24,11 +25,12 @@ export async function GET() {
       title: true,
       summary: true,
       videoUrl: true,
+      isDraft: true,
       createdAt: true,
       updatedAt: true,
       _count: { select: { lessonNodes: true, checkpoints: true, quizQuestions: true } },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
   });
   return NextResponse.json(nodes);
 }
@@ -53,19 +55,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, summary, videoUrl, learningObjectives, checkpoints, quizQuestions } = body as {
+  const {
+    title,
+    summary,
+    videoUrl,
+    tags,
+    learningObjectives,
+    checkpoints,
+    quizQuestions,
+    isDraft = false,
+  } = body as {
     title?: string;
     summary?: string;
     videoUrl?: string | null;
+    tags?: string[];
     learningObjectives?: string[];
     checkpoints?: CheckpointPayload[];
     quizQuestions?: QuestionPayload[];
+    isDraft?: boolean;
   };
 
-  if (!title?.trim()) {
+  if (typeof isDraft !== 'boolean') {
+    return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
+  }
+
+  if (!isDraft && !title?.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
   }
 
+  const tagsTypeError = rejectIfNotArray(tags, 'tags');
+  if (tagsTypeError) return tagsTypeError;
   const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
   if (learningObjectivesTypeError) return learningObjectivesTypeError;
   const checkpointsTypeError = rejectIfNotArray(checkpoints, 'checkpoints');
@@ -73,24 +92,41 @@ export async function POST(req: NextRequest) {
   const quizQuestionsTypeError = rejectIfNotArray(quizQuestions, 'quizQuestions');
   if (quizQuestionsTypeError) return quizQuestionsTypeError;
 
+  if (tags !== undefined && tags.some((item) => typeof item !== 'string')) {
+    return NextResponse.json({ error: 'tags must be an array of strings' }, { status: 422 });
+  }
   if (learningObjectives !== undefined && learningObjectives.some((item) => typeof item !== 'string')) {
     return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
 
-  const contentError = validateNodeContent({ checkpoints, quizQuestions });
-  if (contentError) {
-    return NextResponse.json({ error: contentError }, { status: 422 });
+  if (!isDraft) {
+    const contentError = validateNodeContent({ checkpoints, quizQuestions });
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 422 });
+    }
+
+    if (!parseYouTubeId((videoUrl ?? '').trim())) {
+      return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
+    }
+    if (!quizQuestions || quizQuestions.length === 0) {
+      return NextResponse.json({ error: 'At least one quiz bank question is required.' }, { status: 422 });
+    }
   }
 
-  const normalizedObjectives = (learningObjectives ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
+  const normalizedTags = (tags ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
+  const normalizedLearningObjectives = (learningObjectives ?? [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 
   const node = await prisma.node.create({
     data: {
-      title: title.trim(),
+      title: title?.trim() ?? '',
       summary: summary?.trim() ?? null,
-      videoUrl: videoUrl ?? null,
-      learningObjectives: normalizedObjectives,
+      videoUrl: videoUrl?.trim() || null,
+      tags: normalizedTags,
+      learningObjectives: normalizedLearningObjectives,
       createdByClerkId: userId,
+      isDraft,
       checkpoints: {
         create: (checkpoints ?? []).map(serializeCheckpointCreate),
       },

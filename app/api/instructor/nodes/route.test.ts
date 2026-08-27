@@ -37,7 +37,9 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        learningObjectives: ['  Identify hazards  ', '', 'Apply procedure'],
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        tags: ['  safety  ', '', 'Procedure'],
+        learningObjectives: ['  Identify hazards.  ', '', 'Apply the safety procedure.'],
         checkpoints: [
           {
             sortOrder: 0,
@@ -64,7 +66,11 @@ describe('POST /api/instructor/nodes', () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mockCreate.mock.calls[0][0].data.learningObjectives).toEqual(['Identify hazards', 'Apply procedure']);
+    expect(mockCreate.mock.calls[0][0].data.tags).toEqual(['safety', 'Procedure']);
+    expect(mockCreate.mock.calls[0][0].data.learningObjectives).toEqual([
+      'Identify hazards.',
+      'Apply the safety procedure.',
+    ]);
     expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 45,
@@ -78,11 +84,116 @@ describe('POST /api/instructor/nodes', () => {
     ]);
   });
 
-  it('returns 422 when learningObjectives is not an array of strings', async () => {
+  it('persists an incomplete draft without publish validation', async () => {
+    const response = await POST(
+      postRequest({
+        title: '',
+        videoUrl: null,
+        checkpoints: [],
+        quizQuestions: [],
+        isDraft: true,
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: '',
+          videoUrl: null,
+          isDraft: true,
+        }),
+      })
+    );
+  });
+
+  it('returns 422 when tags is not an array of strings', async () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
-        learningObjectives: ['ok', 12],
+        tags: ['ok', 12],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists checkpoint notes without answer data', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                kind: 'note',
+                prompt: 'Notice how the flame changes color.',
+              },
+            ],
+          },
+        ],
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create[0].questions.create).toEqual([
+      expect.objectContaining({
+        kind: 'NOTE',
+        prompt: 'Notice how the flame changes color.',
+        options: { type: 'note' },
+        correctIndices: [],
+      }),
+    ]);
+  });
+
+  it('rejects blank checkpoint notes', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, kind: 'note', prompt: '' }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when learningObjectives is not an array', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        learningObjectives: 'not an array',
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when learningObjectives contains a non-string value', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        learningObjectives: ['valid', 12],
       }) as never
     );
 
@@ -147,6 +258,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         quizQuestions: [
           {
             sortOrder: 0,
@@ -184,6 +296,7 @@ describe('POST /api/instructor/nodes', () => {
     const response = await POST(
       postRequest({
         title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         quizQuestions: [{ sortOrder: 0, prompt: 'Estimate', options }],
       }) as never
     );
@@ -208,6 +321,36 @@ describe('POST /api/instructor/nodes', () => {
       }) as never
     );
 
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when video URL is missing or invalid', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://example.com/not-youtube',
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never
+    );
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  it('returns 422 when quiz questions are missing', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        quizQuestions: [],
+      }) as never
+    );
     expect(response.status).toBe(422);
     expect(mockCreate).not.toHaveBeenCalled();
   });

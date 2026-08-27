@@ -31,9 +31,11 @@ export default async function EditNodePage({ params }: Props) {
     <NodeEditForm
       node={{
         id: node.id,
+        isDraft: node.isDraft,
         title: node.title,
         summary: node.summary ?? '',
         videoUrl: node.videoUrl ?? '',
+        tags: node.tags,
         learningObjectives: node.learningObjectives,
         checkpoints: node.checkpoints.map((checkpoint) => ({
           id: checkpoint.id,
@@ -43,6 +45,7 @@ export default async function EditNodePage({ params }: Props) {
             prompt: q.prompt,
             options: q.options,
             correctIndices: q.correctIndices,
+            kind: q.kind,
           })),
         })),
         quizQuestions: node.quizQuestions.map((q) => ({

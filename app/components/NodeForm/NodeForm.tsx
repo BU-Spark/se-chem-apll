@@ -16,6 +16,7 @@ import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer'
 import {
   dbQuestionToForm,
   makeCheckpoint,
+  makeLearningObjective,
   makeQuestion,
   serializeQuestionOptions,
   type FormCheckpoint,
@@ -80,6 +81,7 @@ function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
     questions: checkpoint.questions.map((q, qIdx) => ({
       sortOrder: qIdx,
       prompt: q.prompt,
+      kind: q.questionType === 'note' ? 'note' : 'question',
       options: serializeQuestionOptions(q),
       correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],
     })),
@@ -99,8 +101,13 @@ function validateQuestionPayloads(
   if (timestampError) return timestampError;
 
   if (options.requireCheckpointQuestions && checkpointPayload.some((c) => c.questions.length === 0)) {
-    return 'Each checkpoint must include at least one question.';
+    return 'Each checkpoint must include at least one question or note.';
   }
+
+  const emptyNote = checkpointPayload
+    .flatMap((checkpoint) => checkpoint.questions)
+    .find((item) => item.kind === 'note' && item.prompt.trim() === '');
+  if (emptyNote) return 'Each note must have non-empty text.';
 
   const questions = [...checkpointPayload.flatMap((c) => c.questions), ...(options.includeQuiz ? quizPayload : [])];
   const correctAnswersError = validateMultipleChoiceAnswers(questions);
@@ -114,19 +121,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const router = useRouter();
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const learningObjectiveRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [step, setStep] = useState<WizardStep>('basics');
   const [maxReachedStep, setMaxReachedStep] = useState<WizardStep>('basics');
   const [savedNodeId, setSavedNodeId] = useState<string | null>(nodeId ?? null);
   const [createdThisSession, setCreatedThisSession] = useState(false);
+  const [draftStatus, setDraftStatus] = useState(initial?.isDraft ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
-  const [learningObjectives, setLearningObjectives] = useState<string[]>(initial?.learningObjectives ?? []);
-  const [objectiveDraft, setObjectiveDraft] = useState('');
-  const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(initial?.checkpoints[0]?.id ?? null);
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [tagDraft, setTagDraft] = useState('');
+  const [learningObjectives, setLearningObjectives] = useState(() => {
+    const initialValues = initial?.learningObjectives ?? [];
+    return (initialValues.length > 0 ? initialValues : ['']).map((value) => makeLearningObjective(value));
+  });
+  const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
       id: checkpoint.id,
@@ -144,6 +157,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   );
 
   const youtubeId = parseYouTubeId(videoUrl.trim());
+  const objectiveValues = learningObjectives.map((objective) => objective.value.trim()).filter(Boolean);
   const currentStepIndex = stepIndex(step);
   const maxReachedIndex = stepIndex(maxReachedStep);
 
@@ -213,6 +227,16 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     setExpandedQuestionByCheckpoint((prev) => ({ ...prev, [checkpointId]: question.id }));
   }
 
+  function addNoteToCheckpoint(checkpointId: string) {
+    const note: FormQuestion = { ...makeQuestion(), questionType: 'note' };
+    setCheckpoints((prev) =>
+      prev.map((checkpoint) =>
+        checkpoint.id === checkpointId ? { ...checkpoint, questions: [...checkpoint.questions, note] } : checkpoint
+      )
+    );
+    setExpandedQuestionByCheckpoint((prev) => ({ ...prev, [checkpointId]: note.id }));
+  }
+
   function removeQuestionFromCheckpoint(checkpointId: string, questionId: string) {
     const checkpoint = checkpoints.find((item) => item.id === checkpointId);
     if (!checkpoint) return;
@@ -255,27 +279,50 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     addCheckpointAt(Math.max(0, seconds));
   }
 
-  function addLearningObjective(raw: string) {
+  function addTag(raw: string) {
     const value = raw.trim();
     if (!value) return;
-    const exists = learningObjectives.some((item) => item.toLowerCase() === value.toLowerCase());
+    const exists = tags.some((item) => item.toLowerCase() === value.toLowerCase());
     if (exists) {
-      setObjectiveDraft('');
+      setTagDraft('');
       return;
     }
-    setLearningObjectives((prev) => [...prev, value]);
-    setObjectiveDraft('');
+    setTags((prev) => [...prev, value]);
+    setTagDraft('');
   }
 
-  function handleObjectiveKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      addLearningObjective(objectiveDraft);
+      addTag(tagDraft);
     }
   }
 
+  function addLearningObjective() {
+    const objective = makeLearningObjective();
+    setLearningObjectives((prev) => [...prev, objective]);
+    requestAnimationFrame(() => learningObjectiveRefs.current[objective.id]?.focus());
+  }
+
+  function updateLearningObjective(id: string, value: string) {
+    setLearningObjectives((prev) =>
+      prev.map((objective) => (objective.id === id ? { ...objective, value } : objective))
+    );
+  }
+
+  function removeLearningObjective(id: string) {
+    setLearningObjectives((prev) => {
+      const remaining = prev.filter((objective) => objective.id !== id);
+      return remaining.length > 0 ? remaining : [makeLearningObjective()];
+    });
+  }
   function validateBasicsStep(): string | null {
-    if (!title.trim()) return 'Title is required.';
+    if (!title.trim()) {
+      return 'Title is required.';
+    }
+    if (!youtubeId) {
+      return 'A valid YouTube video URL is required.';
+    }
     return null;
   }
 
@@ -288,12 +335,19 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function validateQuizStep(): string | null {
-    if (quizQuestions.length === 0) return null;
+    if (quizQuestions.length === 0) {
+      return 'Add at least one quiz bank question.';
+    }
     const quizIssues = validateQuestionBank(quizQuestions);
     const { errors: quizErrorCount } = countIssuesBySeverity(quizIssues);
-    return quizErrorCount > 0
-      ? `Fix ${quizErrorCount} quiz question error${quizErrorCount === 1 ? '' : 's'} before continuing.`
-      : null;
+    if (quizErrorCount > 0) {
+      return `Fix ${quizErrorCount} quiz question error${quizErrorCount === 1 ? '' : 's'} before continuing.`;
+    }
+    const quizPayload = buildQuizPayload(quizQuestions);
+    return validateQuestionPayloads([], quizPayload, {
+      requireCheckpointQuestions: false,
+      includeQuiz: true,
+    });
   }
 
   function validateAll(): string | null {
@@ -365,13 +419,15 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     goToStep(target);
   }
 
-  async function saveNode() {
+  async function persistNode(asDraft: boolean) {
     if (saving) return;
     setError(null);
-    const allError = validateAll();
-    if (allError) {
-      setError(allError);
-      return;
+    if (!asDraft) {
+      const allError = validateAll();
+      if (allError) {
+        setError(allError);
+        return;
+      }
     }
 
     const checkpointPayload = buildCheckpointPayload(checkpoints);
@@ -387,9 +443,11 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           title: title.trim(),
           summary,
           videoUrl: videoUrl || null,
-          learningObjectives,
+          tags,
+          learningObjectives: objectiveValues,
           checkpoints: checkpointPayload,
           quizQuestions: quizPayload,
+          isDraft: asDraft,
         }),
       });
 
@@ -400,6 +458,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
       const idFromResponse = typeof data.id === 'string' ? data.id : null;
       setSavedNodeId(idFromResponse ?? savedNodeId ?? nodeId ?? null);
+      if (asDraft) {
+        setDraftStatus(true);
+        router.push('/instructor/nodes');
+        return;
+      }
+      setDraftStatus(false);
       setCreatedThisSession(!updatingExisting && mode === 'create');
       goToStep('done');
     } catch (err) {
@@ -409,10 +473,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     }
   }
 
+  async function saveNode() {
+    await persistNode(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (step !== 'review') return;
-    await saveNode();
+    await persistNode(false);
   }
 
   function renderPreviewSummary() {
@@ -434,18 +502,32 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               <dd className={styles.previewMono}>{videoUrl.trim() || '—'}</dd>
             </div>
             <div>
-              <dt>Learning objectives</dt>
+              <dt>Tags</dt>
               <dd>
-                {learningObjectives.length === 0 ? (
+                {tags.length === 0 ? (
                   '—'
                 ) : (
                   <ul className={styles.tagList}>
-                    {learningObjectives.map((objective) => (
-                      <li key={objective} className={styles.tag}>
-                        <span>{objective}</span>
+                    {tags.map((tag) => (
+                      <li key={tag} className={styles.tag}>
+                        <span>{tag}</span>
                       </li>
                     ))}
                   </ul>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Learning objectives</dt>
+              <dd>
+                {objectiveValues.length === 0 ? (
+                  '—'
+                ) : (
+                  <ol className={styles.objectivePreviewList}>
+                    {objectiveValues.map((objective, index) => (
+                      <li key={`${index}-${objective}`}>{objective}</li>
+                    ))}
+                  </ol>
                 )}
               </dd>
             </div>
@@ -466,13 +548,16 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                     Checkpoint {idx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
                   </strong>
                   <span className={styles.previewMeta}>
-                    {checkpoint.questions.length} question
-                    {checkpoint.questions.length === 1 ? '' : 's'}
+                    {checkpoint.questions.filter((item) => item.questionType !== 'note').length} question
+                    {checkpoint.questions.filter((item) => item.questionType !== 'note').length === 1 ? '' : 's'} ·{' '}
+                    {checkpoint.questions.filter((item) => item.questionType === 'note').length} note
+                    {checkpoint.questions.filter((item) => item.questionType === 'note').length === 1 ? '' : 's'}
                   </span>
                   <ul className={styles.previewSublist}>
                     {checkpoint.questions.map((q, qIdx) => (
                       <li key={q.id}>
-                        Q{qIdx + 1}: {q.prompt.trim() || '(empty prompt)'}
+                        {q.questionType === 'note' ? `Note ${qIdx + 1}` : `Q${qIdx + 1}`}:{' '}
+                        {q.prompt.trim() || '(empty prompt)'}
                       </li>
                     ))}
                   </ul>
@@ -546,7 +631,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       <nav className={styles.tabs} aria-label="Node authoring steps">
         {STEPS.map((s, idx) => {
           const isActive = s.id === step;
-          const reachable = s.id === 'done' ? step === 'done' : step === 'done' || idx <= maxReachedIndex;
+          const reachable =
+            s.id === 'done' ? step === 'done' : step === 'done' ? idx <= stepIndex('review') : idx <= maxReachedIndex;
           return (
             <button
               key={s.id}
@@ -588,7 +674,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </label>
             </div>
             <label className={styles.field}>
-              Video URL
+              <span className={styles.fieldLabel}>
+                Video URL <span className={styles.required}>*</span>
+              </span>
               <input
                 type="url"
                 value={videoUrl}
@@ -597,32 +685,32 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               />
             </label>
             <div className={styles.field}>
-              <span className={styles.fieldLabel}>Learning objectives</span>
+              <span className={styles.fieldLabel}>Tags</span>
               <p className={styles.sectionNote} style={{ margin: 0 }}>
-                Add short objectives as tags. Press Enter or click Add.
+                Add short labels to help organize nodes. Press Enter or click Add.
               </p>
               <div className={styles.tagInputRow}>
                 <input
-                  value={objectiveDraft}
-                  onChange={(e) => setObjectiveDraft(e.target.value)}
-                  onKeyDown={handleObjectiveKeyDown}
-                  placeholder="e.g. Identify ignition hazards"
-                  aria-label="New learning objective"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder="e.g. lab safety"
+                  aria-label="New tag"
                 />
-                <button type="button" className={styles.tagAddBtn} onClick={() => addLearningObjective(objectiveDraft)}>
+                <button type="button" className={styles.tagAddBtn} onClick={() => addTag(tagDraft)}>
                   Add
                 </button>
               </div>
-              {learningObjectives.length > 0 && (
+              {tags.length > 0 && (
                 <ul className={styles.tagList}>
-                  {learningObjectives.map((objective) => (
-                    <li key={objective} className={styles.tag}>
-                      <span>{objective}</span>
+                  {tags.map((tag) => (
+                    <li key={tag} className={styles.tag}>
+                      <span>{tag}</span>
                       <button
                         type="button"
                         className={styles.tagRemove}
-                        aria-label={`Remove ${objective}`}
-                        onClick={() => setLearningObjectives((prev) => prev.filter((item) => item !== objective))}
+                        aria-label={`Remove ${tag}`}
+                        onClick={() => setTags((prev) => prev.filter((item) => item !== tag))}
                       >
                         ×
                       </button>
@@ -630,6 +718,46 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                   ))}
                 </ul>
               )}
+            </div>
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Learning objectives</span>
+              <span className={styles.sectionNote}>
+                Add student-facing statements describing what this node will help them learn.
+              </span>
+              <div className={styles.objectiveList}>
+                {learningObjectives.map((objective, index) => (
+                  <div key={objective.id} className={styles.objectiveRow}>
+                    <input
+                      ref={(element) => {
+                        learningObjectiveRefs.current[objective.id] = element;
+                      }}
+                      aria-label={`Learning objective ${index + 1}`}
+                      value={objective.value}
+                      onChange={(event) => updateLearningObjective(objective.id, event.target.value)}
+                      placeholder={`Learning objective ${index + 1}`}
+                    />
+                    {learningObjectives.length > 1 && (
+                      <button
+                        type="button"
+                        className={styles.objectiveRemoveBtn}
+                        aria-label={`Remove learning objective ${index + 1}`}
+                        onClick={() => removeLearningObjective(objective.id)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={styles.objectiveAddBtn}
+                aria-label="Add learning objective"
+                onClick={addLearningObjective}
+              >
+                <span aria-hidden="true">+</span>
+                <span>Add objective</span>
+              </button>
             </div>
           </section>
         )}
@@ -639,7 +767,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
             <p className={styles.sectionNote}>
               Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold
-              multiple questions.
+              multiple questions or notes.
             </p>
 
             {!youtubeId && (
@@ -705,7 +833,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                             Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
                           </span>
                           <span className={styles.checkpointQuestionCount}>
-                            {checkpoint.questions.length} question{checkpoint.questions.length === 1 ? '' : 's'}
+                            {checkpoint.questions.length} item{checkpoint.questions.length === 1 ? '' : 's'}
                           </span>
                           <span className={styles.questionChevron} aria-hidden="true">
                             {activeCheckpointId === checkpoint.id ? '−' : '+'}
@@ -777,15 +905,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                                 )
                               }
                               canRemove={checkpoint.questions.length > 1}
+                              allowNotes
                             />
                           ))}
-                          <button
-                            type="button"
-                            className={styles.addQuestionBtn}
-                            onClick={() => addQuestionToCheckpoint(checkpoint.id)}
-                          >
-                            + Add question to checkpoint
-                          </button>
+                          <div className={styles.checkpointItemActions}>
+                            <button
+                              type="button"
+                              className={styles.addQuestionBtn}
+                              onClick={() => addQuestionToCheckpoint(checkpoint.id)}
+                            >
+                              + Add question to checkpoint
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.addQuestionBtn}
+                              onClick={() => addNoteToCheckpoint(checkpoint.id)}
+                            >
+                              + Add note
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -806,7 +944,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
         {step === 'quiz' && (
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Quiz question bank</h2>
+            <h2 className={styles.sectionTitle}>
+              Quiz question bank <span className={styles.required}>*</span>
+            </h2>
             <p className={styles.sectionNote}>
               These questions are sampled for the node quiz (after the QEV, or first for foundational nodes). No
               timestamps. Rich text, LaTeX math, and mhchem chemistry notation are supported.
@@ -860,6 +1000,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </>
             ) : (
               <>
+                <button type="button" className={styles.draftBtn} onClick={() => persistNode(true)} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save as draft'}
+                </button>
                 {currentStepIndex > 0 && (
                   <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
                     Back
@@ -871,7 +1014,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                   </button>
                 ) : (
                   <button type="submit" className={styles.submitBtn} disabled={saving}>
-                    {saving ? 'Saving…' : savedNodeId ? 'Save changes' : 'Create node'}
+                    {saving ? 'Saving…' : draftStatus ? 'Publish node' : savedNodeId ? 'Save changes' : 'Create node'}
                   </button>
                 )}
               </>

@@ -13,9 +13,11 @@ export default function NodeEditForm({ node }: Props) {
       mode="edit"
       nodeId={node.id}
       initial={{
+        isDraft: node.isDraft,
         title: node.title,
         summary: node.summary,
         videoUrl: node.videoUrl,
+        tags: node.tags,
         learningObjectives: node.learningObjectives,
         checkpoints: node.checkpoints,
         quizQuestions: node.quizQuestions,

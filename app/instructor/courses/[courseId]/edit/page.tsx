@@ -33,6 +33,7 @@ export default async function EditCoursePage({ params }: Props) {
     }),
     prisma.lesson.findMany({
       where: {
+        isDraft: false,
         OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
       },
       select: { id: true, title: true, slug: true },
@@ -44,5 +45,10 @@ export default async function EditCoursePage({ params }: Props) {
     notFound();
   }
 
-  return <CourseEditForm course={course} availableLessons={availableLessons} />;
+  return (
+    <CourseEditForm
+      course={course}
+      availableLessons={availableLessons.map((lesson) => ({ ...lesson, slug: lesson.slug ?? '' }))}
+    />
+  );
 }

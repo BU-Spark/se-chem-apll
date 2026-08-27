@@ -1,6 +1,6 @@
 'use client';
 
-import type { FormQuestion, QuestionType, ShortAnswerMode } from './types';
+import type { CheckpointItemType, FormQuestion, ShortAnswerMode } from './types';
 import styles from './NodeForm.module.css';
 
 interface QuestionEditorProps {
@@ -14,6 +14,7 @@ interface QuestionEditorProps {
   canRemove: boolean;
   expanded: boolean;
   onToggle: () => void;
+  allowNotes?: boolean;
 }
 
 export default function QuestionEditor({
@@ -27,10 +28,18 @@ export default function QuestionEditor({
   canRemove,
   expanded,
   onToggle,
+  allowNotes = false,
 }: QuestionEditorProps) {
+  const isNote = q.questionType === 'note';
+  const itemLabel = isNote ? `Note ${index + 1}` : `Question ${index + 1}`;
   const panelId = `checkpoint-question-${q.id}`;
-  const promptSummary = q.prompt.trim() || 'Untitled question';
-  const typeLabel = q.questionType === 'multipleChoice' ? 'Multiple choice' : 'Numeric short answer';
+  const promptSummary = q.prompt.trim() || (isNote ? 'Untitled note' : 'Untitled question');
+  const typeLabel =
+    q.questionType === 'note'
+      ? 'Note'
+      : q.questionType === 'multipleChoice'
+        ? 'Multiple choice'
+        : 'Numeric short answer';
 
   return (
     <div className={styles.questionCard}>
@@ -41,9 +50,9 @@ export default function QuestionEditor({
           onClick={onToggle}
           aria-expanded={expanded}
           aria-controls={panelId}
-          aria-label={`Question ${index + 1}: ${promptSummary}`}
+          aria-label={`${itemLabel}: ${promptSummary}`}
         >
-          <span className={styles.questionIndex}>Q{index + 1}</span>
+          <span className={styles.questionIndex}>{isNote ? `Note ${index + 1}` : `Q${index + 1}`}</span>
           <span className={styles.questionSummary} title={promptSummary}>
             {promptSummary}
           </span>
@@ -57,7 +66,7 @@ export default function QuestionEditor({
             type="button"
             className={styles.removeBtn}
             onClick={onRemove}
-            aria-label={`Remove question ${index + 1}`}
+            aria-label={`Remove ${isNote ? 'note' : 'question'} ${index + 1}`}
           >
             Remove
           </button>
@@ -70,26 +79,30 @@ export default function QuestionEditor({
             Type:
             <select
               value={q.questionType}
-              onChange={(e) => onUpdate({ questionType: e.target.value as QuestionType, correctIndices: [] })}
+              onChange={(e) => onUpdate({ questionType: e.target.value as CheckpointItemType, correctIndices: [] })}
             >
               <option value="multipleChoice">Multiple choice</option>
               <option value="shortAnswer">Numeric short answer</option>
+              {allowNotes && <option value="note">Note</option>}
             </select>
           </label>
 
           <label className={styles.field}>
             <span className={styles.fieldLabel}>
-              Question prompt <span className={styles.required}>*</span>
+              {isNote ? 'Note' : 'Question prompt'} <span className={styles.required}>*</span>
             </span>
             <textarea
               rows={2}
               value={q.prompt}
               onChange={(e) => onUpdate({ prompt: e.target.value })}
-              placeholder="What happens if the gas flow is too high?"
+              aria-label={isNote ? 'Note text' : 'Question prompt'}
+              placeholder={
+                isNote ? 'Explain what learners should notice here.' : 'What happens if the gas flow is too high?'
+              }
             />
           </label>
 
-          {q.questionType === 'multipleChoice' ? (
+          {isNote ? null : q.questionType === 'multipleChoice' ? (
             <div className={styles.choiceList}>
               <p className={styles.choiceLabel}>Answer choices (select all correct answers)</p>
               {q.choices.map((choice, ci) => (
@@ -100,7 +113,7 @@ export default function QuestionEditor({
                     onChange={() =>
                       onUpdate({
                         correctIndices: q.correctIndices.includes(ci)
-                          ? q.correctIndices.filter((index) => index !== ci)
+                          ? q.correctIndices.filter((answerIndex) => answerIndex !== ci)
                           : [...q.correctIndices, ci].sort((a, b) => a - b),
                       })
                     }

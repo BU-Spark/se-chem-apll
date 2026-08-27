@@ -81,6 +81,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const lessonIds = [...new Set(lessonInputs.map((row) => row.lessonId))];
+  if (lessonIds.length > 0) {
+    const draftLesson = await prisma.lesson.findFirst({
+      where: { id: { in: lessonIds }, isDraft: true },
+      select: { id: true },
+    });
+    if (draftLesson) {
+      return NextResponse.json({ error: 'Draft lessons cannot be added to a course.' }, { status: 422 });
+    }
+  }
+
   const course = await prisma.course.create({
     data: {
       code: code.trim().toUpperCase(),

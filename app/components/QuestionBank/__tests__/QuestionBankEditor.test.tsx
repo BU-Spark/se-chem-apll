@@ -426,7 +426,7 @@ describe('QuestionBankEditor', () => {
     const bulkBar = screen.getByText('2 selected').closest('[role="status"]');
     expect(bulkBar).not.toBeNull();
     expect(screen.getByRole('textbox', { name: /Question prompt/ })).toHaveValue('Third');
-    await user.click(within(bulkBar!).getByRole('button', { name: 'Delete' }));
+    await user.click(within(bulkBar as HTMLElement).getByRole('button', { name: 'Delete' }));
 
     expect(harnessQuestions().map((question) => question.prompt)).toEqual(['First']);
     expect(screen.getByRole('textbox', { name: /Question prompt/ })).toHaveValue('First');
@@ -439,7 +439,7 @@ describe('QuestionBankEditor', () => {
     await user.click(screen.getByRole('button', { name: 'First' }));
     fireEvent.click(screen.getByRole('button', { name: 'Second' }), { ctrlKey: true });
     const bulkBar = screen.getByText('2 selected').closest('[role="status"]');
-    await user.click(within(bulkBar!).getByRole('button', { name: 'Duplicate' }));
+    await user.click(within(bulkBar as HTMLElement).getByRole('button', { name: 'Duplicate' }));
 
     expect(harnessQuestions().map((question) => question.prompt)).toEqual(['First', 'First', 'Second', 'Second']);
     expect(screen.queryByText('2 selected')).not.toBeInTheDocument();

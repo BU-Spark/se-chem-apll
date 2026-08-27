@@ -27,7 +27,8 @@ async function createDemoNode(index) {
       summary: '[seed-demo] Example learning node',
       videoUrl: pickRandomYoutube(),
       estimatedMinutes: 8 + index,
-      learningObjectives: [`Identify key concept ${index}`, `Apply procedure ${index}`],
+      tags: [`key concept ${index}`, `procedure ${index}`],
+      learningObjectives: [`Understand key concept ${index}.`, `Apply procedure ${index}.`],
       checkpoints: {
         create: [
           {
@@ -274,7 +275,9 @@ async function main() {
     if (!primaryLessonNode) continue;
 
     const quizQuestions = primaryLessonNode.node.quizQuestions;
-    const checkpointQuestions = primaryLessonNode.node.checkpoints.flatMap((c) => c.questions);
+    const checkpointQuestions = primaryLessonNode.node.checkpoints
+      .flatMap((c) => c.questions)
+      .filter((question) => question.kind === 'QUESTION');
 
     if (quizQuestions.length > 0) {
       const shouldFail = i % 2 === 0;

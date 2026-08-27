@@ -127,13 +127,14 @@ enum CourseRole {
 
 model Lesson {
   id                String             @id @default(cuid())
-  slug              String             @unique
+  slug              String?            @unique
   title             String
   summary           String
   description       String?
   thumbnailUrl      String?
   estimatedMinutes  Int?
   createdByClerkId  String?
+  isDraft           Boolean            @default(false)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   courseLessons     CourseLesson[]
@@ -176,8 +177,10 @@ model Node {
   muxPlaybackId       String?
   thumbnailUrl        String?
   estimatedMinutes    Int?
+  tags                String[]         @default([])
   learningObjectives  String[]         @default([])
   createdByClerkId    String?
+  isDraft             Boolean          @default(false)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   checkpoints         NodeCheckpoint[]
@@ -206,6 +209,7 @@ model CheckpointQuestion {
   id             String   @id @default(cuid())
   checkpointId   String
   sortOrder      Int
+  kind           CheckpointQuestionKind @default(QUESTION)
   prompt         String
   // For multiple-choice: { type: "multipleChoice", choices: string[] } or legacy string[]
   // For short answer:    { type: "shortAnswer", answerMode: "exact"|"range", ... }
@@ -218,6 +222,11 @@ model CheckpointQuestion {
   responses  NodeResponse[]
 
   @@unique([checkpointId, sortOrder])
+}
+
+enum CheckpointQuestionKind {
+  QUESTION
+  NOTE
 }
 
 // Post-video (or foundational first-attempt) quiz bank; sampled via LessonNode.quizQuestionCount.

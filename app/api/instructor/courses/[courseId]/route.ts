@@ -99,6 +99,17 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
       }
     }
+
+    const lessonIds = [...new Set(lessons.map((row) => row.lessonId))];
+    if (lessonIds.length > 0) {
+      const draftLesson = await prisma.lesson.findFirst({
+        where: { id: { in: lessonIds }, isDraft: true },
+        select: { id: true },
+      });
+      if (draftLesson) {
+        return NextResponse.json({ error: 'Draft lessons cannot be added to a course.' }, { status: 422 });
+      }
+    }
   }
 
   const course = await prisma.course.update({

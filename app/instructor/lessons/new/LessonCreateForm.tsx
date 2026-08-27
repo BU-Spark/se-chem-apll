@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import LessonBuilder from '@/app/components/LessonBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
+import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
@@ -35,46 +34,76 @@ export default function LessonCreateForm({ availableNodes }: Props) {
     );
   }
 
-  // Lesson nodes (drag-and-drop state)
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>([]);
+  const [edges, setEdges] = useState<LessonEdgeEntry[]>([]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleLessonNodesChange(updated: LessonNodeEntry[]) {
+    const validIds = new Set(updated.map((e) => e.instanceId));
+    setEdges((prev) => prev.filter((e) => validIds.has(e.sourceInstanceId) && validIds.has(e.targetInstanceId)));
+    setLessonNodes(updated);
+  }
+
+  async function persistLesson(asDraft: boolean) {
     setError(null);
 
-    if (lessonNodes.length === 0) {
-      setError('Add at least one node to the lesson before saving.');
-      return;
+    if (!asDraft) {
+      if (!title.trim()) {
+        setError('Title is required.');
+        return;
+      }
+      if (!slug.trim()) {
+        setError('Slug is required.');
+        return;
+      }
+      if (!summary.trim()) {
+        setError('Summary is required.');
+        return;
+      }
+      if (lessonNodes.length === 0) {
+        setError('Add at least one node to the lesson before saving.');
+        return;
+      }
+
+      if (
+        lessonNodes.some(
+          (entry) =>
+            entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100
+        )
+      ) {
+        setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+        return;
+      }
+
+      if (
+        lessonNodes.some((entry) => {
+          if (entry.quizBankCount === 0) {
+            return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+          }
+          return (
+            entry.quizQuestionCount === '' ||
+            !Number.isInteger(Number(entry.quizQuestionCount)) ||
+            Number(entry.quizQuestionCount) < 1
+          );
+        })
+      ) {
+        setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+        return;
+      }
     }
 
-    if (
-      lessonNodes.some(
-        (entry) =>
-          entry.passingPercent === '' ||
-          !Number.isInteger(Number(entry.passingPercent)) ||
-          Number(entry.passingPercent) < 0 ||
-          Number(entry.passingPercent) > 100
-      )
-    ) {
-      setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
-      return;
-    }
-
-    if (
-      lessonNodes.some((entry) => {
-        if (entry.quizBankCount === 0) {
-          return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
-        }
-        return (
-          entry.quizQuestionCount === '' ||
-          !Number.isInteger(Number(entry.quizQuestionCount)) ||
-          Number(entry.quizQuestionCount) < 1
-        );
-      })
-    ) {
-      setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
-      return;
-    }
+    const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
+    const serialisedEdges = edges
+      .map((e) => ({
+        sourceSortOrder: instanceToSortOrder.get(e.sourceInstanceId),
+        targetSortOrder: instanceToSortOrder.get(e.targetInstanceId),
+      }))
+      .filter(
+        (e): e is { sourceSortOrder: number; targetSortOrder: number } =>
+          e.sourceSortOrder !== undefined && e.targetSortOrder !== undefined
+      );
 
     setSaving(true);
     try {
@@ -94,6 +123,8 @@ export default function LessonCreateForm({ availableNodes }: Props) {
             quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
+          edges: serialisedEdges,
+          isDraft: asDraft,
         }),
       });
 
@@ -110,13 +141,16 @@ export default function LessonCreateForm({ availableNodes }: Props) {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await persistLesson(false);
+  }
+
   return (
     <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New lesson</h1>
-        <p className={styles.pageSubtitle}>
-          Fill in the lesson details, then drag nodes from the library into the lesson canvas below.
-        </p>
+        <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
       </header>
 
       <form onSubmit={handleSubmit} className={styles.form}>
@@ -179,13 +213,22 @@ export default function LessonCreateForm({ availableNodes }: Props) {
           </label>
         </section>
 
-        {/* ── Builder ── */}
+        {/* ── Roadmap ── */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Build lesson</h2>
+          <h2 className={styles.sectionTitle}>Learning roadmap</h2>
           <p className={styles.sectionNote}>
-            Add nodes from the library, choose a pass threshold for each one, and drag to reorder.
+            Click empty space to add a node. Draw prerequisite paths between nodes — no cycles allowed.
           </p>
-          <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={setLessonNodes} />
+          <p className={styles.sectionNote}>
+            Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+          </p>
+          <LessonRoadmapBuilder
+            availableNodes={availableNodes}
+            lessonNodes={lessonNodes}
+            edges={edges}
+            onEdgesChange={setEdges}
+            onLessonNodesChange={handleLessonNodesChange}
+          />
         </section>
 
         {error && <p className={styles.error}>{error}</p>}
@@ -194,6 +237,9 @@ export default function LessonCreateForm({ availableNodes }: Props) {
           <a href="/instructor/lessons" className={styles.cancelLink}>
             Cancel
           </a>
+          <button type="button" className={styles.draftBtn} onClick={() => persistLesson(true)} disabled={saving}>
+            {saving ? 'Saving…' : 'Save as draft'}
+          </button>
           <button type="submit" className={styles.submitBtn} disabled={saving}>
             {saving ? 'Saving…' : 'Create lesson'}
           </button>

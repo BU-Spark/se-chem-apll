@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
 import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
+import { isAcyclic } from '@/app/utils/dagValidation';
 
 // GET /api/instructor/lessons
 export async function GET() {
@@ -19,7 +20,7 @@ export async function GET() {
         orderBy: { sortOrder: 'asc' },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
   });
   return NextResponse.json(lessons);
 }
@@ -36,7 +37,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, slug, summary, description, estimatedMinutes, lessonNodes } = body as {
+  const {
+    title,
+    slug,
+    summary,
+    description,
+    estimatedMinutes,
+    lessonNodes,
+    edges,
+    isDraft = false,
+  } = body as {
     title?: string;
     slug?: string;
     summary?: string;
@@ -49,13 +59,30 @@ export async function POST(req: NextRequest) {
       quizQuestionCount?: number;
       isRequired?: boolean;
     }>;
+    edges?: Array<{ sourceSortOrder: number; targetSortOrder: number }>;
+    isDraft?: boolean;
   };
 
-  if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
-  if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
-  if (!summary?.trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
+  if (typeof isDraft !== 'boolean') {
+    return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
+  }
+  if (lessonNodes !== undefined && !Array.isArray(lessonNodes)) {
+    return NextResponse.json({ error: 'lessonNodes must be an array' }, { status: 422 });
+  }
+  if (edges !== undefined && !Array.isArray(edges)) {
+    return NextResponse.json({ error: 'edges must be an array' }, { status: 422 });
+  }
 
-  if ((lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
+  if (!isDraft) {
+    if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 422 });
+    if (!slug?.trim()) return NextResponse.json({ error: 'slug is required' }, { status: 422 });
+    if (!summary?.trim()) return NextResponse.json({ error: 'summary is required' }, { status: 422 });
+    if (!lessonNodes || lessonNodes.length === 0) {
+      return NextResponse.json({ error: 'At least one node is required.' }, { status: 422 });
+    }
+  }
+
+  if (!isDraft && (lessonNodes ?? []).some((ln) => !isValidPassingPercent(ln.passingPercent))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a passingPercent between 0 and 100' },
       { status: 422 }
@@ -63,32 +90,54 @@ export async function POST(req: NextRequest) {
   }
 
   // same check as above, but for quizQuestionCount
-  if ((lessonNodes ?? []).some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
+  if (!isDraft && (lessonNodes ?? []).some((ln) => !isValidQuizQuestionCount(ln.quizQuestionCount))) {
     return NextResponse.json(
       { error: 'Each lesson node must have a non-negative integer quizQuestionCount' },
       { status: 422 }
     );
   }
 
-  // Validate slug format
-  if (!/^[a-z0-9-]+$/.test(slug)) {
+  if (edges && edges.length > 0) {
+    const edgesForValidation = edges.map((e) => ({
+      sourceId: String(e.sourceSortOrder),
+      targetId: String(e.targetSortOrder),
+    }));
+    if (!isAcyclic(edgesForValidation)) {
+      return NextResponse.json({ error: 'Edge set contains a cycle' }, { status: 422 });
+    }
+  }
+
+  // Validate slug format when publishing. Drafts may contain a partial slug.
+  if (!isDraft && !/^[a-z0-9-]+$/.test(slug!)) {
     return NextResponse.json({ error: 'slug must be lowercase letters, numbers, and hyphens only' }, { status: 422 });
+  }
+
+  const nodeIds = [...new Set((lessonNodes ?? []).map((ln) => ln.nodeId))];
+  if (nodeIds.length > 0) {
+    const draftNode = await prisma.node.findFirst({
+      where: { id: { in: nodeIds }, isDraft: true },
+      select: { id: true },
+    });
+    if (draftNode) {
+      return NextResponse.json({ error: 'Draft nodes cannot be added to a lesson.' }, { status: 422 });
+    }
   }
 
   const lesson = await prisma.lesson.create({
     data: {
-      title: title.trim(),
-      slug: slug.trim(),
-      summary: summary.trim(),
+      title: title?.trim() ?? '',
+      slug: slug?.trim() || null,
+      summary: summary?.trim() ?? '',
       createdByClerkId: userId,
+      isDraft,
       description: description ?? null,
       estimatedMinutes: estimatedMinutes ?? null,
       lessonNodes: {
         create: (lessonNodes ?? []).map((ln) => ({
           nodeId: ln.nodeId,
           sortOrder: ln.sortOrder,
-          passingPercent: ln.passingPercent!,
-          quizQuestionCount: ln.quizQuestionCount!,
+          passingPercent: ln.passingPercent ?? 0,
+          quizQuestionCount: ln.quizQuestionCount ?? 0,
           isRequired: ln.isRequired ?? true,
         })),
       },
@@ -97,6 +146,28 @@ export async function POST(req: NextRequest) {
       lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
     },
   });
-
-  return NextResponse.json(lesson, { status: 201 });
+  if (edges && edges.length > 0) {
+    const sortToId = new Map(lesson.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
+    const edgeRows = edges
+      .map(({ sourceSortOrder, targetSortOrder }) => ({
+        lessonId: lesson.id,
+        sourceId: sortToId.get(sourceSortOrder)!,
+        targetId: sortToId.get(targetSortOrder)!,
+      }))
+      .filter((e) => e.sourceId && e.targetId);
+    if (edgeRows.length > 0) {
+      await prisma.lessonNodeEdge.createMany({ data: edgeRows });
+    }
+  }
+  const fullLesson = await prisma.lesson.findUnique({
+    where: { id: lesson.id },
+    include: {
+      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+      lessonNodeEdges: {
+        select: { id: true, sourceId: true, targetId: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+  return NextResponse.json(fullLesson, { status: 201 });
 }
