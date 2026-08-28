@@ -145,7 +145,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Edit course</h1>
         <p className={styles.pageSubtitle}>

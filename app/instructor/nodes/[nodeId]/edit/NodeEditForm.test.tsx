@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NodeEditForm from './NodeEditForm';
 
@@ -12,6 +12,41 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   __esModule: true,
   default: () => <div data-testid="youtube-player" />,
 }));
+
+jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
+  return {
+    __esModule: true,
+    default: function MockQuestionBankEditor({
+      questions,
+      onChange,
+      onSave,
+    }: {
+      questions: Array<{ id: string; type: string; prompt: string }>;
+      onChange: (next: typeof questions) => void;
+      onSave: () => void | Promise<void>;
+    }) {
+      return (
+        <div data-testid="question-bank-editor">
+          {questions.map((q, index) => (
+            <label key={q.id}>
+              Quiz question prompt {index + 1}
+              <input
+                aria-label={`Quiz question prompt ${index + 1}`}
+                value={q.prompt}
+                onChange={(e) =>
+                  onChange(questions.map((item) => (item.id === q.id ? { ...item, prompt: e.target.value } : item)))
+                }
+              />
+            </label>
+          ))}
+          <button type="button" onClick={() => void onSave()}>
+            Mock save node command
+          </button>
+        </div>
+      );
+    },
+  };
+});
 
 const node = {
   id: 'node-1',
@@ -136,6 +171,74 @@ describe('NodeEditForm', () => {
     await user.click(screen.getByRole('button', { name: 'Back to nodes' }));
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
   });
+  it('saves directly from the quiz-bank command without visiting Review', async () => {
+    const user = userEvent.setup();
+    render(<NodeEditForm node={node} />);
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Mock save node command' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe('/api/instructor/nodes/node-1');
+    expect((global.fetch as jest.Mock).mock.calls[0][1].method).toBe('PATCH');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Changes saved' })).toBeInTheDocument());
+  });
+
+  it('renders formatted quiz prompts and choices in the Review step', async () => {
+    const user = userEvent.setup();
+    const formattedNode = {
+      ...node,
+      quizQuestions: [
+        {
+          id: 'qq-formatted',
+          prompt: '**Water** contains $\\ce{H2O}$.',
+          options: { type: 'multipleChoice', choices: ['$2$ atoms', '$3$ atoms'] },
+          correctIndices: [1],
+        },
+      ],
+    };
+    render(<NodeEditForm node={formattedNode} />);
+
+    await advanceToReview(user);
+
+    expect(screen.getByText('Water')).toHaveStyle({ fontWeight: 'bold' });
+    expect(screen.getAllByTestId('markdown-preview').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByTestId('markdown-preview').some((preview) => preview.querySelector('.katex'))).toBe(true);
+    expect(screen.getAllByText('Correct').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders each formatted QEV prompt and answer in the Review step', async () => {
+    const user = userEvent.setup();
+    const formattedNode = {
+      ...node,
+      checkpoints: [
+        {
+          ...node.checkpoints[0],
+          questions: [
+            {
+              id: 'cq-formatted',
+              prompt: '<u>Water</u> is H<sub>2</sub>O.',
+              options: { type: 'multipleChoice', choices: ['x<sup>2</sup>', '**Two** atoms'] },
+              correctIndices: [1],
+            },
+          ],
+        },
+      ],
+    };
+    render(<NodeEditForm node={formattedNode} />);
+
+    await advanceToReview(user);
+    const qevPreview = screen.getByTestId('qev-item-preview');
+    expect(within(qevPreview).getByText('Water').tagName).toBe('U');
+    expect(within(qevPreview).getByText('2', { selector: 'sub' })).toBeInTheDocument();
+    expect(within(qevPreview).getByText('2', { selector: 'sup' })).toBeInTheDocument();
+    expect(within(qevPreview).getByText('Two').tagName).toBe('STRONG');
+    expect(within(qevPreview).getByText('Correct')).toBeInTheDocument();
+  });
+
   it('adds tags on the basics step', async () => {
     const user = userEvent.setup();
     render(<NodeEditForm node={{ ...node, tags: [], learningObjectives: [] }} />);

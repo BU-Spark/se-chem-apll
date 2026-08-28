@@ -147,7 +147,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New lesson</h1>
         <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
