@@ -74,6 +74,8 @@ const nextConfig: NextConfig = {
     'remark-gfm',
     'remark-math',
     'rehype-katex',
+    'rehype-raw',
+    'rehype-sanitize',
   ]),
 };
 

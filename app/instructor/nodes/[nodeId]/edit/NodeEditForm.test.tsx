@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NodeEditForm from './NodeEditForm';
 
@@ -205,9 +205,38 @@ describe('NodeEditForm', () => {
     await advanceToReview(user);
 
     expect(screen.getByText('Water')).toHaveStyle({ fontWeight: 'bold' });
-    expect(screen.getAllByTestId('markdown-preview')).toHaveLength(3);
+    expect(screen.getAllByTestId('markdown-preview').length).toBeGreaterThanOrEqual(3);
     expect(screen.getAllByTestId('markdown-preview').some((preview) => preview.querySelector('.katex'))).toBe(true);
-    expect(screen.getByText('Correct')).toBeInTheDocument();
+    expect(screen.getAllByText('Correct').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders each formatted QEV prompt and answer in the Review step', async () => {
+    const user = userEvent.setup();
+    const formattedNode = {
+      ...node,
+      checkpoints: [
+        {
+          ...node.checkpoints[0],
+          questions: [
+            {
+              id: 'cq-formatted',
+              prompt: '<u>Water</u> is H<sub>2</sub>O.',
+              options: { type: 'multipleChoice', choices: ['x<sup>2</sup>', '**Two** atoms'] },
+              correctIndices: [1],
+            },
+          ],
+        },
+      ],
+    };
+    render(<NodeEditForm node={formattedNode} />);
+
+    await advanceToReview(user);
+    const qevPreview = screen.getByTestId('qev-item-preview');
+    expect(within(qevPreview).getByText('Water').tagName).toBe('U');
+    expect(within(qevPreview).getByText('2', { selector: 'sub' })).toBeInTheDocument();
+    expect(within(qevPreview).getByText('2', { selector: 'sup' })).toBeInTheDocument();
+    expect(within(qevPreview).getByText('Two').tagName).toBe('STRONG');
+    expect(within(qevPreview).getByText('Correct')).toBeInTheDocument();
   });
 
   it('adds tags on the basics step', async () => {

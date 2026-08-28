@@ -8,6 +8,20 @@ describe('MarkdownPreview', () => {
     expect(screen.getByText('italic').tagName).toBe('EM');
   });
 
+  it('renders underline, superscript, and subscript while sanitizing unsafe HTML', () => {
+    render(
+      <MarkdownPreview
+        content={'<u onclick="alert(1)">underlined</u> H<sub>2</sub>O x<sup>2</sup><script>alert(1)</script>'}
+      />
+    );
+
+    expect(screen.getByText('underlined').tagName).toBe('U');
+    expect(screen.getByText('underlined')).not.toHaveAttribute('onclick');
+    expect(screen.getByText('2', { selector: 'sub' })).toBeInTheDocument();
+    expect(screen.getByText('2', { selector: 'sup' })).toBeInTheDocument();
+    expect(screen.getByTestId('markdown-preview').querySelector('script')).toBeNull();
+  });
+
   it('renders inline LaTeX math with KaTeX', () => {
     render(<MarkdownPreview content={'Lift coefficient: $C_L$'} />);
     const preview = screen.getByTestId('markdown-preview');

@@ -311,7 +311,7 @@ describe('QuestionBankEditor', () => {
     }
   });
 
-  it('uses one visual authoring surface without an editor mode selector', async () => {
+  it('switches the selected quiz-bank question between editing and a complete preview', async () => {
     const user = userEvent.setup();
     render(<Harness initial={[validMcQuestion('q1', 'First'), validMcQuestion('q2', 'Second')]} />);
 
@@ -321,7 +321,19 @@ describe('QuestionBankEditor', () => {
     expect(screen.getByRole('textbox', { name: 'Choice 2' })).toHaveValue('B');
     expect(screen.queryByRole('group', { name: 'Editor mode' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Markdown' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true');
+    const preview = screen.getByRole('region', { name: 'Question preview' });
+    expect(within(preview).getByText('First')).toBeInTheDocument();
+    expect(within(preview).getByText('A')).toBeInTheDocument();
+    expect(within(preview).getByText('B')).toBeInTheDocument();
+    expect(within(preview).getByText('Correct')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /Question prompt/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('textbox', { name: /Question prompt/ })).toHaveValue('First');
   });
 
   it('shows issue counts in the status bar for incomplete questions', async () => {

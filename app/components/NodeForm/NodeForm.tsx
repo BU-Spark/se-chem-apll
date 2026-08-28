@@ -11,6 +11,7 @@ import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
 import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
 import { countIssuesBySeverity, validateQuestionBank } from '@/app/components/QuestionBank/validation';
 import type { AuthoringQuestion } from '@/app/components/QuestionBank/types';
+import QevItemPreview from './QevItemPreview';
 import QuestionEditor from './QuestionEditor';
 import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer';
 import {
@@ -556,8 +557,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                   <ul className={styles.previewSublist}>
                     {checkpoint.questions.map((q, qIdx) => (
                       <li key={q.id}>
-                        {q.questionType === 'note' ? `Note ${qIdx + 1}` : `Q${qIdx + 1}`}:{' '}
-                        {q.prompt.trim() || '(empty prompt)'}
+                        <div className={styles.previewQuestionPrompt}>
+                          <strong>{q.questionType === 'note' ? `Note ${qIdx + 1}` : `Q${qIdx + 1}`}</strong>
+                          <div className={styles.previewRenderedContent}>
+                            <QevItemPreview question={q} />
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>

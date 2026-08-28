@@ -386,6 +386,47 @@
   margin-top: 0.45rem;
 }
 
+.questionBodyToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+}
+
+.questionViewToggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem;
+  margin-left: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #f3f4f6;
+}
+
+.questionViewToggle button {
+  padding: 0.3rem 0.65rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.questionViewToggle button[aria-pressed='true'] {
+  background: #fff;
+  color: #1f5fab;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.questionViewToggle button:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 1px;
+}
+
 .typeSelect {
   display: inline-flex;
   align-items: center;
@@ -434,16 +475,21 @@
 
 .choiceRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.6rem;
 }
 
 .choiceRow input[type='checkbox'] {
   width: 1rem;
   height: 1rem;
-  margin: 0;
+  margin: 2.1rem 0 0;
   flex-shrink: 0;
   accent-color: #1f5fab;
+}
+
+.choiceMarkdownField {
+  flex: 1;
+  min-width: 0;
 }
 
 .choiceInput {
@@ -474,6 +520,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-top: 2rem;
 }
 
 .removeChoiceBtn:hover {
@@ -490,7 +537,9 @@
   font-size: 0.85rem;
   color: #374151;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .addChoiceBtn {
@@ -547,7 +596,9 @@
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .secondaryBtn:hover {
@@ -781,6 +832,74 @@
 
 .previewAnswer {
   margin: 0.3rem 0 0 1.55rem;
+  color: #4b5563;
+}
+
+.qevItemPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.55rem;
+  background: #fff;
+  color: #111827;
+}
+
+.qevPreviewPrompt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.qevPreviewLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.qevPreviewEmpty {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.qevPreviewChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.qevPreviewChoice {
+  padding-left: 0.2rem;
+}
+
+.qevPreviewChoice::marker {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.qevPreviewChoiceContent {
+  display: inline-block;
+  min-width: 0;
+  margin-right: 0.45rem;
+  vertical-align: top;
+}
+
+.qevPreviewChoiceContent p,
+.qevPreviewPrompt p {
+  margin: 0;
+}
+
+.qevPreviewAnswer {
+  margin: 0;
   color: #4b5563;
 }
 

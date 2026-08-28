@@ -62,6 +62,13 @@ jest.mock('@mdxeditor/editor', () => {
         ))}
       </>
     ),
+    StrikeThroughSupSubToggles: ({ options }: { options: string[] }) => (
+      <>
+        {options.map((option) => (
+          <button type="button" aria-label={option === 'Sup' ? 'Superscript' : 'Subscript'} key={option} />
+        ))}
+      </>
+    ),
     ListsToggle: ({ options }: { options: string[] }) => (
       <>
         {options.map((option) => (
@@ -98,7 +105,9 @@ describe('RichMarkdownEditor', () => {
     expect(editor).toHaveTextContent('Existing $K_a$');
     expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Italic' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Underline' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Underline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Superscript' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Subscript' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'bullet list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'number list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create link' })).toBeInTheDocument();
@@ -114,6 +123,9 @@ describe('RichMarkdownEditor', () => {
 
     const editor = screen.getByRole('textbox', { name: 'Choice 1' });
     expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Underline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Superscript' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Subscript' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'bullet list' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create link' })).not.toBeInTheDocument();
     expect(fireEvent.keyDown(editor, { key: 'Enter' })).toBe(false);
@@ -155,12 +167,12 @@ describe('RichMarkdownEditor', () => {
     expect(onChange).toHaveBeenCalledWith('**Bold** and $K_a$');
   });
 
-  it('drops unsupported pasted styling while preserving its text and supported Markdown', () => {
+  it('drops unsupported styling while preserving supported semantic formatting', () => {
     expect(
       normalizeVisualMarkdown(
         '<span style={{ color: "red" }}><u>Red</u></span> H<sub>2</sub>O x<sup>2</sup> **bold** $K_a$'
       )
-    ).toBe('Red H2O x2 **bold** $K_a$');
+    ).toBe('<u>Red</u> H<sub>2</sub>O x<sup>2</sup> **bold** $K_a$');
   });
 
   it('undoes Markdown escaping inside LaTeX without changing command backslashes', () => {

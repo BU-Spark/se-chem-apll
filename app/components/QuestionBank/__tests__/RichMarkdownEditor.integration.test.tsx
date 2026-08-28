@@ -118,7 +118,7 @@ describe('RichMarkdownEditor integration', () => {
     expect(Array.from(preview.querySelectorAll('li')).map((item) => item.textContent)).toEqual(['First', 'Second']);
   });
 
-  it('keeps pasted text while removing unsupported inline styling', async () => {
+  it('keeps supported semantic formatting while removing unsupported inline styling', async () => {
     render(<RichEditorHarness />);
     const editor = await screen.findByRole('textbox', { name: 'Question prompt' });
 
@@ -131,7 +131,10 @@ describe('RichMarkdownEditor integration', () => {
     });
 
     await waitFor(() => expect(markdownSource()).toContain('Red'));
-    expect(markdownSource()).not.toMatch(/<\/?(?:span|sub|sup|u)\b/i);
+    expect(markdownSource()).not.toMatch(/<\/?span\b/i);
+    expect(markdownSource()).toMatch(/<u>Red<\/u>/i);
+    expect(markdownSource()).toMatch(/H<sub>2<\/sub>O/i);
+    expect(markdownSource()).toMatch(/x<sup>2<\/sup>/i);
     expect(screen.getByTestId('markdown-preview')).toHaveTextContent('Red H2O and x2');
   });
 

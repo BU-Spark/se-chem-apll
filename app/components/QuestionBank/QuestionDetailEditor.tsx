@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import MarkdownField from './MarkdownField';
+import QuestionPreview from './QuestionPreview';
 import type { QuestionIssue } from './validation';
 import {
   MAX_CHOICES,
@@ -235,23 +237,35 @@ export default function QuestionDetailEditor({
   canMoveUp,
   canMoveDown,
 }: Props) {
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.length - errorCount;
 
   return (
     <section className={styles.detailEditor} aria-label="Question editor">
       <header className={styles.detailHeader}>
-        <label className={styles.detailTypeSelect}>
-          Type
-          <select
-            value={question.type}
-            onChange={(e) => onChangeType(e.target.value as AuthoringQuestion['type'])}
-            aria-label="Question type"
-          >
-            <option value="multipleChoice">Multiple choice</option>
-            <option value="shortAnswer">Numeric short answer</option>
-          </select>
-        </label>
+        <div className={styles.detailHeaderControls}>
+          <label className={styles.detailTypeSelect}>
+            Type
+            <select
+              value={question.type}
+              onChange={(e) => onChangeType(e.target.value as AuthoringQuestion['type'])}
+              aria-label="Question type"
+              disabled={view === 'preview'}
+            >
+              <option value="multipleChoice">Multiple choice</option>
+              <option value="shortAnswer">Numeric short answer</option>
+            </select>
+          </label>
+          <div className={styles.detailViewToggle} role="group" aria-label="Question view">
+            <button type="button" aria-pressed={view === 'edit'} onClick={() => setView('edit')}>
+              Edit
+            </button>
+            <button type="button" aria-pressed={view === 'preview'} onClick={() => setView('preview')}>
+              Preview
+            </button>
+          </div>
+        </div>
         {isDraft ? (
           <span className={styles.draftBadge}>New question</span>
         ) : (
@@ -280,20 +294,26 @@ export default function QuestionDetailEditor({
         </p>
       )}
 
-      <MarkdownField
-        label="Question prompt"
-        required
-        value={question.prompt}
-        onChange={(prompt) => onChange({ ...question, prompt })}
-        placeholder={'What is the $K_a$ of $\\ce{CH3COOH}$?'}
-        rows={3}
-        error={issuesForField(issues, 'prompt')}
-      />
-
-      {question.type === 'multipleChoice' ? (
-        <MultipleChoiceEditor question={question} issues={issues} onChange={onChange} />
+      {view === 'preview' ? (
+        <QuestionPreview question={question} />
       ) : (
-        <ShortAnswerEditor question={question} issues={issues} onChange={onChange} />
+        <>
+          <MarkdownField
+            label="Question prompt"
+            required
+            value={question.prompt}
+            onChange={(prompt) => onChange({ ...question, prompt })}
+            placeholder={'What is the $K_a$ of $\\ce{CH3COOH}$?'}
+            rows={3}
+            error={issuesForField(issues, 'prompt')}
+          />
+
+          {question.type === 'multipleChoice' ? (
+            <MultipleChoiceEditor question={question} issues={issues} onChange={onChange} />
+          ) : (
+            <ShortAnswerEditor question={question} issues={issues} onChange={onChange} />
+          )}
+        </>
       )}
     </section>
   );

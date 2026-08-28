@@ -13,6 +13,33 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   default: () => <div data-testid="youtube-player" />,
 }));
 
+// RichMarkdownEditor has its own focused integration coverage. Keep these
+// workflow tests centered on NodeForm state, validation, and payloads.
+jest.mock('@/app/components/QuestionBank/MarkdownField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    value,
+    onChange,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => (
+    <label>
+      {label}
+      <textarea
+        aria-label={label === 'Note' ? 'Note text' : label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
+  ),
+}));
+
 jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
   return {
     __esModule: true,

@@ -11,6 +11,7 @@ import {
   MDXEditor,
   type MDXEditorMethods,
   Separator,
+  StrikeThroughSupSubToggles,
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
@@ -93,7 +94,8 @@ export default function RichMarkdownEditor({
           <>
             <UndoRedo />
             <Separator />
-            <BoldItalicUnderlineToggles options={['Bold', 'Italic']} />
+            <BoldItalicUnderlineToggles options={['Bold', 'Italic', 'Underline']} />
+            <StrikeThroughSupSubToggles options={['Sup', 'Sub']} />
             {!compact && (
               <>
                 <Separator />
