@@ -1,0 +1,1220 @@
+/* Question bank editor — hybrid browser + detail editor */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.searchInput {
+  flex: 1 1 16rem;
+  min-width: 10rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+.filterSelect {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: #fff;
+  color: #374151;
+}
+
+.toolbarBtn {
+  font-size: 0.8rem;
+  color: #1f5fab;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbarBtnDanger {
+  font-size: 0.8rem;
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.toolbarBtnDanger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.primaryBtn {
+  font-size: 0.85rem;
+  color: #fff;
+  background: #1f5fab;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Bulk bar ── */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  color: #0c4a6e;
+}
+
+/* ── Workspace split ── */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.browser {
+  height: 480px;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.browserPanel {
+  min-width: 0;
+}
+
+.selectionHint {
+  margin: 0.45rem 0 0;
+  color: #64748b;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.selectionHint kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.3rem;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+}
+
+.detail {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fff;
+  min-height: 200px;
+}
+
+.emptyState,
+.emptyDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  height: 100%;
+  min-height: 160px;
+  color: #6b7280;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.emptyState p,
+.emptyDetail p {
+  margin: 0;
+}
+
+.emptyHint {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.emptyHint kbd,
+.statusBarHint kbd {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.78em;
+  font-family: inherit;
+}
+
+/* ── Status column dots ── */
+.statusDotError,
+.statusDotWarning,
+.statusDotOk {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.statusDotError {
+  background: #dc2626;
+}
+
+.statusDotWarning {
+  background: #d97706;
+}
+
+.statusDotOk {
+  background: #16a34a;
+}
+
+/* ── Detail editor ── */
+.detailEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.detailHeaderControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.detailTypeSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.detailTypeSelect select {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: #fff;
+}
+
+.detailTypeSelect select:disabled {
+  color: #6b7280;
+  background: #f9fafb;
+}
+
+.detailViewToggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #f3f4f6;
+}
+
+.detailViewToggle button {
+  padding: 0.3rem 0.7rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detailViewToggle button[aria-pressed='true'] {
+  background: #fff;
+  color: #1f5fab;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.detailViewToggle button:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 1px;
+}
+
+.detailHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.detailHeaderActions button {
+  font-size: 0.78rem;
+  color: #374151;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.detailHeaderActions button:hover:not(:disabled) {
+  border-color: #1f5fab;
+  color: #1f5fab;
+}
+
+.detailHeaderActions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.draftBadge {
+  color: #1f5fab;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.detailDeleteBtn {
+  color: #dc2626 !important;
+}
+
+.detailDeleteBtn:hover:not(:disabled) {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+  background: #fef2f2 !important;
+}
+
+.detailIssueError,
+.detailIssueWarning {
+  margin: 0;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.45rem;
+}
+
+.detailIssueError {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.detailIssueWarning {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+/* ── Markdown field ── */
+.markdownField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.markdownFieldHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.markdownFieldLabel {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.required {
+  color: #ef4444;
+  margin-left: 0.2rem;
+}
+
+.markdownInput,
+.markdownInputCompact {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #111827;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.markdownInputCompact {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.markdownInput:focus,
+.markdownInputCompact:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+.markdownInput[aria-invalid='true'],
+.markdownInputCompact[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+.richMarkdownEditor {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  overflow: hidden;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.richMarkdownEditor:focus-within {
+  border-color: #1f5fab;
+  box-shadow: 0 0 0 1px #1f5fab;
+}
+
+.richMarkdownEditorInvalid {
+  border-color: #dc2626;
+}
+
+.richMarkdownRoot {
+  color: #111827;
+}
+
+.richMarkdownToolbar {
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0;
+  background: #f9fafb;
+}
+
+.richMarkdownContent,
+.richMarkdownContentCompact {
+  min-height: 5.25rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+
+.richMarkdownContentCompact {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+.richMarkdownContent p,
+.richMarkdownContentCompact p {
+  margin: 0 0 0.5rem;
+}
+
+.richMarkdownContent p:last-child,
+.richMarkdownContentCompact p:last-child {
+  margin-bottom: 0;
+}
+
+.richMarkdownContent ul,
+.richMarkdownContent ol {
+  margin: 0.4rem 0;
+  padding-left: 1.5rem;
+}
+
+.richMarkdownSlot,
+.richMarkdownSlotCompact {
+  min-height: 7.5rem;
+}
+
+.richMarkdownSlotCompact {
+  min-height: 4.5rem;
+}
+
+.richMarkdownLoading {
+  min-height: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.markdownRepair {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.markdownRepairButton {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.markdownRepairButton:hover {
+  background: #f9fafb;
+}
+
+.markdownPreview p:first-child {
+  margin-top: 0;
+}
+
+.markdownPreview p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Complete question preview ── */
+.questionPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 12rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.questionPreviewPrompt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.questionPreviewLabel {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.questionPreviewEmpty {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.questionPreviewChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.questionPreviewChoice {
+  padding-left: 0.2rem;
+}
+
+.questionPreviewChoice::marker {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.questionPreviewChoiceContent {
+  display: inline-block;
+  min-width: 0;
+  margin-right: 0.5rem;
+  vertical-align: top;
+}
+
+.questionPreviewChoiceContent p,
+.questionPreviewPrompt p {
+  margin: 0;
+}
+
+.questionPreviewCorrect {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: top;
+}
+
+.questionPreviewAnswer {
+  margin: 0;
+  color: #4b5563;
+}
+
+/* Single-line rendered Markdown used by the question browser grid. */
+.gridPromptPreview {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gridPromptPreview .markdownPreview {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gridPromptPreview .markdownPreview p,
+.gridPromptPreview .markdownPreview ul,
+.gridPromptPreview .markdownPreview ol,
+.gridPromptPreview .markdownPreview li,
+.gridPromptPreview .markdownPreview blockquote,
+.gridPromptPreview .markdownPreview h1,
+.gridPromptPreview .markdownPreview h2,
+.gridPromptPreview .markdownPreview h3,
+.gridPromptPreview .markdownPreview h4,
+.gridPromptPreview .markdownPreview h5,
+.gridPromptPreview .markdownPreview h6 {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.gridPromptPreview .markdownPreview br {
+  display: none;
+}
+
+.gridPromptEmpty {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ── Choices ── */
+.choiceEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.choiceEditorLabel {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.choiceEditorRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.choiceCorrect {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.55rem;
+  flex-shrink: 0;
+  accent-color: #1f5fab;
+}
+
+.choiceEditorField {
+  flex: 1;
+  min-width: 0;
+}
+
+.choiceEditorActions {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.choiceEditorActions button {
+  background: none;
+  border: 1px solid transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.3rem;
+}
+
+.choiceEditorActions button:hover:not(:disabled) {
+  color: #1f5fab;
+  border-color: #d1d5db;
+}
+
+.choiceEditorActions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.addChoiceBtn {
+  align-self: flex-start;
+  background: none;
+  border: 1px dashed #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.addChoiceBtn:hover {
+  border-color: #1f5fab;
+  color: #1f5fab;
+}
+
+/* ── Short answer ── */
+.shortAnswerEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.segment,
+.segmentActive {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  cursor: pointer;
+  background: #fff;
+  color: #374151;
+}
+
+.segmentActive {
+  background: #1f5fab;
+  color: #fff;
+}
+
+.numericRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.numericField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.numericField input {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.numericField input:focus {
+  outline: none;
+  border-color: #1f5fab;
+}
+
+/* ── Validation ── */
+.fieldError {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+/* ── Status bar ── */
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: #6b7280;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.6rem;
+}
+
+.statusBarHint {
+  color: #9ca3af;
+}
+
+.statusBarHint button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.statusBarHint button:hover {
+  color: #1f5fab;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Command palette ── */
+.commandOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.commandPalette {
+  width: min(58rem, 100%);
+  max-height: min(88vh, 52rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 0.8rem;
+  background: #fff;
+  color: #111827;
+}
+
+.commandHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem 0.75rem;
+}
+
+.commandHeader h3,
+.commandHeader p,
+.commandReference h4,
+.commandReference p {
+  margin: 0;
+}
+
+.commandHeader h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.commandHeader p {
+  margin-top: 0.2rem;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.commandSearch {
+  margin: 0 1.15rem 0.85rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.commandSearch:focus {
+  outline: 2px solid #1f5fab;
+  outline-offset: 1px;
+}
+
+.commandContent {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.commandResults {
+  min-height: 18rem;
+  overflow-y: auto;
+  padding: 0.55rem;
+}
+
+.commandGroup + .commandGroup {
+  margin-top: 0.45rem;
+}
+
+.commandGroupLabel {
+  padding: 0.35rem 0.55rem 0.25rem;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.commandItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commandItem:hover,
+.commandItemSelected {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.commandItem[aria-disabled='true'] {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.commandItemMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.commandItemTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.commandItemDescription {
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commandItemMeta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+.commandItemMeta kbd,
+.commandFooter kbd {
+  padding: 0.08rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.3rem;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.commandReference {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border-left: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.commandReference h4 {
+  font-size: 0.9rem;
+}
+
+.commandReference p {
+  margin-top: 0.25rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.commandReferenceEmpty {
+  align-self: stretch;
+  margin: auto 0;
+  text-align: center;
+}
+
+.commandExample {
+  align-self: stretch;
+  overflow-x: auto;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.commandPreview {
+  align-self: stretch;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.commandPreview > span {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commandCopyStatus {
+  color: #166534 !important;
+}
+
+.commandEmpty {
+  margin: 2rem 1rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.commandFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.15rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 720px) {
+  .commandContent {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .commandResults {
+    min-height: 14rem;
+    overflow-y: visible;
+  }
+
+  .commandReference {
+    border-top: 1px solid #e5e7eb;
+    border-left: 0;
+  }
+}
+
+/* ── Import dialog ── */
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+  width: min(42rem, 100%);
+  max-height: min(85vh, 48rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.dialogCloseBtn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #6b7280;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.25rem;
+}
+
+.dialogCloseBtn:hover {
+  color: #111827;
+}
+
+.dialogBody {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overflow-y: auto;
+}
+
+.dialogRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dialogFileInput {
+  font-size: 0.85rem;
+}
+
+.importSummary {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.importErrorList {
+  margin: 0;
+  padding: 0.75rem 1rem 0.75rem 2rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  color: #7f1d1d;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.importMode {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.importModeLegend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  padding: 0 0.25rem;
+}
+
+.importModeOption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.importModeOption input {
+  margin: 0;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.85rem 1.25rem 1rem;
+  border-top: 1px solid #e5e7eb;
+}

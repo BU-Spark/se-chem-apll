@@ -13,6 +13,99 @@ jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   default: () => <div data-testid="youtube-player" />,
 }));
 
+// RichMarkdownEditor has its own focused integration coverage. Keep these
+// workflow tests centered on NodeForm state, validation, and payloads.
+jest.mock('@/app/components/QuestionBank/MarkdownField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    value,
+    onChange,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => (
+    <label>
+      {label}
+      <textarea
+        aria-label={label === 'Note' ? 'Note text' : label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
+  ),
+}));
+
+jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
+  return {
+    __esModule: true,
+    default: function MockQuestionBankEditor({
+      questions,
+      onChange,
+    }: {
+      questions: Array<{ id: string; type: string; prompt: string; [key: string]: unknown }>;
+      onChange: (next: typeof questions) => void;
+    }) {
+      return (
+        <div data-testid="question-bank-editor">
+          {questions.map((q, index) => (
+            <div key={q.id}>
+              <label>
+                Quiz question prompt {index + 1}
+                <input
+                  aria-label={`Quiz question prompt ${index + 1}`}
+                  value={q.prompt}
+                  onChange={(e) =>
+                    onChange(questions.map((item) => (item.id === q.id ? { ...item, prompt: e.target.value } : item)))
+                  }
+                />
+              </label>
+            </div>
+          ))}
+          <div data-testid="quiz-draft-row">
+            <label>
+              Draft quiz prompt
+              <input aria-label="Draft quiz prompt" name="prompt" />
+            </label>
+            <input aria-label="Draft quiz choice 1" name="choice1" placeholder="Choice 1" />
+            <input aria-label="Draft quiz choice 2" name="choice2" placeholder="Choice 2" />
+            <button
+              type="button"
+              onClick={(e) => {
+                const root = (e.currentTarget.parentElement as HTMLElement) ?? null;
+                const prompt = (root?.querySelector('input[name="prompt"]') as HTMLInputElement | null)?.value ?? '';
+                const choice1 = (root?.querySelector('input[name="choice1"]') as HTMLInputElement | null)?.value ?? '';
+                const choice2 = (root?.querySelector('input[name="choice2"]') as HTMLInputElement | null)?.value ?? '';
+                onChange([
+                  ...questions,
+                  {
+                    id: `mock-q-${questions.length + 1}`,
+                    type: 'multipleChoice' as const,
+                    prompt,
+                    choices: [
+                      { id: `mock-c-${questions.length + 1}-1`, content: choice1, correct: true },
+                      { id: `mock-c-${questions.length + 1}-2`, content: choice2, correct: false },
+                    ],
+                  },
+                ]);
+                root?.querySelectorAll('input').forEach((input) => {
+                  (input as HTMLInputElement).value = '';
+                });
+              }}
+            >
+              Commit draft
+            </button>
+          </div>
+        </div>
+      );
+    },
+  };
+});
+
 function questionCardFor(prompt: HTMLElement) {
   return prompt.closest('[class*="questionCard"]') as HTMLElement;
 }
@@ -48,22 +141,32 @@ describe('NewNodePage', () => {
     expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
 
     const checkpointPrompt = screen.getByLabelText(/Question prompt/);
-    const checkpointCard = questionCardFor(checkpointPrompt);
+    const questionCard = questionCardFor(checkpointPrompt);
+    const checkpointCard = questionCard.parentElement as HTMLElement;
     await user.type(checkpointPrompt, 'Checkpoint question');
-    await user.type(within(checkpointCard).getByPlaceholderText('Choice 1'), 'A');
-    await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'B');
+    await user.type(within(questionCard).getByPlaceholderText('Choice 1'), 'A');
+    await user.type(within(questionCard).getByPlaceholderText('Choice 2'), 'B');
+    await user.click(within(questionCard).getAllByTitle('Mark as correct')[0]);
+
+    await user.click(within(checkpointCard).getByRole('button', { name: '+ Add question to checkpoint' }));
+    expect(within(checkpointCard).getByRole('button', { name: 'Question 1: Checkpoint question' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    const secondCheckpointPrompt = within(checkpointCard).getByLabelText(/Question prompt/);
+    await user.type(secondCheckpointPrompt, 'Second checkpoint question');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 1'), 'C');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'D');
     await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
-    const prompts = screen.getAllByLabelText(/Question prompt/);
-    const quizCard = questionCardFor(prompts[0]);
-    await user.type(prompts[0], 'Quiz bank question');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 1'), 'X');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 2'), 'Y');
-    await user.click(within(quizCard).getAllByTitle('Mark as correct')[0]);
+    const quizGrid = screen.getByTestId('question-bank-editor');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'X');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'Y');
+    await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
@@ -78,7 +181,10 @@ describe('NewNodePage', () => {
     expect(body.checkpoints).toEqual([
       expect.objectContaining({
         timeOffsetSeconds: 0,
-        questions: [expect.objectContaining({ prompt: 'Checkpoint question' })],
+        questions: [
+          expect.objectContaining({ prompt: 'Checkpoint question' }),
+          expect.objectContaining({ prompt: 'Second checkpoint question' }),
+        ],
       }),
     ]);
     expect(body.quizQuestions).toEqual([expect.objectContaining({ prompt: 'Quiz bank question' })]);
@@ -117,13 +223,11 @@ describe('NewNodePage', () => {
     expect(screen.queryByPlaceholderText('Choice 1')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Add quiz question/ }));
-    const quizPrompt = screen.getByLabelText(/Question prompt/);
-    const quizCard = questionCardFor(quizPrompt);
-    await user.type(quizPrompt, 'Quiz bank question');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 1'), 'A');
-    await user.type(within(quizCard).getByPlaceholderText('Choice 2'), 'B');
-    await user.click(within(quizCard).getAllByTitle('Mark as correct')[0]);
+    const quizGrid = screen.getByTestId('question-bank-editor');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'A');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'B');
+    await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Create node' }));
 
@@ -157,7 +261,79 @@ describe('NewNodePage', () => {
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
     expect(screen.getByText(/Checkpoint 2 · 1:00/)).toBeInTheDocument();
-    expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at 0:00' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Checkpoint 2 at 1:00' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(1);
+  });
+
+  it('keeps one checkpoint open, preserves its selected question, and opens a neighbor after removal', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+
+    const firstCheckpoint = screen.getByText(/Checkpoint 1 · 0:00/).closest('[class*="checkpointCard"]') as HTMLElement;
+    await user.type(within(firstCheckpoint).getByLabelText(/Question prompt/), 'First question');
+    await user.click(within(firstCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
+
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    const secondCheckpoint = screen
+      .getByText(/Checkpoint 2 · 1:00/)
+      .closest('[class*="checkpointCard"]') as HTMLElement;
+    await user.click(within(secondCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
+    const secondCheckpointQuestion = within(secondCheckpoint).getByRole('button', {
+      name: 'Question 2: Untitled question',
+    });
+    expect(secondCheckpointQuestion).toHaveAttribute('aria-expanded', 'true');
+
+    const firstCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 1 at 0:00' });
+    const secondCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 2 at 1:00' });
+    expect(firstCheckpointToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(secondCheckpointToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(firstCheckpoint).queryByRole('button', { name: 'Question 1: First question' })
+    ).not.toBeInTheDocument();
+
+    await user.click(firstCheckpointToggle);
+    expect(firstCheckpointToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(secondCheckpointToggle).toHaveAttribute('aria-expanded', 'false');
+    const firstQuestion = within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' });
+    const secondQuestion = within(firstCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' });
+    expect(secondQuestion).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(firstQuestion);
+    expect(firstQuestion).toHaveAttribute('aria-expanded', 'true');
+    expect(secondQuestion).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(secondCheckpointToggle);
+    expect(within(secondCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(firstCheckpointToggle);
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(within(firstCheckpoint).getByRole('button', { name: 'Remove question 1' }));
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
   });
 
   it('saves an incomplete node as a draft from the first step', async () => {
