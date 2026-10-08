@@ -48,4 +48,7 @@ jobs:
           if-no-files-found: error # Fails the step if coverage/ directory is not found
 
       - name: Build project
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+
         run: npm run build
