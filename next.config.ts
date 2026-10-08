@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
 
+console.log('[CI smoke test] Loading Next.js configuration.');
+
 /**
  * ESM-only packages (MDXEditor and the unified / react-markdown ecosystem)
  * must be listed in `transpilePackages` so that next/jest's SWC transformer
@@ -78,5 +80,7 @@ const nextConfig: NextConfig = {
     'rehype-sanitize',
   ]),
 };
+
+console.log('[CI smoke test] Next.js configuration ready.');
 
 export default nextConfig;
