@@ -33,6 +33,15 @@ jest.mock('@/lib/prisma', () => ({
 const context = { params: Promise.resolve({ lessonNodeId: 'ln-1' }) };
 const DAY = 24 * 60 * 60 * 1000;
 
+function lessonNode(quizQuestionCount: number, bankIds: string[]) {
+  return {
+    id: 'ln-1',
+    lessonId: 'lesson-1',
+    quizQuestionCount,
+    node: { quizQuestions: bankIds.map((id) => ({ id })) },
+  };
+}
+
 function courseLesson(overrides: Record<string, unknown> = {}) {
   return { openDate: null, dueDate: null, accessibleAfterDue: false, ...overrides };
 }
@@ -43,22 +52,29 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
     mockAuth.mockResolvedValue({ userId: 'clerk-1' });
     mockCurrentUser.mockResolvedValue({ emailAddresses: [{ emailAddress: 'Student@BU.edu' }] });
     mockUserFindUnique.mockResolvedValue({ id: 'student-1' });
-    mockLessonNodeFindFirst.mockResolvedValue({
-      id: 'ln-1',
-      lessonId: 'lesson-1',
-      node: { _count: { quizQuestions: 3 } },
-    });
+    mockLessonNodeFindFirst.mockResolvedValue(lessonNode(2, ['q1', 'q2', 'q3']));
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson());
     mockAttemptCreate.mockResolvedValue({ id: 'attempt-1' });
   });
 
-  it('creates an attempt for an enrolled student', async () => {
+  it('creates an attempt with quizQuestionCount random questions from the bank', async () => {
     const response = await POST({} as never, context);
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ attemptId: 'attempt-1' });
     expect(mockUserFindUnique).toHaveBeenCalledWith({ where: { email: 'student@bu.edu' } });
-    expect(mockAttemptCreate).toHaveBeenCalledWith({ data: { lessonNodeId: 'ln-1', userId: 'student-1' } });
+
+    const { data } = mockAttemptCreate.mock.calls[0][0];
+    expect(data).toMatchObject({ lessonNodeId: 'ln-1', userId: 'student-1' });
+    expect(data.quizQuestionIds).toHaveLength(2);
+    expect(new Set(data.quizQuestionIds).size).toBe(2);
+    data.quizQuestionIds.forEach((id: string) => expect(['q1', 'q2', 'q3']).toContain(id));
+  });
+
+  it('serves the whole bank when quizQuestionCount is larger than the bank', async () => {
+    mockLessonNodeFindFirst.mockResolvedValue(lessonNode(10, ['q1', 'q2']));
+    await POST({} as never, context);
+    expect([...mockAttemptCreate.mock.calls[0][0].data.quizQuestionIds].sort()).toEqual(['q1', 'q2']);
   });
 
   it('returns 401 when signed out', async () => {
@@ -116,11 +132,14 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
   });
 
   it('returns 422 when the node has no quiz questions', async () => {
-    mockLessonNodeFindFirst.mockResolvedValue({
-      id: 'ln-1',
-      lessonId: 'lesson-1',
-      node: { _count: { quizQuestions: 0 } },
-    });
+    mockLessonNodeFindFirst.mockResolvedValue(lessonNode(3, []));
+    const response = await POST({} as never, context);
+    expect(response.status).toBe(422);
+    expect(mockAttemptCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when quizQuestionCount is 0', async () => {
+    mockLessonNodeFindFirst.mockResolvedValue(lessonNode(0, ['q1', 'q2']));
     const response = await POST({} as never, context);
     expect(response.status).toBe(422);
     expect(mockAttemptCreate).not.toHaveBeenCalled();

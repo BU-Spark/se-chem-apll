@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { pickRandomQuizQuestions } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
   params: Promise<{ lessonNodeId: string }>;
@@ -23,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   // Draft lessons and nodes are hidden from students, so treat them as not found.
   const lessonNode = await prisma.lessonNode.findFirst({
     where: { id: lessonNodeId, lesson: { isDraft: false }, node: { isDraft: false } },
-    include: { node: { select: { _count: { select: { quizQuestions: true } } } } },
+    include: { node: { select: { quizQuestions: { select: { id: true } } } } },
   });
   if (!lessonNode) return NextResponse.json({ error: 'Lesson node not found' }, { status: 404 });
 
@@ -45,12 +46,14 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'This lesson is not open right now' }, { status: 403 });
   }
 
-  if (lessonNode.node._count.quizQuestions === 0) {
+  // Empty bank or a quizQuestionCount of 0 both mean there is no quiz to take.
+  const picked = pickRandomQuizQuestions(lessonNode.node.quizQuestions, lessonNode.quizQuestionCount);
+  if (picked.length === 0) {
     return NextResponse.json({ error: 'No quiz is configured for this node' }, { status: 422 });
   }
 
   const attempt = await prisma.nodeAttempt.create({
-    data: { lessonNodeId, userId: student.id },
+    data: { lessonNodeId, userId: student.id, quizQuestionIds: picked.map((question) => question.id) },
   });
 
   return NextResponse.json({ attemptId: attempt.id }, { status: 201 });

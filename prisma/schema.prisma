@@ -325,6 +325,8 @@ model NodeAttempt {
   completedAt  DateTime?
   isPassing    Boolean?
   score        Float?
+  // Quiz bank questions randomly picked for this attempt, in display order.
+  quizQuestionIds String[] @default([])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
