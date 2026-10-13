@@ -162,3 +162,80 @@ CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test'
 ```
 
 The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
+
+## Application authentication and administration
+
+Clerk verifies sessions; PostgreSQL stores application roles. `User.clerkUserId`
+uniquely links a verified Clerk identity to the existing `Student` table. The app
+never takes the caller's identity from request JSON, query parameters, or custom
+headers. Clerk metadata is not used for authorization.
+
+- `appRole`: `STUDENT`, `INSTRUCTOR`, or null (role selection is incomplete).
+- `platformRole`: `MEMBER` by default, or `ADMIN`. Admin access is independent of
+  the student/instructor debug mode.
+- `/select-role` and `/debug-role` remain available to signed-in users. They can
+  update only their own application role. This intentionally permits instructor
+  self-selection during the current development/demo phase.
+- `/admin` provides user search, role management, and links to platform-wide
+  content, enrollment, and gradebook management. Only admins can grant/revoke
+  admin access. Unlinked email-only records cannot become admins.
+- Role changes are audited in `RoleAudit`. A PostgreSQL transaction-level advisory
+  lock serializes role writes across app instances, rechecks the acting admin,
+  and prevents concurrent requests from removing the last admin. The bootstrap
+  command uses the same lock. Database connection pooling must support ordinary
+  transactions; the lock is released at transaction completion.
+
+On first use, the server fetches the Clerk profile once to obtain the verified
+primary email and display name. It creates an ordinary member or conditionally
+links an unclaimed, email-matched enrollment record. Subsequent requests query by
+Clerk ID without calling `currentUser()`. Name/email are snapshots; automatic
+profile synchronization is not configured. No Clerk dashboard changes, custom
+session claims, or webhooks are required.
+
+### Database setup and first admin
+
+Use Node 22.20.0. For an existing database whose migration history is already
+established, deploy the new migration and regenerate the client before starting
+the updated app:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
+
+This repository's historical migrations do not include its original base schema.
+For a brand-new disposable development database, `npx prisma db push` creates the
+current schema; do not try to replay the historical migrations onto an empty
+database. Do not use `db push` to upgrade an existing shared database.
+
+Sign in to the app to create/link your local user, then use the Clerk ID displayed
+by the signed-in account's role page to grant admin access from a trusted terminal:
+
+```bash
+npm run admin:grant -- --clerk-user-id user_...
+```
+
+The command reads the same `.env*` configuration as Next.js, requires an already
+linked account, and records a `BOOTSTRAP` audit entry. It does not change Clerk.
+Open `/admin` afterward. Further role changes can be made there. The command is
+idempotent and may also be used by a trusted database operator for recovery.
+
+If a reverse proxy changes the server-visible URL origin, set `APP_ORIGINS` to a
+comma-separated list of exact trusted frontend origins. Role-management endpoints
+require a matching browser `Origin` header and reject cross-site requests. When
+unset, the request URL's origin is used.
+
+### Auth tests
+
+`npm test` includes identity, authorization, role-mutation, admin UI, and debug
+switch tests. PostgreSQL concurrency tests require an explicitly selected local
+database named `spark_auth_test`; they delete fixtures in that dedicated database:
+
+```bash
+DATABASE_URL=postgresql://localhost:5432/spark_auth_test \
+DIRECT_URL=postgresql://localhost:5432/spark_auth_test \
+AUTH_TEST_DATABASE_URL=postgresql://localhost:5432/spark_auth_test \
+npx jest lib/auth/auth.integration.test.ts --runInBand
+```
+
+Create that test database and apply the current schema before running the tests.
