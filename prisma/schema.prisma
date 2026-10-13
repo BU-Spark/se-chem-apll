@@ -13,19 +13,19 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                 String            @id @default(cuid())
-  email              String            @unique
-  name               String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  enrollments        Enrollment[]
-  lessonProgress     LessonProgress[]
-  lessonNodeAttempts NodeAttempt[]
-  nodeResponses      NodeResponse[]
-  avatar             AvatarSetting?
-  analytics          StudentAnalytics?
-  surveyResponses    SurveyResponse[]
-  badgeProgress      StudentBadge[]
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  name                 String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  enrollments          Enrollment[]
+  courseLessonProgress CourseLessonProgress[]
+  lessonNodeAttempts   NodeAttempt[]
+  nodeResponses        NodeResponse[]
+  avatar               AvatarSetting?
+  analytics            StudentAnalytics?
+  surveyResponses      SurveyResponse[]
+  badgeProgress        StudentBadge[]
 
   @@map("Student")
 }
@@ -67,17 +67,17 @@ enum AvatarAccessory {
 // ---------------------------------------------------------------------------
 
 model Course {
-  id                String          @id @default(cuid())
-  code              String
-  section           String?
-  title             String
-  description       String?
-  createdByClerkId  String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  enrollments       Enrollment[]
-  courseLessons     CourseLesson[]
-  contacts          CourseContact[]
+  id               String          @id @default(cuid())
+  code             String
+  section          String?
+  title            String
+  description      String?
+  createdByClerkId String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  enrollments      Enrollment[]
+  courseLessons    CourseLesson[]
+  contacts         CourseContact[]
 
   @@unique([code, section])
   @@index([createdByClerkId])
@@ -140,7 +140,6 @@ model Lesson {
   courseLessons     CourseLesson[]
   lessonNodes       LessonNode[]
   lessonNodeEdges   LessonNodeEdge[]
-  progress          LessonProgress[]
   surveys           SurveyPrompt[]
   badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
 
@@ -168,8 +167,9 @@ model CourseLesson {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  course   Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson   Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  progress CourseLessonProgress[]
 
   @@unique([courseId, lessonId])
   @@index([lessonId])
@@ -180,22 +180,22 @@ model CourseLesson {
 // ---------------------------------------------------------------------------
 
 model Node {
-  id                  String           @id @default(cuid())
-  title               String
-  summary             String?
-  videoUrl            String?
-  muxPlaybackId       String?
-  thumbnailUrl        String?
-  estimatedMinutes    Int?
-  tags                String[]         @default([])
-  learningObjectives  String[]         @default([])
-  createdByClerkId    String?
-  isDraft             Boolean          @default(false)
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  checkpoints         NodeCheckpoint[]
-  quizQuestions       QuizQuestion[]
-  lessonNodes         LessonNode[]
+  id                 String           @id @default(cuid())
+  title              String
+  summary            String?
+  videoUrl           String?
+  muxPlaybackId      String?
+  thumbnailUrl       String?
+  estimatedMinutes   Int?
+  tags               String[]         @default([])
+  learningObjectives String[]         @default([])
+  createdByClerkId   String?
+  isDraft            Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  checkpoints        NodeCheckpoint[]
+  quizQuestions      QuizQuestion[]
+  lessonNodes        LessonNode[]
 
   @@index([createdByClerkId])
 }
@@ -219,7 +219,7 @@ model NodeCheckpoint {
 }
 
 model CheckpointQuestion {
-  id             String   @id @default(cuid())
+  id             String                 @id @default(cuid())
   checkpointId   String
   sortOrder      Int
   kind           CheckpointQuestionKind @default(QUESTION)
@@ -227,9 +227,9 @@ model CheckpointQuestion {
   // For multiple-choice: { type: "multipleChoice", choices: string[] } or legacy string[]
   // For short answer:    { type: "shortAnswer", answerMode: "exact"|"range", ... }
   options        Json
-  correctIndices Int[]    @default([])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  correctIndices Int[]                  @default([])
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
   checkpoint NodeCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
   responses  NodeResponse[]
@@ -264,15 +264,15 @@ model QuizQuestion {
 // ---------------------------------------------------------------------------
 
 model LessonNode {
-  id             String   @id @default(cuid())
-  lessonId       String
-  nodeId         String
-  sortOrder      Int
-  passingPercent Int
+  id                String   @id @default(cuid())
+  lessonId          String
+  nodeId            String
+  sortOrder         Int
+  passingPercent    Int
   quizQuestionCount Int
-  isRequired     Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isRequired        Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   lesson        Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   node          Node             @relation(fields: [nodeId], references: [id])
@@ -304,24 +304,23 @@ model LessonNodeEdge {
 // Progress & Attempts
 // ---------------------------------------------------------------------------
 
-model LessonProgress {
-  id               String       @id @default(cuid())
-  studentId        String
-  lessonId         String
-  status           LessonStatus @default(NOT_STARTED)
-  startedAt        DateTime?
-  completedAt      DateTime?
-  percentComplete  Int          @default(0)
-  lastGradePercent Float?
-  lastGradePassed  Boolean?
-  lastGradedAt     DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+model CourseLessonProgress {
+  id              String             @id @default(cuid())
+  studentId       String
+  courseLessonId  String
+  status          LessonStatus       @default(NOT_STARTED)
+  percentComplete Int                @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  student         User               @relation(fields: [studentId], references: [id])
+  courseLesson    CourseLesson       @relation(fields: [courseLessonId], references: [id], onDelete: Restrict)
+  attempts        NodeAttempt[]
+  submissions     LessonSubmission[]
 
-  student User   @relation(fields: [studentId], references: [id])
-  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, lessonId])
+  @@unique([studentId, courseLessonId])
+  @@unique([id, studentId, courseLessonId])
 }
 
 enum LessonStatus {
@@ -330,38 +329,95 @@ enum LessonStatus {
   COMPLETED
 }
 
-model NodeAttempt {
-  id           String    @id @default(cuid())
-  lessonNodeId String
-  userId       String
-  startedAt    DateTime  @default(now())
-  completedAt  DateTime?
-  isPassing    Boolean?
-  score        Float?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+enum AttemptKind {
+  QUIZ
+  CHECKPOINT
+  REVIEW
+}
 
-  lessonNode LessonNode     @relation(fields: [lessonNodeId], references: [id], onDelete: Cascade)
-  user       User           @relation(fields: [userId], references: [id])
-  responses  NodeResponse[]
+enum SubmissionGradeStatus {
+  GRADED
+  COMPLETION_ONLY
+}
+
+model LessonSubmission {
+  id             String                @id @default(cuid())
+  progressId     String
+  number         Int
+  idempotencyKey String
+  submittedAt    DateTime              @default(now())
+  gradingStatus  SubmissionGradeStatus
+  rawPercent     Float?
+  penaltyPercent Float
+  finalPercent   Float?
+  passed         Boolean
+  // Immutable assignment, question, grading and policy snapshots.
+  snapshot       Json
+  progress       CourseLessonProgress  @relation(fields: [progressId], references: [id], onDelete: Restrict)
+  attempts       SubmissionAttempt[]
+
+  @@unique([progressId, number])
+  @@unique([progressId, idempotencyKey])
+  @@unique([id, progressId])
+  @@index([progressId, finalPercent, submittedAt])
+}
+
+model NodeAttempt {
+  id             String               @id @default(cuid())
+  progressId     String
+  courseLessonId String
+  userId         String
+  lessonNodeId   String?
+  kind           AttemptKind
+  contentKey     String
+  idempotencyKey String
+  snapshot       Json
+  startedAt      DateTime             @default(now())
+  completedAt    DateTime?
+  isPassing      Boolean?
+  score          Float?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  lessonNode     LessonNode?          @relation(fields: [lessonNodeId], references: [id], onDelete: SetNull)
+  user           User                 @relation(fields: [userId], references: [id])
+  progress       CourseLessonProgress @relation(fields: [progressId, userId, courseLessonId], references: [id, studentId, courseLessonId], onDelete: Restrict)
+  responses      NodeResponse[]
+  submissions    SubmissionAttempt[]
+
+  @@unique([progressId, idempotencyKey])
+  @@unique([id, progressId])
+  @@unique([id, userId])
+  @@index([progressId, completedAt])
+}
+
+model SubmissionAttempt {
+  submissionId String
+  attemptId    String
+  progressId   String
+  submission   LessonSubmission @relation(fields: [submissionId, progressId], references: [id, progressId], onDelete: Restrict)
+  attempt      NodeAttempt      @relation(fields: [attemptId, progressId], references: [id, progressId], onDelete: Restrict)
+
+  @@id([submissionId, attemptId])
 }
 
 model NodeResponse {
-  id                   String   @id @default(cuid())
+  id                   String              @id @default(cuid())
   attemptId            String
+  studentId            String
   checkpointQuestionId String?
   quizQuestionId       String?
-  studentId            String
-  selectedIndices      Int[]    @default([])
+  questionKey          String
+  snapshot             Json
+  selectedIndices      Int[]               @default([])
   rawAnswer            String?
   isCorrect            Boolean?
-  createdAt            DateTime @default(now())
+  createdAt            DateTime            @default(now())
+  attempt              NodeAttempt         @relation(fields: [attemptId, studentId], references: [id, userId], onDelete: Restrict)
+  checkpointQuestion   CheckpointQuestion? @relation(fields: [checkpointQuestionId], references: [id], onDelete: SetNull)
+  quizQuestion         QuizQuestion?       @relation(fields: [quizQuestionId], references: [id], onDelete: SetNull)
+  student              User                @relation(fields: [studentId], references: [id])
 
-  attempt            NodeAttempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  checkpointQuestion CheckpointQuestion? @relation(fields: [checkpointQuestionId], references: [id], onDelete: Cascade)
-  quizQuestion       QuizQuestion?       @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
-  student            User                @relation(fields: [studentId], references: [id])
-
+  @@unique([attemptId, questionKey])
   @@index([checkpointQuestionId])
   @@index([quizQuestionId])
 }

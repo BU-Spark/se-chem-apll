@@ -111,6 +111,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  if (
+    lessons !== undefined &&
+    (await prisma.courseLesson.count({
+      where: { courseId, lessonId: { notIn: lessons.map((row) => row.lessonId) }, progress: { some: {} } },
+    }))
+  ) {
+    return NextResponse.json({ error: 'Assignments with student activity cannot be removed.' }, { status: 409 });
+  }
   const course = await prisma.course.update({
     where: { id: courseId },
     data: {
@@ -120,11 +128,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(lessons !== undefined && {
         courseLessons: {
-          deleteMany: {},
-          create: lessons.map((row) => ({
-            lessonId: row.lessonId,
-            ...lessonPolicyData(row),
-            sortOrder: row.sortOrder,
+          deleteMany: { lessonId: { notIn: lessons.map((row) => row.lessonId) } },
+          upsert: lessons.map((row) => ({
+            where: { courseId_lessonId: { courseId, lessonId: row.lessonId } },
+            create: { lessonId: row.lessonId, ...lessonPolicyData(row), sortOrder: row.sortOrder },
+            update: { ...lessonPolicyData(row), sortOrder: row.sortOrder },
           })),
         },
       }),
@@ -158,6 +166,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  if (await prisma.courseLessonProgress.count({ where: { courseLesson: { courseId } } }))
+    return NextResponse.json({ error: 'Courses with student activity cannot be deleted.' }, { status: 409 });
   await prisma.course.delete({ where: { id: courseId } });
   return new NextResponse(null, { status: 204 });
 }

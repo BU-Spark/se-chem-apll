@@ -24,6 +24,7 @@ jest.mock('@/lib/prisma', () => ({
       findFirst: (...args: unknown[]) => mockCourseFindFirst(...args),
       update: (...args: unknown[]) => mockCourseUpdate(...args),
     },
+    courseLesson: { count: jest.fn().mockResolvedValue(0) },
     lesson: { findFirst: (...args: unknown[]) => mockLessonFindFirst(...args) },
   },
 }));
@@ -109,13 +110,15 @@ describe('PATCH /api/instructor/courses/[courseId]', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           courseLessons: expect.objectContaining({
-            create: [
+            upsert: [
               expect.objectContaining({
-                dueDate: new Date('2026-10-12T12:00:00Z'),
-                lateDeadline: new Date('2026-10-14T12:00:00Z'),
-                hideAfterDue: false,
-                latePenaltyType: 'DAILY',
-                latePenaltyPercent: 10,
+                create: expect.objectContaining({
+                  dueDate: new Date('2026-10-12T12:00:00Z'),
+                  lateDeadline: new Date('2026-10-14T12:00:00Z'),
+                  hideAfterDue: false,
+                  latePenaltyType: 'DAILY',
+                  latePenaltyPercent: 10,
+                }),
               }),
             ],
           }),

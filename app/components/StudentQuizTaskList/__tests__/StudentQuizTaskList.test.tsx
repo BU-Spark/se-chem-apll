@@ -69,7 +69,7 @@ describe('buildQuizTasks', () => {
 });
 
 describe('StudentQuizTaskList', () => {
-  it('renders quiz task as coming soon', () => {
+  it('links the quiz to the course assignment', () => {
     render(
       <StudentQuizTaskList
         isFoundational
@@ -77,11 +77,12 @@ describe('StudentQuizTaskList', () => {
         checkpointQuestionCount={0}
         attempts={[]}
         lessonNodeId="ln-1"
+        assignmentId="cl-1"
       />
     );
 
     expect(screen.getByText('Quiz')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Start quiz \(coming soon\)/ })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Start quiz' })).toHaveAttribute('href', '/student/assignments/cl-1');
     expect(screen.queryByText('Pre-quiz')).not.toBeInTheDocument();
   });
 });

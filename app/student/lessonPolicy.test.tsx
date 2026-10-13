@@ -33,13 +33,13 @@ it('hides expired lessons everywhere while keeping visible lessons available for
     lateDeadline: null,
     latePenaltyType: 'NONE',
     latePenaltyPercent: 0,
+    progress: [{ startedAt: new Date('2026-10-13T11:00:00Z') }],
     lesson: {
       id,
       title: id,
       summary: null,
       estimatedMinutes: null,
       lessonNodes: [],
-      progress: [{ startedAt: new Date('2026-10-13T11:00:00Z') }],
     },
   });
   mockEnrollments.mockResolvedValue([

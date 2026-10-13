@@ -1,4 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
@@ -17,10 +18,13 @@ export default async function StudentHomePage() {
   if (!userId) redirect('/sign-in');
 
   const clerkUser = await currentUser();
-  const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
+  if (!clerkUser) redirect('/sign-in');
+  const email =
+    clerkUser?.emailAddresses?.find((address) => address.id === clerkUser.primaryEmailAddressId)?.emailAddress ??
+    clerkUser?.emailAddresses?.[0]?.emailAddress;
   if (!email) redirect('/sign-in');
 
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
   // Find or create the student's User record
   let student = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -41,7 +45,7 @@ export default async function StudentHomePage() {
 
   // Fetch enrolled courses with their lessons, nodes and student progress
   const enrolledCourses = await prisma.enrollment.findMany({
-    where: { studentId: student.id },
+    where: { studentId: student.id, role: 'STUDENT' },
     include: {
       course: {
         include: {
@@ -49,6 +53,16 @@ export default async function StudentHomePage() {
             where: { lesson: { isDraft: false } },
             orderBy: { sortOrder: 'asc' },
             include: {
+              progress: {
+                where: { studentId: student.id },
+                include: {
+                  attempts: {
+                    where: { kind: 'QUIZ' },
+                    orderBy: { createdAt: 'desc' },
+                    include: { responses: { select: { quizQuestionId: true, checkpointQuestionId: true } } },
+                  },
+                },
+              },
               lesson: {
                 include: {
                   lessonNodes: {
@@ -67,22 +81,7 @@ export default async function StudentHomePage() {
                           },
                         },
                       },
-                      attempts: {
-                        where: { userId: student.id },
-                        orderBy: { createdAt: 'desc' },
-                        include: {
-                          responses: {
-                            select: {
-                              quizQuestionId: true,
-                              checkpointQuestionId: true,
-                            },
-                          },
-                        },
-                      },
                     },
-                  },
-                  progress: {
-                    where: { studentId: student.id },
                   },
                 },
               },
@@ -115,7 +114,7 @@ export default async function StudentHomePage() {
         .filter((cl) => {
           const open = cl.openDate ? new Date(cl.openDate) : null;
           const due = cl.lateDeadline ?? cl.dueDate;
-          const progress = (cl.lesson.progress && cl.lesson.progress[0]) ?? null;
+          const progress = (cl.progress && cl.progress[0]) ?? null;
           const startedAt = progress?.startedAt ? new Date(progress.startedAt) : null;
           const completedAt = progress?.completedAt ? new Date(progress.completedAt) : null;
           const overlaps =
@@ -220,6 +219,7 @@ export default async function StudentHomePage() {
                               Late submission deadline: {formatDeadline(cl.lateDeadline)} · {describeLatePenalty(cl)}
                             </p>
                           )}
+                          <Link href={`/student/assignments/${cl.id}`}>Open assignment and submit work</Link>
                           {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
                         </div>
 
@@ -252,8 +252,12 @@ export default async function StudentHomePage() {
                                     isFoundational={ln.isRequired}
                                     quizBankCount={quizBankCount}
                                     checkpointQuestionCount={checkpointQuestionCount}
-                                    attempts={ln.attempts}
+                                    attempts={
+                                      cl.progress?.[0]?.attempts.filter((attempt) => attempt.lessonNodeId === ln.id) ??
+                                      []
+                                    }
                                     lessonNodeId={ln.id}
+                                    assignmentId={cl.id}
                                   />
                                 </li>
                               );

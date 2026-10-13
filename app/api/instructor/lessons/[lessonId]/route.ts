@@ -213,6 +213,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  if (await prisma.courseLessonProgress.count({ where: { courseLesson: { lessonId } } }))
+    return NextResponse.json({ error: 'Lessons with student activity cannot be deleted.' }, { status: 409 });
   await prisma.lesson.delete({ where: { id: lessonId } });
   return new NextResponse(null, { status: 204 });
 }

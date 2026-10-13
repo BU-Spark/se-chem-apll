@@ -1,0 +1,66 @@
+.page {
+  max-width: 1000px;
+  margin: auto;
+  padding: 1.5rem;
+  color: #1e293b;
+}
+.page h1 {
+  font-size: 1.75rem;
+}
+.page h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.7rem;
+}
+.page section {
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid #d5deea;
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+}
+.page p {
+  margin: 0.5rem 0;
+}
+.page a {
+  color: #1f5fab;
+  text-decoration: underline;
+}
+.page button {
+  padding: 0.5rem 0.8rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.4rem;
+  color: #1f5fab;
+  cursor: pointer;
+}
+.page button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.page button:focus-visible {
+  outline: 2px solid #1f5fab;
+}
+.page fieldset {
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid #d5deea;
+}
+.page label {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.5rem 0;
+}
+.page input[type='text'] {
+  border: 1px solid #cbd5e1;
+  padding: 0.4rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+.page [role='alert'] {
+  color: #991b1b;
+}

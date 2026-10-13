@@ -30,6 +30,10 @@ databaseTests('checkpoint persistence in PostgreSQL', () => {
   });
   afterAll(async () => {
     try {
+      await prisma.nodeResponse.deleteMany({ where: { studentId: { in: userIds } } });
+      await prisma.nodeAttempt.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.courseLessonProgress.deleteMany({ where: { studentId: { in: userIds } } });
+      await prisma.course.deleteMany({ where: { code: { in: userIds } } });
       await prisma.lesson.deleteMany({ where: { id: { in: lessonIds } } });
       await prisma.node.deleteMany({ where: { id: { in: nodeIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -141,9 +145,31 @@ databaseTests('checkpoint persistence in PostgreSQL', () => {
     const lessonNode = await prisma.lessonNode.create({
       data: { lessonId: lesson.id, nodeId, sortOrder: 0, passingPercent: 80, quizQuestionCount: 1 },
     });
-    const attempt = await prisma.nodeAttempt.create({ data: { lessonNodeId: lessonNode.id, userId: user.id } });
+    const course = await prisma.course.create({ data: { code: user.id, title: 'Test' } });
+    const assignment = await prisma.courseLesson.create({ data: { courseId: course.id, lessonId: lesson.id } });
+    const progress = await prisma.courseLessonProgress.create({
+      data: { studentId: user.id, courseLessonId: assignment.id },
+    });
+    const attempt = await prisma.nodeAttempt.create({
+      data: {
+        lessonNodeId: lessonNode.id,
+        userId: user.id,
+        courseLessonId: assignment.id,
+        progressId: progress.id,
+        kind: 'CHECKPOINT',
+        contentKey: 'test',
+        idempotencyKey: 'test',
+        snapshot: {},
+      },
+    });
     const response = await prisma.nodeResponse.create({
-      data: { attemptId: attempt.id, studentId: user.id, checkpointQuestionId: created.checkpoints[0].questions[0].id },
+      data: {
+        attemptId: attempt.id,
+        studentId: user.id,
+        questionKey: created.checkpoints[0].questions[0].id,
+        snapshot: {},
+        checkpointQuestionId: created.checkpoints[0].questions[0].id,
+      },
     });
     const swapped = created.checkpoints.map((c, i) => ({
       ...c,

@@ -142,14 +142,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       if (replacingCheckpoints) await saveCheckpoints(tx, nodeId, checkpoints!);
 
       if (replacingQuizQuestions) {
-        const quizQuestionIds = (await tx.quizQuestion.findMany({ where: { nodeId }, select: { id: true } })).map(
-          (q) => q.id
-        );
-        if (quizQuestionIds.length > 0) {
-          await tx.nodeResponse.deleteMany({
-            where: { quizQuestionId: { in: quizQuestionIds } },
-          });
-        }
         await tx.quizQuestion.deleteMany({ where: { nodeId } });
       }
 
