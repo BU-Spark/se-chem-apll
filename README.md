@@ -194,19 +194,77 @@ session claims, or webhooks are required.
 
 ### Database setup and first admin
 
-Use Node 22.20.0. For an existing database whose migration history is already
-established, deploy the new migration and regenerate the client before starting
-the updated app:
+Use Node 22.20.0. For a **new, empty PostgreSQL database**, configure `DATABASE_URL`
+and `DIRECT_URL`, then run:
 
 ```bash
 npx prisma migrate deploy
 npx prisma generate
 ```
 
-This repository's historical migrations do not include its original base schema.
-For a brand-new disposable development database, `npx prisma db push` creates the
-current schema; do not try to replay the historical migrations onto an empty
-database. Do not use `db push` to upgrade an existing shared database.
+Optionally run `npm run db:seed` for demo content. The `0_init` migration creates
+the historical schema; all later migrations bring it to the current version.
+It was generated with Prisma 6.17 from `prisma/schema.prisma` at commit
+`8d31b27032a26c3cd9c06b5c1c0fc62c31585ff8`, immediately before the first recorded
+migration. Existing migration files remain unchanged.
+
+**Existing databases: adopt the baseline before the next deploy.** Back up the
+database and rehearse on a copy. Inspect `npx prisma migrate status` and the
+`_prisma_migrations` records to confirm the historical migrations are applied
+successfully and match the repository. Compare the database with the schema
+appropriate to its applied migration version (the current `schema.prisma` only
+if every later migration is applied). Investigate drift before continuing.
+For an up-to-date database, the comparison command is:
+
+```bash
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --exit-code
+```
+
+Prisma's comparison does not check SQL-only CHECK constraints or triggers;
+compare those with a freshly migrated reference database as well. Once verified,
+record the missing baseline without executing its table-creation SQL:
+
+```bash
+npx prisma migrate resolve --applied 0_init
+npx prisma migrate deploy
+npx prisma migrate status
+npx prisma generate
+```
+
+This preserves existing data, including Clerk links and admin grants. Never run
+the baseline SQL directly on an existing schema. Do not edit already-applied
+migration files or reset a database to adopt this baseline.
+
+**Databases created using `db push`:** marking only `0_init` is insufficient;
+later migrations would run against tables already at their final shape. For a
+disposable database, create a new empty database and use the fresh setup above.
+If data must be kept, back up and reconcile its schema and SQL-only safeguards
+against a freshly migrated reference first. `db push` does not create the custom
+constraints and triggers in our SQL migrations. Repair missing safeguards on a
+copy and verify the data satisfies them, then mark each migration whose effects
+are already present as applied with `prisma migrate resolve --applied <name>`.
+Only deploy after the migration history accurately represents the database.
+
+### Verifying migration history
+
+Create an empty, disposable local PostgreSQL database named `spark_migration_test`:
+
+```bash
+MIGRATION_TEST_DATABASE_URL=postgresql://localhost:5432/spark_migration_test \
+npm run db:verify-migrations
+```
+
+The command overrides both Prisma connection URLs for its subprocesses, refuses
+non-local URLs and nonempty public schemas, and never resets or drops a database.
+It replays every migration, fails on Prisma schema drift, verifies the expected
+SQL-only CHECK constraints and enabled triggers, and checks a second deploy.
+Recreate the disposable database before rerunning. CI runs this check on a fresh
+PostgreSQL service, runs the seed, and runs the auth, submission, and checkpoint
+integration suites on separately migrated databases. Update the safeguard assertions when
+intentionally adding or removing SQL-only constraints or triggers.
+
+### Granting the first admin
 
 Sign in to the app to create/link your local user, then use the Clerk ID displayed
 by the signed-in account's role page to grant admin access from a trusted terminal:
