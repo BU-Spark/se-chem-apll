@@ -15,6 +15,7 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
+import { mathSourcePlugin } from './mathSourcePlugin';
 import { normalizeVisualMarkdown } from './normalizeVisualMarkdown';
 import styles from './QuestionBank.module.css';
 
@@ -89,6 +90,7 @@ export default function RichMarkdownEditor({
 
   const plugins = useMemo(
     () => [
+      mathSourcePlugin(),
       ...(!compact ? [listsPlugin(), linkPlugin(), linkDialogPlugin()] : []),
       toolbarPlugin({
         toolbarClassName: styles.richMarkdownToolbar,
