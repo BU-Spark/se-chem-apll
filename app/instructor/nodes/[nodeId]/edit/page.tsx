@@ -40,6 +40,8 @@ export default async function EditNodePage({ params }: Props) {
         checkpoints: node.checkpoints.map((checkpoint) => ({
           id: checkpoint.id,
           timeOffsetSeconds: checkpoint.timeOffsetSeconds,
+          checkpointKey: checkpoint.checkpointKey,
+          placementHint: checkpoint.placementHint,
           questions: checkpoint.questions.map((q) => ({
             id: q.id,
             prompt: q.prompt,

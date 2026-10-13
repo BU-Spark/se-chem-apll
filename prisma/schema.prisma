@@ -195,7 +195,9 @@ model NodeCheckpoint {
   id                String               @id @default(cuid())
   nodeId            String
   sortOrder         Int
-  timeOffsetSeconds Int
+  timeOffsetSeconds Int?
+  checkpointKey     String
+  placementHint     String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   node              Node                 @relation(fields: [nodeId], references: [id], onDelete: Cascade)
@@ -203,6 +205,7 @@ model NodeCheckpoint {
 
   @@unique([nodeId, sortOrder])
   @@unique([nodeId, timeOffsetSeconds])
+  @@unique([nodeId, checkpointKey])
 }
 
 model CheckpointQuestion {

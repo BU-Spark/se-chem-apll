@@ -53,6 +53,9 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return NextResponse.json({ error: 'Body must be an object' }, { status: 422 });
+
   const { title, summary, videoUrl, tags, learningObjectives, checkpoints, quizQuestions, isDraft } = body as {
     title?: string;
     summary?: string;
@@ -76,6 +79,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
   }
 
+  for (const [field, value] of Object.entries({ title, summary, videoUrl })) {
+    if (value !== undefined && !(field === 'videoUrl' && value === null) && typeof value !== 'string')
+      return NextResponse.json({ error: `${field} must be text` }, { status: 422 });
+  }
+
   const tagsTypeError = rejectIfNotArray(tags, 'tags');
   if (tagsTypeError) return tagsTypeError;
   const learningObjectivesTypeError = rejectIfNotArray(learningObjectives, 'learningObjectives');
@@ -96,17 +104,21 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const replacingQuizQuestions = quizQuestions !== undefined;
 
   const savingAsDraft = isDraft ?? owned.isDraft;
-  if (!savingAsDraft) {
+  {
     const effectiveCheckpoints = checkpoints ?? owned.checkpoints;
     const effectiveQuizQuestions = quizQuestions ?? owned.quizQuestions;
-    const contentError = validateNodeContent({
-      checkpoints: effectiveCheckpoints,
-      quizQuestions: effectiveQuizQuestions,
-    });
+    const contentError = validateNodeContent(
+      {
+        checkpoints: effectiveCheckpoints,
+        quizQuestions: effectiveQuizQuestions,
+      },
+      savingAsDraft ? 'draft' : 'publish'
+    );
     if (contentError) {
       return NextResponse.json({ error: contentError }, { status: 422 });
     }
-
+  }
+  if (!savingAsDraft) {
     if (!(title ?? owned.title).trim()) {
       return NextResponse.json({ error: 'title is required' }, { status: 422 });
     }
@@ -114,7 +126,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     if (!parseYouTubeId((effectiveVideoUrl ?? '').trim())) {
       return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
     }
-    if (effectiveQuizQuestions.length === 0) {
+    if ((quizQuestions ?? owned.quizQuestions).length === 0) {
       return NextResponse.json({ error: 'At least one quiz bank question is required.' }, { status: 422 });
     }
   }

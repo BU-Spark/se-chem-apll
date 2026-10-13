@@ -32,6 +32,25 @@ export function dbQuestionToAuthoring(q: {
     };
   }
 
+  // Draft numeric answers may be deliberately blank; preserve their editor type.
+  const draftOptions = q.options && typeof q.options === 'object' ? (q.options as Record<string, unknown>) : null;
+  if (draftOptions?.type === 'shortAnswer') {
+    const numberText = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? String(value) : '');
+    return {
+      id: q.id,
+      type: 'shortAnswer',
+      prompt: q.prompt,
+      answer:
+        draftOptions.answerMode === 'range'
+          ? {
+              mode: 'range',
+              minimum: numberText(draftOptions.minimumAnswer),
+              maximum: numberText(draftOptions.maximumAnswer),
+            }
+          : { mode: 'exact', expected: numberText(draftOptions.expectedAnswer) },
+    };
+  }
+
   const choices = getMultipleChoiceChoices(q.options);
   if (choices) {
     const correct = new Set(q.correctIndices);
@@ -69,7 +88,7 @@ export function authoringQuestionToPayload(q: AuthoringQuestion, sortOrder: numb
       options: {
         type: 'shortAnswer',
         answerMode: 'exact',
-        expectedAnswer: Number(q.answer.expected),
+        expectedAnswer: q.answer.expected.trim() === '' ? null : Number(q.answer.expected),
       },
       correctIndices: [],
     };
@@ -81,8 +100,8 @@ export function authoringQuestionToPayload(q: AuthoringQuestion, sortOrder: numb
     options: {
       type: 'shortAnswer',
       answerMode: 'range',
-      minimumAnswer: Number(q.answer.minimum),
-      maximumAnswer: Number(q.answer.maximum),
+      minimumAnswer: q.answer.minimum.trim() === '' ? null : Number(q.answer.minimum),
+      maximumAnswer: q.answer.maximum.trim() === '' ? null : Number(q.answer.maximum),
     },
     correctIndices: [],
   };

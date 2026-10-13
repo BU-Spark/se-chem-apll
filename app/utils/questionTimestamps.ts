@@ -51,19 +51,24 @@ export function splitTimeOffsetSeconds(timeOffsetSeconds: number | null | undefi
   };
 }
 
-export function formatTimeOffsetSeconds(timeOffsetSeconds: number): string {
+export function formatTimeOffsetSeconds(timeOffsetSeconds: number | null): string {
+  if (timeOffsetSeconds === null) return 'Needs timestamp';
   const minutes = Math.floor(timeOffsetSeconds / 60);
   const seconds = timeOffsetSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 /** Checkpoint timestamps are required, non-negative integers, and unique per node. */
-export function validateCheckpointTimestamps(checkpoints: CheckpointTimestampInput[]): string | null {
+export function validateCheckpointTimestamps(
+  checkpoints: CheckpointTimestampInput[],
+  allowUnplaced = false
+): string | null {
   const seen = new Set<number>();
 
   for (const checkpoint of checkpoints) {
     const timestamp = checkpoint.timeOffsetSeconds;
-    if (typeof timestamp !== 'number' || !Number.isInteger(timestamp) || timestamp < 0) {
+    if (timestamp === null && allowUnplaced) continue;
+    if (typeof timestamp !== 'number' || !Number.isInteger(timestamp) || timestamp < 0 || timestamp > 2147483647) {
       return 'Each checkpoint must have a non-negative whole-second timestamp.';
     }
     if (seen.has(timestamp)) {

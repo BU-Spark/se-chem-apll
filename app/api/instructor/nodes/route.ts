@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return NextResponse.json({ error: 'Body must be an object' }, { status: 422 });
+
   const {
     title,
     summary,
@@ -79,8 +82,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
   }
 
-  if (!isDraft && !title?.trim()) {
+  if (!isDraft && (typeof title !== 'string' || !title.trim())) {
     return NextResponse.json({ error: 'title is required' }, { status: 422 });
+  }
+
+  for (const [field, value] of Object.entries({ title, summary, videoUrl })) {
+    if (value !== undefined && !(field === 'videoUrl' && value === null) && typeof value !== 'string')
+      return NextResponse.json({ error: `${field} must be text` }, { status: 422 });
   }
 
   const tagsTypeError = rejectIfNotArray(tags, 'tags');
@@ -99,12 +107,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'learningObjectives must be an array of strings' }, { status: 422 });
   }
 
-  if (!isDraft) {
-    const contentError = validateNodeContent({ checkpoints, quizQuestions });
+  {
+    const contentError = validateNodeContent({ checkpoints, quizQuestions }, isDraft ? 'draft' : 'publish');
     if (contentError) {
       return NextResponse.json({ error: contentError }, { status: 422 });
     }
-
+  }
+  if (!isDraft) {
     if (!parseYouTubeId((videoUrl ?? '').trim())) {
       return NextResponse.json({ error: 'A valid YouTube video URL is required.' }, { status: 422 });
     }

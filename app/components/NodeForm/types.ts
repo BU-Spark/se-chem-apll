@@ -7,6 +7,7 @@ export type CheckpointItemType = QuestionType | 'note';
 export type ShortAnswerMode = 'exact' | 'range';
 
 export interface FormQuestion {
+  persistedId?: string;
   id: string;
   prompt: string;
   questionType: CheckpointItemType;
@@ -25,8 +26,11 @@ export function isQuizFormQuestion(question: FormQuestion): question is QuizForm
 }
 
 export interface FormCheckpoint {
+  persistedId?: string;
+  checkpointKey?: string;
+  placementHint?: string | null;
   id: string;
-  timeOffsetSeconds: number;
+  timeOffsetSeconds: number | null;
   questions: FormQuestion[];
 }
 
@@ -53,10 +57,15 @@ export function makeQuestion(id = generateClientId('question')): QuizFormQuestio
   };
 }
 
-export function makeCheckpoint(timeOffsetSeconds = 0, id = generateClientId('checkpoint')): FormCheckpoint {
+export function makeCheckpoint(
+  timeOffsetSeconds: number | null = null,
+  id = generateClientId('checkpoint')
+): FormCheckpoint {
   return {
     id,
     timeOffsetSeconds,
+    checkpointKey: `checkpoint-${id}`,
+    placementHint: null,
     questions: [makeQuestion()],
   };
 }
@@ -72,14 +81,14 @@ export function serializeQuestionOptions(q: FormQuestion) {
     return {
       type: 'shortAnswer' as const,
       answerMode: 'exact' as const,
-      expectedAnswer: q.expectedAnswer.trim() === '' ? Number.NaN : Number(q.expectedAnswer),
+      expectedAnswer: q.expectedAnswer.trim() === '' ? null : Number(q.expectedAnswer),
     };
   }
   return {
     type: 'shortAnswer' as const,
     answerMode: 'range' as const,
-    minimumAnswer: q.minimumAnswer.trim() === '' ? Number.NaN : Number(q.minimumAnswer),
-    maximumAnswer: q.maximumAnswer.trim() === '' ? Number.NaN : Number(q.maximumAnswer),
+    minimumAnswer: q.minimumAnswer.trim() === '' ? null : Number(q.minimumAnswer),
+    maximumAnswer: q.maximumAnswer.trim() === '' ? null : Number(q.maximumAnswer),
   };
 }
 
@@ -102,6 +111,7 @@ export function dbQuestionToForm(q: {
   const answerMode = shortAnswer?.answerMode ?? (rawOptions?.answerMode === 'range' ? 'range' : 'exact');
   return {
     id: q.id,
+    persistedId: q.id,
     prompt: q.prompt,
     questionType: isNote ? 'note' : isShortAnswer ? 'shortAnswer' : 'multipleChoice',
     choices: isNote || isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
@@ -125,7 +135,9 @@ export type NodeFormInitial = {
   learningObjectives: string[];
   checkpoints: Array<{
     id: string;
-    timeOffsetSeconds: number;
+    timeOffsetSeconds: number | null;
+    checkpointKey?: string;
+    placementHint?: string | null;
     questions: Array<{
       id: string;
       prompt: string;

@@ -77,6 +77,8 @@ function removeChoiceInList(list: FormQuestion[], qId: string, choiceIdx: number
 
 function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
   return checkpoints.map((checkpoint, idx) => ({
+    checkpointKey: checkpoint.checkpointKey,
+    placementHint: checkpoint.placementHint,
     sortOrder: idx,
     timeOffsetSeconds: checkpoint.timeOffsetSeconds,
     questions: checkpoint.questions.map((q, qIdx) => ({
@@ -144,6 +146,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
     (initial?.checkpoints ?? []).map((checkpoint) => ({
       id: checkpoint.id,
+      checkpointKey: checkpoint.checkpointKey,
+      placementHint: checkpoint.placementHint,
       timeOffsetSeconds: checkpoint.timeOffsetSeconds,
       questions: checkpoint.questions.map(dbQuestionToForm),
     }))
@@ -185,7 +189,9 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       return;
     }
     const checkpoint = makeCheckpoint(timeOffsetSeconds);
-    setCheckpoints((prev) => [...prev, checkpoint].sort((a, b) => a.timeOffsetSeconds - b.timeOffsetSeconds));
+    setCheckpoints((prev) =>
+      [...prev, checkpoint].sort((a, b) => (a.timeOffsetSeconds ?? Infinity) - (b.timeOffsetSeconds ?? Infinity))
+    );
     setExpandedQuestionByCheckpoint((prev) => ({
       ...prev,
       [checkpoint.id]: checkpoint.questions[0]?.id ?? null,
@@ -850,7 +856,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                             className={styles.seekBtn}
                             onClick={() => {
                               setActiveCheckpointId(checkpoint.id);
-                              playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true);
+                              if (checkpoint.timeOffsetSeconds !== null)
+                                playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true);
                             }}
                           >
                             Seek to time

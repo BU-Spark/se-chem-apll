@@ -34,6 +34,7 @@ async function createDemoNode(index) {
           {
             sortOrder: 0,
             timeOffsetSeconds: 30 + index * 10,
+            checkpointKey: 'checkpoint-1',
             questions: {
               create: [
                 {

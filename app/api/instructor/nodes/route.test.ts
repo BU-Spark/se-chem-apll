@@ -33,6 +33,38 @@ describe('POST /api/instructor/nodes', () => {
     mockCreate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
   });
 
+  it('creates multiple untimed draft checkpoints with persistent keys and hints', async () => {
+    const response = await POST(
+      postRequest({
+        isDraft: true,
+        checkpoints: ['intro', 'end'].map((checkpointKey, sortOrder) => ({
+          checkpointKey,
+          sortOrder,
+          timeOffsetSeconds: null,
+          placementHint: 'Place later',
+          questions: [{ sortOrder: 0, kind: 'note', prompt: 'Observe.' }],
+        })),
+      }) as never
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual(
+      ['intro', 'end'].map((checkpointKey) =>
+        expect.objectContaining({ checkpointKey, timeOffsetSeconds: null, placementHint: 'Place later' })
+      )
+    );
+  });
+
+  it.each([
+    null,
+    [],
+    { isDraft: true, checkpoints: [null] },
+    { isDraft: true, checkpoints: [{ sortOrder: 0, timeOffsetSeconds: -1, questions: [] }] },
+  ])('rejects malformed draft data before persistence: %p', async (body) => {
+    const response = await POST(postRequest(body) as never);
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('persists checkpoints and quiz questions', async () => {
     const response = await POST(
       postRequest({
