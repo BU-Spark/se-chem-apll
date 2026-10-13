@@ -153,3 +153,12 @@ checkpoint_key,checkpoint_order,item_order,checkpoint_seconds,placement_hint,typ
 - Timing and ordering edits retain checkpoint/question IDs. Content with student responses cannot be replaced, removed, or rewritten; create a new node for revised content.
 
 Before deploying this feature, apply the `20261012000000_untimed_checkpoints` Prisma migration with your normal migration deployment process (`npx prisma migrate deploy`). It backfills keys for existing checkpoints and allows null timestamps without changing existing IDs or responses. Regenerate the Prisma client with `npx prisma generate` after updating the schema.
+
+
+To run the opt-in PostgreSQL checkpoint tests, provision a **dedicated local database** whose name starts with `spark_checkpoint_test`, with the current schema and migrations applied, then run:
+
+```bash
+CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test' npm test -- --runInBand --runTestsByPath app/utils/saveCheckpoints.integration.test.ts
+```
+
+The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
