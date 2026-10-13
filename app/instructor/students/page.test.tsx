@@ -1,3 +1,20 @@
+// These content tests stub identity; auth and provisioning have dedicated tests.
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: async () => {
+    const clerk = jest.requireMock('@clerk/nextjs/server');
+    const session = await clerk.auth();
+    if (!session?.userId) return null;
+    const profile = clerk.currentUser ? await clerk.currentUser() : null;
+    return {
+      id: 'local-user',
+      clerkUserId: session.userId,
+      email: 'instructor@example.com',
+      name: null,
+      appRole: clerk.currentUser ? (profile?.unsafeMetadata?.role?.toUpperCase() ?? null) : 'INSTRUCTOR',
+      platformRole: 'MEMBER',
+    };
+  },
+}));
 import { render, screen } from '@testing-library/react';
 import StudentsPage from './page';
 const mockFindMany = jest.fn();

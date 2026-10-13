@@ -1,3 +1,4 @@
+jest.mock('@/lib/auth/server', () => ({ requireStudent: async () => ({ id: 'student-1', name: 'Student' }) }));
 import StudentHomePage from './page';
 
 const mockAuth = jest.fn();

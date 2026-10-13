@@ -4,7 +4,12 @@ const mockStudent = jest.fn(),
   mockSubmit = jest.fn(),
   mockStart = jest.fn(),
   mockFinish = jest.fn();
-jest.mock('@/lib/submissions/student', () => ({ signedInStudent: () => mockStudent() }));
+jest.mock('@/lib/auth/api', () => ({
+  apiAccess: async () => {
+    const user = await mockStudent();
+    return user ? { user, error: null } : { error: { status: 403 } };
+  },
+}));
 jest.mock('@/lib/submissions/service', () => ({
   assignmentView: (...a: unknown[]) => mockView(...a),
   submitLesson: (...a: unknown[]) => mockSubmit(...a),

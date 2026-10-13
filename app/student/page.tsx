@@ -1,6 +1,5 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { requireStudent } from '@/lib/auth/server';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
 import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentDailyTimeline';
@@ -14,34 +13,7 @@ const formatDeadline = (date: Date) => date.toLocaleString('en-US', { timeZone: 
 export const dynamic = 'force-dynamic';
 
 export default async function StudentHomePage() {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
-
-  const clerkUser = await currentUser();
-  if (!clerkUser) redirect('/sign-in');
-  const email =
-    clerkUser?.emailAddresses?.find((address) => address.id === clerkUser.primaryEmailAddressId)?.emailAddress ??
-    clerkUser?.emailAddresses?.[0]?.emailAddress;
-  if (!email) redirect('/sign-in');
-
-  const normalizedEmail = email.trim().toLowerCase();
-
-  // Find or create the student's User record
-  let student = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (!student) {
-    student = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        name: clerkUser.fullName ?? clerkUser.firstName ?? undefined,
-      },
-    });
-  } else if (!student.name && (clerkUser.fullName || clerkUser.firstName)) {
-    // Backfill name if missing
-    student = await prisma.user.update({
-      where: { id: student.id },
-      data: { name: clerkUser.fullName ?? clerkUser.firstName ?? undefined },
-    });
-  }
+  const student = await requireStudent();
 
   // Fetch enrolled courses with their lessons, nodes and student progress
   const enrolledCourses = await prisma.enrollment.findMany({

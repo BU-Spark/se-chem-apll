@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import {
@@ -13,12 +13,12 @@ import {
 
 // GET /api/instructor/nodes — list all nodes
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const nodes = await prisma.node.findMany({
     where: {
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     select: {
       id: true,
@@ -45,8 +45,8 @@ function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
 
 // POST /api/instructor/nodes — create a new node with checkpoints + quiz bank
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   let body: unknown;
   try {
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
       videoUrl: videoUrl?.trim() || null,
       tags: normalizedTags,
       learningObjectives: normalizedLearningObjectives,
-      createdByClerkId: userId,
+      createdByClerkId: user.clerkUserId,
       isDraft,
       checkpoints: {
         create: (checkpoints ?? []).map(serializeCheckpointCreate),
