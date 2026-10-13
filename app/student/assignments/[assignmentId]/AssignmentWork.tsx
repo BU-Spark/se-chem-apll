@@ -19,6 +19,7 @@ type View = {
   title: string;
   window: string;
   best: Receipt | null;
+  activeAttempt?: Task | null;
   policy: {
     dueDate: string | null;
     lateDeadline: string | null;
@@ -29,7 +30,7 @@ type View = {
     id: string;
     title: string;
     videoUrl: string | null;
-    tasks: { kind: string; completed: boolean; score: number | null }[];
+    tasks: { kind: string; completed: boolean; score: number | null; inProgress?: boolean }[];
   }[];
 };
 type Task = {
@@ -52,7 +53,7 @@ function ReceiptView({ receipt }: { receipt: Receipt }) {
 }
 export default function AssignmentWork({ initial }: { initial: View }) {
   const [view, setView] = useState(initial);
-  const [task, setTask] = useState<Task | null>(null);
+  const [task, setTask] = useState<Task | null>(initial.activeAttempt ?? null);
   const [answers, setAnswers] = useState<Record<string, { selectedIndices?: number[]; rawAnswer?: string }>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -123,13 +124,30 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                 onClick={() =>
                   run(async () => {
                     setAnswers({});
-                    setTask(await post({ action: 'start', nodeId: node.id, kind: t.kind }));
+                    const next = await post({ action: 'start', nodeId: node.id, kind: t.kind });
+                    setTask(next);
+                    setView((current) => ({
+                      ...current,
+                      nodes: current.nodes.map((entry) =>
+                        entry.id === node.id
+                          ? {
+                              ...entry,
+                              tasks: entry.tasks.map((entryTask) =>
+                                entryTask.kind === t.kind ? { ...entryTask, inProgress: !next.completedAt } : entryTask
+                              ),
+                            }
+                          : entry
+                      ),
+                    }));
+                    const address = new URL(window.location.href);
+                    address.searchParams.set('attempt', next.id);
+                    window.history.replaceState(window.history.state, '', address);
                   })
                 }
               >
                 {t.kind === 'QUIZ' ? 'Quiz' : t.kind === 'CHECKPOINT' ? 'Checkpoints' : 'Review'} ·{' '}
                 {t.completed ? (t.score === null ? 'Completed' : percent(t.score)) : 'Not completed'}
-                {t.completed ? ' · Retry' : ''}
+                {t.inProgress ? ' · Resume' : t.completed ? ' · Retry' : ''}
               </button>
             ))}
           </div>
@@ -162,6 +180,7 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                   <legend>
                     <MarkdownPreview content={q.prompt} />
                   </legend>
+                  {q.choices && <p>Select all correct answers.</p>}
                   {q.choices ? (
                     q.choices.map((choice, index) => (
                       <label key={index}>

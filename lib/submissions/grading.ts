@@ -1,7 +1,14 @@
 import { calculateLatePenalty, type LessonPolicy } from '@/app/utils/lessonSubmissionPolicy';
 import { areIndexSetsEqual, getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
 import { gradeShortAnswer, parseShortAnswerOptions } from '@/app/utils/shortAnswer';
-export type QuestionSnapshot = { id: string; prompt: string; options: unknown; correctIndices: number[] };
+export type QuestionSnapshot = {
+  id: string;
+  prompt: string;
+  options: unknown;
+  correctIndices: number[];
+  variantId?: string;
+  variantValues?: Record<string, string>;
+};
 export type AnswerInput = { questionId: string; selectedIndices?: number[]; rawAnswer?: string };
 export function gradeAnswer(question: QuestionSnapshot, answer: AnswerInput) {
   if (parseShortAnswerOptions(question.options)) {

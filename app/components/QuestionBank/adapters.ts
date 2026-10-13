@@ -1,12 +1,29 @@
 import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
 import { parseShortAnswerOptions } from '@/app/utils/shortAnswer';
+import {
+  quizVariantOptions,
+  renderQuestionVariant,
+  type StoredVariant,
+  type VariantAnswer,
+} from '@/app/utils/questionVariants';
 import type { QuestionPayload } from '@/app/utils/nodeContent';
-import { makeChoice, makeMultipleChoiceQuestion, type AuthoringQuestion } from './types';
+import { makeChoice, makeMultipleChoiceQuestion, type AuthoringQuestion, type ShortAnswerQuestion } from './types';
+
+export function answerToOptions(answer: ShortAnswerQuestion['answer']): VariantAnswer {
+  const number = (value: string) => (value.trim() === '' ? null : Number(value));
+  return answer.mode === 'exact'
+    ? { type: 'shortAnswer', answerMode: 'exact', expectedAnswer: number(answer.expected) }
+    : {
+        type: 'shortAnswer',
+        answerMode: 'range',
+        minimumAnswer: number(answer.minimum),
+        maximumAnswer: number(answer.maximum),
+      };
+}
 
 /**
  * Adapters between the authoring model and the existing API/Prisma payload
- * shape (`{ sortOrder, prompt, options, correctIndices }`). The API contract
- * is unchanged; this keeps the UI free of `options` JSON details.
+ * shape (shared options plus separate variant rows).
  */
 
 export function dbQuestionToAuthoring(q: {
@@ -14,7 +31,48 @@ export function dbQuestionToAuthoring(q: {
   prompt: string;
   options: unknown;
   correctIndices: number[];
+  variants?: StoredVariant[];
 }): AuthoringQuestion {
+  const variants = quizVariantOptions(q);
+  if (variants?.type === 'variantMultipleChoice')
+    return {
+      id: q.id,
+      type: 'multipleChoice',
+      prompt: q.prompt,
+      choices: [],
+      variants: variants.variants.map((row) => ({
+        id: row.id,
+        values: { ...row.values },
+        answer: {
+          type: 'multipleChoice',
+          choices:
+            variants.version === 1
+              ? variants.choices!.map((c) => ({ ...c, content: renderQuestionVariant(c.content, row.values) }))
+              : row.answer.choices!.map((c) => ({ ...c })),
+          correctChoiceIds: [...row.answer.correctChoiceIds],
+        },
+      })),
+    };
+  if (variants?.type === 'variantShortAnswer') {
+    return {
+      id: q.id,
+      type: 'shortAnswer',
+      prompt: q.prompt,
+      answer: { mode: 'exact', expected: '' },
+      variants: variants.variants.map((row) => ({
+        id: row.id,
+        values: { ...row.values },
+        answer: (
+          dbQuestionToAuthoring({
+            id: row.id,
+            prompt: '',
+            options: row.answer,
+            correctIndices: [],
+          }) as ShortAnswerQuestion
+        ).answer,
+      })),
+    };
+  }
   const shortAnswer = parseShortAnswerOptions(q.options);
   if (shortAnswer) {
     return {
@@ -72,6 +130,32 @@ export function dbQuestionToAuthoring(q: {
 }
 
 export function authoringQuestionToPayload(q: AuthoringQuestion, sortOrder: number): QuestionPayload {
+  if (q.variants) {
+    return {
+      sortOrder,
+      prompt: q.prompt,
+      correctIndices: [],
+      options:
+        q.type === 'multipleChoice'
+          ? {
+              type: 'variantMultipleChoice',
+              version: 2,
+            }
+          : { type: 'variantShortAnswer', version: 1 },
+      variants:
+        q.type === 'multipleChoice'
+          ? q.variants!.map((row) => ({
+              ...row,
+              values: { ...row.values },
+              answer: {
+                ...row.answer,
+                choices: row.answer.choices?.map((c) => ({ ...c })) ?? [],
+                correctChoiceIds: [...row.answer.correctChoiceIds],
+              },
+            }))
+          : q.variants!.map((row) => ({ id: row.id, values: { ...row.values }, answer: answerToOptions(row.answer) })),
+    };
+  }
   if (q.type === 'multipleChoice') {
     return {
       sortOrder,
@@ -109,6 +193,7 @@ export function authoringQuestionToPayload(q: AuthoringQuestion, sortOrder: numb
 
 /** Human-readable answer summary for the browser grid. */
 export function summarizeAnswer(q: AuthoringQuestion): string {
+  if (q.variants) return `${q.variants.length} variant${q.variants.length === 1 ? '' : 's'}`;
   if (q.type === 'multipleChoice') {
     const correct = q.choices.filter((choice) => choice.correct).length;
     const choiceLabel = `${q.choices.length} choice${q.choices.length === 1 ? '' : 's'}`;

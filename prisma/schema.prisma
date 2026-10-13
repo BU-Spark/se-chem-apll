@@ -253,10 +253,22 @@ model QuizQuestion {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  node      Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  node      Node                  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   responses NodeResponse[]
+  variants  QuizQuestionVariant[]
 
   @@unique([nodeId, sortOrder])
+}
+
+model QuizQuestionVariant {
+  id             String       @id @default(cuid())
+  quizQuestionId String
+  sortOrder      Int
+  values         Json
+  answer         Json
+  quizQuestion   QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+
+  @@index([quizQuestionId, sortOrder])
 }
 
 // ---------------------------------------------------------------------------

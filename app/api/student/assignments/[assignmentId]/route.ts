@@ -2,13 +2,20 @@ import { NextResponse } from 'next/server';
 import { signedInStudent } from '@/lib/submissions/student';
 import { assignmentView, startAttempt, finishAttempt, submitLesson, SubmissionError } from '@/lib/submissions/service';
 type Context = { params: Promise<{ assignmentId: string }> };
-export async function GET(_request: Request, { params }: Context) {
+export async function GET(request: Request, { params }: Context) {
   const student = await signedInStudent();
   if (!student) return NextResponse.json({ error: 'Student access required.' }, { status: 403 });
   try {
-    return NextResponse.json(await assignmentView(student.id, (await params).assignmentId), {
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
+    return NextResponse.json(
+      await assignmentView(
+        student.id,
+        (await params).assignmentId,
+        new URL(request.url).searchParams.get('attempt') ?? undefined
+      ),
+      {
+        headers: { 'Cache-Control': 'private, no-store' },
+      }
+    );
   } catch (e) {
     return failure(e);
   }

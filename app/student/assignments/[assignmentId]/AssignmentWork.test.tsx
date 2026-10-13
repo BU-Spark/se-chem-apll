@@ -24,6 +24,37 @@ beforeEach(() => {
 afterAll(() => {
   global.fetch = originalFetch;
 });
+
+it('renders the saved variant on reload and submits against that same attempt without starting another', async () => {
+  const activeAttempt = {
+    id: 'saved-attempt',
+    nodeTitle: 'Node',
+    kind: 'QUIZ',
+    completedAt: null,
+    score: null,
+    questions: [{ id: 'q1', prompt: 'Moles of NaCl in 58.44 g?', choices: null }],
+  };
+  const restored = { ...initial, activeAttempt };
+  const firstRender = render(<AssignmentWork initial={restored} />);
+  expect(screen.getByText('Moles of NaCl in 58.44 g?')).toBeInTheDocument();
+  firstRender.unmount();
+  render(<AssignmentWork initial={restored} />);
+  expect(mockFetch).not.toHaveBeenCalled();
+  mockFetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...activeAttempt, completedAt: '2026-01-01', score: 100 }),
+    })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ ...initial, activeAttempt: null }) });
+  fireEvent.change(screen.getByLabelText('Numeric answer'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save answers' }));
+  await screen.findByText('Attempt recorded: 100%');
+  expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
+    action: 'finish',
+    attemptId: 'saved-attempt',
+    answers: [{ questionId: 'q1', rawAnswer: '1' }],
+  });
+});
 it('sends answers to the assignment endpoint, then shows a server-calculated receipt', async () => {
   const receipt = {
     number: 1,
