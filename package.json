@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prepare": "husky",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "admin:grant": "node scripts/grant-admin.cjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
