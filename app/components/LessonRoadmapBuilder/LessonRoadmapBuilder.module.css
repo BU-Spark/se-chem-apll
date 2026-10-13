@@ -16,6 +16,34 @@
   font-size: 0.9rem;
 }
 
+.tidyButton {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #334155;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tidyButton:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.tidyButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tidyButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .hint {
   font-size: 0.78rem;
   color: #9ca3af;
