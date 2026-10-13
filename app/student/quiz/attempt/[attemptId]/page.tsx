@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { toStudentQuizQuestion, type StudentQuizQuestion } from '@/app/utils/studentQuizQuestion';
+import { getCurrentStudent } from '@/lib/currentStudent';
+import { getAttemptQuestions } from '@/lib/attemptQuestions';
+import { toStudentQuizQuestion } from '@/app/utils/studentQuizQuestion';
 import QuizPlayer from './QuizPlayer';
 import styles from '../../quiz.module.css';
 
@@ -13,14 +14,7 @@ interface PageProps {
 }
 
 export default async function QuizAttemptPage({ params }: PageProps) {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
-
-  const clerkUser = await currentUser();
-  const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
-  if (!email) redirect('/sign-in');
-
-  const student = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  const student = await getCurrentStudent();
   if (!student) redirect('/student');
 
   const { attemptId } = await params;
@@ -28,25 +22,46 @@ export default async function QuizAttemptPage({ params }: PageProps) {
   // Only the student who owns the attempt can open it.
   const attempt = await prisma.nodeAttempt.findFirst({
     where: { id: attemptId, userId: student.id, quizQuestionIds: { isEmpty: false } },
-    include: { lessonNode: { select: { node: { select: { title: true } } } } },
+    include: { lessonNode: { select: { id: true, passingPercent: true, node: { select: { title: true } } } } },
   });
   if (!attempt) notFound();
-  if (attempt.completedAt) redirect('/student');
 
-  const bank = await prisma.quizQuestion.findMany({
-    where: { id: { in: attempt.quizQuestionIds } },
-    select: { id: true, prompt: true, options: true, correctIndices: true },
-  });
-  const byId = new Map(bank.map((question) => [question.id, question]));
+  const title = `${attempt.lessonNode.node.title} Assessment`;
 
-  // Keep the order the questions were picked in; correct answers never leave the server.
-  const questions = attempt.quizQuestionIds.flatMap((id): StudentQuizQuestion[] => {
-    const question = byId.get(id);
-    const studentQuestion = question ? toStudentQuizQuestion(question) : null;
-    return studentQuestion ? [studentQuestion] : [];
-  });
+  // A submitted attempt shows its saved result (also after a refresh).
+  if (attempt.completedAt) {
+    const totalQuestions = attempt.quizQuestionIds.length;
+    const correctCount = await prisma.nodeResponse.count({ where: { attemptId: attempt.id, isCorrect: true } });
 
-  if (questions.length !== attempt.quizQuestionIds.length) {
+    return (
+      <div className={styles.screen}>
+        <div className={styles.intro}>
+          <p className={styles.eyebrow}>{title}</p>
+          <h1 className={styles.introTitle}>{attempt.isPassing ? 'Passed' : 'Not passed yet'}</h1>
+          <p className={styles.resultScore}>{Math.round(attempt.score ?? 0)}%</p>
+          <p className={styles.introText}>
+            {correctCount} of {totalQuestions} correct · {attempt.lessonNode.passingPercent}% needed to pass
+          </p>
+          <div className={styles.actions}>
+            <Link href="/student" className={styles.secondaryButton}>
+              Back to My Courses
+            </Link>
+            {!attempt.isPassing && (
+              <Link href={`/student/quiz/${attempt.lessonNode.id}`} className={styles.primaryButton}>
+                Try again
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Correct answers never leave the server.
+  const bank = await getAttemptQuestions(attempt.quizQuestionIds);
+  const questions = (bank ?? []).flatMap((question) => toStudentQuizQuestion(question) ?? []);
+
+  if (!bank || questions.length !== bank.length) {
     return (
       <div className={styles.screen}>
         <div className={styles.intro}>
@@ -59,5 +74,5 @@ export default async function QuizAttemptPage({ params }: PageProps) {
     );
   }
 
-  return <QuizPlayer title={`${attempt.lessonNode.node.title} Assessment`} questions={questions} />;
+  return <QuizPlayer attemptId={attempt.id} title={title} questions={questions} />;
 }

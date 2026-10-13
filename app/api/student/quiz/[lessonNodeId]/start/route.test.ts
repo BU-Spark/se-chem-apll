@@ -1,15 +1,12 @@
 import { POST } from './route';
 
-const mockAuth = jest.fn();
-const mockCurrentUser = jest.fn();
-const mockUserFindUnique = jest.fn();
+const mockGetCurrentStudent = jest.fn();
 const mockLessonNodeFindFirst = jest.fn();
 const mockCourseLessonFindFirst = jest.fn();
 const mockAttemptCreate = jest.fn();
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-  currentUser: () => mockCurrentUser(),
+jest.mock('@/lib/currentStudent', () => ({
+  getCurrentStudent: () => mockGetCurrentStudent(),
 }));
 
 jest.mock('next/server', () => ({
@@ -23,7 +20,6 @@ jest.mock('next/server', () => ({
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
-    user: { findUnique: (...args: unknown[]) => mockUserFindUnique(...args) },
     lessonNode: { findFirst: (...args: unknown[]) => mockLessonNodeFindFirst(...args) },
     courseLesson: { findFirst: (...args: unknown[]) => mockCourseLessonFindFirst(...args) },
     nodeAttempt: { create: (...args: unknown[]) => mockAttemptCreate(...args) },
@@ -49,9 +45,7 @@ function courseLesson(overrides: Record<string, unknown> = {}) {
 describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'clerk-1' });
-    mockCurrentUser.mockResolvedValue({ emailAddresses: [{ emailAddress: 'Student@BU.edu' }] });
-    mockUserFindUnique.mockResolvedValue({ id: 'student-1' });
+    mockGetCurrentStudent.mockResolvedValue({ id: 'student-1' });
     mockLessonNodeFindFirst.mockResolvedValue(lessonNode(2, ['q1', 'q2', 'q3']));
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson());
     mockAttemptCreate.mockResolvedValue({ id: 'attempt-1' });
@@ -62,7 +56,6 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ attemptId: 'attempt-1' });
-    expect(mockUserFindUnique).toHaveBeenCalledWith({ where: { email: 'student@bu.edu' } });
 
     const { data } = mockAttemptCreate.mock.calls[0][0];
     expect(data).toMatchObject({ lessonNodeId: 'ln-1', userId: 'student-1' });
@@ -77,17 +70,11 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
     expect([...mockAttemptCreate.mock.calls[0][0].data.quizQuestionIds].sort()).toEqual(['q1', 'q2']);
   });
 
-  it('returns 401 when signed out', async () => {
-    mockAuth.mockResolvedValue({ userId: null });
+  it('returns 401 when there is no signed-in student', async () => {
+    mockGetCurrentStudent.mockResolvedValue(null);
     const response = await POST({} as never, context);
     expect(response.status).toBe(401);
     expect(mockAttemptCreate).not.toHaveBeenCalled();
-  });
-
-  it('returns 404 when the student has no database user', async () => {
-    mockUserFindUnique.mockResolvedValue(null);
-    const response = await POST({} as never, context);
-    expect(response.status).toBe(404);
   });
 
   it('returns 404 for a missing or draft lesson node', async () => {

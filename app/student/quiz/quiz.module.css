@@ -51,6 +51,12 @@
   margin-top: 1rem;
 }
 
+.resultScore {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #111827;
+}
+
 /* ── Quiz ─────────────────────────────────── */
 .quizScreen {
   width: 100%;

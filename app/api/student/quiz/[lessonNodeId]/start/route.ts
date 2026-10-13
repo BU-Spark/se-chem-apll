@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentStudent } from '@/lib/currentStudent';
 import { pickRandomQuizQuestions } from '@/app/utils/quizQuestionCount';
 
 interface RouteContext {
@@ -9,15 +9,8 @@ interface RouteContext {
 
 // POST /api/student/quiz/[lessonNodeId]/start — begin a quiz attempt
 export async function POST(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const clerkUser = await currentUser();
-  const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
-  if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const student = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+  const student = await getCurrentStudent();
+  if (!student) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { lessonNodeId } = await params;
 

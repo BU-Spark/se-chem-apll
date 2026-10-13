@@ -2,29 +2,43 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
+import { isNumberAnswer } from '@/app/utils/quizGrading';
 import type { StudentQuizQuestion } from '@/app/utils/studentQuizQuestion';
 import styles from '../../quiz.module.css';
 
-export type QuizAnswer = { selectedIndices: number[] } | { rawAnswer: string };
+type QuizAnswer = { selectedIndices: number[] } | { rawAnswer: string };
 
 const LETTERS = 'ABCDEFGH';
 
 function isAnswered(answer: QuizAnswer | undefined): boolean {
   if (answer === undefined) return false;
   if ('selectedIndices' in answer) return answer.selectedIndices.length > 0;
-  return answer.rawAnswer.trim() !== '';
+  return isNumberAnswer(answer.rawAnswer);
 }
 
-export default function QuizPlayer({ title, questions }: { title: string; questions: StudentQuizQuestion[] }) {
+export default function QuizPlayer({
+  attemptId,
+  title,
+  questions,
+}: {
+  attemptId: string;
+  title: string;
+  questions: StudentQuizQuestion[];
+}) {
+  const router = useRouter();
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const question = questions[index];
   const answer = answers[question.id];
   const isLast = index === questions.length - 1;
   const selected = answer && 'selectedIndices' in answer ? answer.selectedIndices : [];
   const rawAnswer = answer && 'rawAnswer' in answer ? answer.rawAnswer : '';
+  const showNumberError = rawAnswer.trim() !== '' && !isNumberAnswer(rawAnswer);
 
   function setAnswer(value: QuizAnswer) {
     setAnswers((prev) => ({ ...prev, [question.id]: value }));
@@ -38,6 +52,27 @@ export default function QuizPlayer({ title, questions }: { title: string; questi
       setAnswer({ selectedIndices: selected.filter((i) => i !== choiceIndex) });
     } else {
       setAnswer({ selectedIndices: [...selected, choiceIndex].sort((a, b) => a - b) });
+    }
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/student/quiz/attempts/${attemptId}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Could not submit the quiz');
+      // The page re-renders on the server and shows the saved result.
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not submit the quiz');
+      setSubmitting(false);
     }
   }
 
@@ -91,8 +126,20 @@ export default function QuizPlayer({ title, questions }: { title: string; questi
               className={styles.numberInput}
               value={rawAnswer}
               onChange={(e) => setAnswer({ rawAnswer: e.target.value })}
+              aria-invalid={showNumberError}
             />
+            {showNumberError && (
+              <span role="alert" className={styles.error}>
+                Please enter a number, e.g. 7 or 0.5.
+              </span>
+            )}
           </label>
+        )}
+
+        {error && (
+          <p role="alert" className={styles.error}>
+            {error}
+          </p>
         )}
       </section>
 
@@ -103,9 +150,13 @@ export default function QuizPlayer({ title, questions }: { title: string; questi
           </button>
         )}
         {isLast ? (
-          // Submitting is wired up with the submit API in the next step.
-          <button type="button" className={styles.primaryButton} disabled>
-            Submit
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={handleSubmit}
+            disabled={!questions.every((q) => isAnswered(answers[q.id])) || submitting}
+          >
+            {submitting ? 'Submitting…' : 'Submit'}
           </button>
         ) : (
           <button
