@@ -12,7 +12,35 @@ datasource db {
 // Users & Auth
 // ---------------------------------------------------------------------------
 
+enum AppRole {
+  STUDENT
+  INSTRUCTOR
+}
+
+enum PlatformRole {
+  MEMBER
+  ADMIN
+}
+
+// Snapshot IDs deliberately retain the audit trail independently of account lifecycle.
+model RoleAudit {
+  id                   String       @id @default(cuid())
+  actorId              String?
+  targetId             String
+  source               String
+  previousAppRole      AppRole?
+  newAppRole           AppRole?
+  previousPlatformRole PlatformRole
+  newPlatformRole      PlatformRole
+  createdAt            DateTime     @default(now())
+
+  @@index([targetId, createdAt])
+}
+
 model User {
+  clerkUserId          String?                @unique
+  appRole              AppRole?
+  platformRole         PlatformRole           @default(MEMBER)
   id                   String                 @id @default(cuid())
   email                String                 @unique
   name                 String?
