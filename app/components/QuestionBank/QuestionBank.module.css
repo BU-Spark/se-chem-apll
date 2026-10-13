@@ -35,13 +35,7 @@
 }
 
 .filterSelect {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 0.85rem;
-  font-family: inherit;
-  background: #fff;
-  color: #374151;
+  max-width: 100%;
 }
 
 .toolbarBtn {
@@ -253,17 +247,8 @@
 }
 
 .detailTypeSelect select {
-  padding: 0.35rem 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.45rem;
-  font-size: 0.85rem;
-  font-family: inherit;
-  background: #fff;
-}
-
-.detailTypeSelect select:disabled {
-  color: #6b7280;
-  background: #f9fafb;
+  flex: 1;
+  min-width: 0;
 }
 
 .detailViewToggle {

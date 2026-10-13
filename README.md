@@ -162,3 +162,14 @@ CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test'
 ```
 
 The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
+
+
+## Instructor dropdown styles
+
+Native instructor dropdowns share `app/components/Select/Select.module.css`. Apply `control` to a native `<select>` and optionally add `compact` or `grid`. This also works for DOM-created AG Grid usage filters. Keep component-specific CSS limited to layout and width; do not override the shared padding, background image, border or focus styles.
+
+- Forms: minimum 40px height; compact toolbars/editors: 36px; grid filters: 34px.
+- All densities: 12px left padding, 40px reserved on the right, 16px outline chevron inset 12px, 8px corner radius.
+- Keyboard focus: blue 2px outline. Disabled and `aria-invalid="true"` states use the shared styles. Forced-color mode restores the native arrow.
+- Keep visible labels or accessible names, native keyboard behavior, and enough width for the longest label. Exact/Range uses a 96px minimum width.
+- AG Grid's built-in pickers use the corresponding spacing and state styles in `app/components/InstructorGrid/theme.ts`. Action menus and command search remain distinct controls.

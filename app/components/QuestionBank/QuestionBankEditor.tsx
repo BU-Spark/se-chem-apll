@@ -1,5 +1,7 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import {
@@ -504,7 +506,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className={styles.filterSelect}
+          className={`${selectStyles.control} ${selectStyles.compact} ${styles.filterSelect}`}
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
           aria-label="Filter by type"
@@ -514,7 +516,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           <option value="shortAnswer">Short answer</option>
         </select>
         <select
-          className={styles.filterSelect}
+          className={`${selectStyles.control} ${selectStyles.compact} ${styles.filterSelect}`}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           aria-label="Filter by status"

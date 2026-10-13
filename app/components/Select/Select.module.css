@@ -1,0 +1,66 @@
+/* Instructor selects: shared chrome, native keyboard and mobile picker behavior.
+   Use control with compact (36px) or grid (34px); default form height is 40px. */
+.control {
+  appearance: none;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  color: #334155;
+  color-scheme: light;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+
+.compact {
+  min-height: 2.25rem;
+  padding-block: 0.375rem;
+}
+
+.control.grid {
+  min-height: 2.125rem;
+  height: 2.125rem;
+  align-self: center;
+  padding-block: 0.3125rem;
+}
+
+.control:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.control:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 2px;
+  border-color: #1f5fab;
+}
+
+.control[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+.control:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+/* Let the OS supply a visible arrow in forced-color modes. */
+@media (forced-colors: active) {
+  .control {
+    appearance: auto;
+    background-image: none;
+    padding-right: 0.75rem;
+  }
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
 import {
   describeLatePenalty,
   type LatePenaltyType,
@@ -51,6 +52,7 @@ export default function LessonScheduleFields({
         <label className={styles.field}>
           Late submission penalty
           <select
+            className={selectStyles.control}
             value={value.latePenaltyType}
             onChange={(event) =>
               onChange({

@@ -1,5 +1,6 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AgGridReact } from 'ag-grid-react';
@@ -235,7 +236,11 @@ export default function LessonsGrid({
           </label>
           <label className={styles.filterField}>
             <span className={styles.srOnly}>My course</span>
-            <select value={filters.course} onChange={(event) => update({ course: event.target.value })}>
+            <select
+              className={`${selectStyles.control} ${selectStyles.compact}`}
+              value={filters.course}
+              onChange={(event) => update({ course: event.target.value })}
+            >
               <option value="">All lessons · any course</option>
               {filters.course && !courses.some((course) => course.id === filters.course) && (
                 <option value={filters.course}>Unavailable course</option>

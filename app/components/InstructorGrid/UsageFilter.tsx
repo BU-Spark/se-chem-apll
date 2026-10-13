@@ -1,4 +1,5 @@
 'use client';
+import selectStyles from '@/app/components/Select/Select.module.css';
 import type { CustomFloatingFilterProps } from 'ag-grid-react';
 import type { IDoesFilterPassParams, IFilterComp, IFilterParams } from 'ag-grid-community';
 import styles from './grid.module.css';
@@ -13,7 +14,7 @@ export class UsageFilter implements IFilterComp<unknown> {
   init(params: IFilterParams<unknown>) {
     this.params = params;
     this.select = document.createElement('select');
-    this.select.className = styles.usageFilter;
+    this.select.className = `${selectStyles.control} ${selectStyles.grid} ${styles.usageFilter}`;
     this.select.setAttribute('aria-label', params.context?.usageLabel ?? 'Filter lesson usage');
     for (const [value, label] of [
       ['', 'All'],
@@ -61,7 +62,7 @@ export function UsageFloatingFilter({
 }: CustomFloatingFilterProps<never, unknown, { usageLabel?: string }, UsageModel>) {
   return (
     <select
-      className={styles.usageFilter}
+      className={`${selectStyles.control} ${selectStyles.grid} ${styles.usageFilter}`}
       aria-label={context?.usageLabel ?? 'Filter lesson usage'}
       value={model ? String(model.value) : ''}
       onChange={(event) => onModelChange(event.target.value ? { value: event.target.value === 'true' } : null)}

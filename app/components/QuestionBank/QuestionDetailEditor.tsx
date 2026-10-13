@@ -1,5 +1,7 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
+
 import { useState } from 'react';
 import MarkdownField from './MarkdownField';
 import QuestionPreview from './QuestionPreview';
@@ -248,6 +250,7 @@ export default function QuestionDetailEditor({
           <label className={styles.detailTypeSelect}>
             Type
             <select
+              className={`${selectStyles.control} ${selectStyles.compact}`}
               value={question.type}
               onChange={(e) => onChangeType(e.target.value as AuthoringQuestion['type'])}
               aria-label="Question type"
