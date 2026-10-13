@@ -17,19 +17,17 @@ jobs:
     name: Test, Lint, and Build
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22.x] # Latest LTS version
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
+      - name: Set up Node.js
+        id: node
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm' # Cache npm dependencies
+          node-version-file: '.nvmrc'
+          cache: 'npm' # Cache npm downloads; npm ci still installs dependencies
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci # Use npm ci for cleaner installs in CI
@@ -46,6 +44,15 @@ jobs:
           name: coverage-report
           path: coverage/
           if-no-files-found: error # Fails the step if coverage/ directory is not found
+
+      - name: Restore Next.js build cache
+        uses: actions/cache@v5
+        with:
+          path: .next/cache
+          # Save each commit's build and reuse the latest compatible cache.
+          key: ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}-
 
       - name: Build project
         env:
