@@ -1,6 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NodeEditForm from './NodeEditForm';
+import NodeForm from '@/app/components/NodeForm/NodeForm';
 
 const push = jest.fn();
 
@@ -11,6 +12,31 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   __esModule: true,
   default: () => <div data-testid="youtube-player" />,
+}));
+
+jest.mock('@/app/components/QuestionBank/MarkdownField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    value,
+    onChange,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => (
+    <label>
+      {label}
+      <textarea
+        aria-label={label === 'Note' ? 'Note text' : label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
+  ),
 }));
 
 jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
@@ -102,6 +128,29 @@ describe('NodeEditForm', () => {
   });
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('keeps timestamp editing available without a completion banner and reveals actions on expansion', async () => {
+    const user = userEvent.setup();
+    render(
+      <NodeEditForm node={{ ...node, checkpoints: [{ ...node.checkpoints[0], checkpointKey: 'acceleration' }] }} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.queryByText('All checkpoint groups have timestamps')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Assign timestamps' })).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'Checkpoint 1 at 1:30' });
+    if (toggle.getAttribute('aria-expanded') === 'true') await user.click(toggle);
+    expect(toggle).toHaveTextContent('acceleration');
+    expect(toggle).toHaveTextContent('1:30');
+    expect(toggle).toHaveTextContent('2 items');
+    expect(screen.queryByRole('button', { name: 'Remove checkpoint' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Seek to time' })).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByRole('button', { name: 'Remove checkpoint' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Seek to time' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit timestamps' }));
+    expect(screen.getByRole('heading', { name: 'Assign checkpoint timestamps' })).toBeInTheDocument();
   });
 
   it('hydrates checkpoints and quiz bank and PATCHes them', async () => {
@@ -284,13 +333,80 @@ describe('NodeEditForm', () => {
     expect(body.learningObjectives).toEqual(['Second objective']);
   });
 
-  it('blocks Next without a title', async () => {
+  it('allows content authoring before the title is ready', async () => {
     const user = userEvent.setup();
     render(<NodeEditForm node={{ ...node, title: '' }} />);
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('Title is required.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Basic info' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Checkpoints (QEV)' })).toBeInTheDocument();
+  });
+
+  it('allows typing a time whose prefix is used by another checkpoint', async () => {
+    const user = userEvent.setup();
+    const first = node.checkpoints[0];
+    render(
+      <NodeEditForm
+        node={{
+          ...node,
+          checkpoints: [
+            { ...first, checkpointKey: 'intro', timeOffsetSeconds: null },
+            {
+              ...first,
+              id: 'cp2',
+              checkpointKey: 'other',
+              timeOffsetSeconds: 1,
+              questions: first.questions.map((q) => ({ ...q, id: `other-${q.id}` })),
+            },
+          ],
+        }}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.queryByLabelText('Checkpoint key')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:10');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at 0:10' })).toBeInTheDocument();
+  });
+
+  it('reopens untimed groups, blocks publication, then saves placement with existing IDs', async () => {
+    const user = userEvent.setup();
+    render(
+      <NodeEditForm
+        node={{
+          ...node,
+          isDraft: true,
+          checkpoints: node.checkpoints.map((c) => ({
+            ...c,
+            checkpointKey: 'intro',
+            placementHint: 'After introduction',
+            timeOffsetSeconds: null,
+          })),
+        }}
+      />
+    );
+    await advanceToReview(user);
+    await user.click(screen.getByRole('button', { name: 'Publish node' }));
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Assign timestamps to all checkpoints/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /2.*Checkpoints/ }));
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    expect(screen.getByText('After introduction')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:45');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Publish node' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.checkpoints[0]).toMatchObject({
+      id: node.checkpoints[0].id,
+      checkpointKey: 'intro',
+      timeOffsetSeconds: 45,
+    });
+    expect(body.checkpoints[0].questions[0].id).toBe(node.checkpoints[0].questions[0].id);
   });
 
   it('offers to publish a completed draft', async () => {
@@ -299,5 +415,158 @@ describe('NodeEditForm', () => {
 
     await advanceToReview(user);
     expect(screen.getByRole('button', { name: 'Publish node' })).toBeInTheDocument();
+  });
+});
+
+// The server echoes order from the request; client identities must survive later edits.
+function savedResponse(checkpoints: typeof node.checkpoints, id = node.id) {
+  return {
+    id,
+    checkpoints: checkpoints.map((checkpoint, sortOrder) => ({
+      id: checkpoint.id,
+      sortOrder,
+      questions: checkpoint.questions.map((question, sortOrder) => ({ id: question.id, sortOrder })),
+    })),
+  };
+}
+
+function deferSave() {
+  let resolve!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+  global.fetch = jest
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        })
+    )
+    .mockResolvedValue({ ok: true, json: async () => ({ id: node.id }) });
+  return async (data: unknown, ok = true) => {
+    await act(async () => resolve({ ok, json: async () => data }));
+  };
+}
+
+function secondRequest() {
+  return JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+}
+
+describe('edits during a pending node save', () => {
+  beforeEach(() => push.mockReset());
+  afterEach(() => jest.restoreAllMocks());
+
+  it('keeps the remaining checkpoint identity when an earlier checkpoint is removed', async () => {
+    const user = userEvent.setup();
+    const second = {
+      ...node.checkpoints[0],
+      id: 'cp-2',
+      timeOffsetSeconds: 120,
+      questions: [{ ...node.checkpoints[0].questions[0], id: 'cq-3', prompt: 'Second checkpoint' }],
+    };
+    const initial = { ...node, checkpoints: [node.checkpoints[0], second] };
+    const finish = deferSave();
+    render(<NodeEditForm node={initial} />);
+    await advanceToReview(user);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await user.click(screen.getByRole('button', { name: /2.*Checkpoints/ }));
+    await user.click(screen.getByRole('button', { name: 'Checkpoint 1 at 1:30' }));
+    await user.click(screen.getByRole('button', { name: 'Remove checkpoint' }));
+    await finish(savedResponse(initial.checkpoints));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Your newer changes are still unsaved');
+    expect(screen.getByRole('heading', { name: 'Checkpoints (QEV)' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Changes saved' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(secondRequest().checkpoints).toEqual([
+      expect.objectContaining({
+        id: 'cp-2',
+        questions: [expect.objectContaining({ id: 'cq-3', prompt: 'Second checkpoint' })],
+      }),
+    ]);
+  });
+
+  it('keeps question deletions and additions and does not redirect a draft with newer edits', async () => {
+    const user = userEvent.setup();
+    const finish = deferSave();
+    render(<NodeEditForm node={node} />);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Checkpoint 1 at 1:30' }));
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await user.click(screen.getByRole('button', { name: 'Remove question 1' }));
+    await user.click(screen.getByRole('button', { name: '+ Add note' }));
+    await user.type(screen.getByLabelText('Note text'), 'New note while saving');
+    await finish(savedResponse(node.checkpoints));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Your newer changes are still unsaved');
+    expect(screen.getByLabelText('Note text')).toHaveValue('New note while saving');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    const items = secondRequest().checkpoints[0].questions;
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ id: 'cq-2', prompt: node.checkpoints[0].questions[1].prompt });
+    expect(items[1]).toMatchObject({ prompt: 'New note while saving' });
+    expect(items[1]).not.toHaveProperty('id');
+    expect(push).toHaveBeenCalledWith('/instructor/nodes');
+  });
+
+  it('remembers newly created node and item IDs while retaining later edits', async () => {
+    const user = userEvent.setup();
+    const finish = deferSave();
+    render(<NodeForm mode="create" />);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await user.type(screen.getByLabelText(/Question prompt/), 'Edited after submission');
+    await finish({
+      id: 'created-node',
+      checkpoints: [{ id: 'created-checkpoint', sortOrder: 0, questions: [{ id: 'created-question', sortOrder: 0 }] }],
+    });
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Your newer changes are still unsaved');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect((global.fetch as jest.Mock).mock.calls[0][1].method).toBe('POST');
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe('/api/instructor/nodes/created-node');
+    expect((global.fetch as jest.Mock).mock.calls[1][1].method).toBe('PATCH');
+    expect(secondRequest().checkpoints[0]).toMatchObject({
+      id: 'created-checkpoint',
+      questions: [{ id: 'created-question', prompt: 'Edited after submission' }],
+    });
+  });
+
+  it('recognizes edits outside checkpoints when deciding whether publication is complete', async () => {
+    const user = userEvent.setup();
+    const finish = deferSave();
+    render(<NodeEditForm node={node} />);
+    await advanceToReview(user);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await user.click(screen.getByRole('button', { name: /3.*Quiz bank/ }));
+    await user.type(screen.getByLabelText('Quiz question prompt 1'), ' revised');
+    await finish(savedResponse(node.checkpoints));
+    expect(screen.getByRole('status')).toHaveTextContent('Your newer changes are still unsaved');
+    expect(screen.getByLabelText('Quiz question prompt 1')).toHaveValue('Quiz prompt revised');
+    await user.click(screen.getByRole('button', { name: 'Mock save node command' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(secondRequest().quizQuestions[0].prompt).toBe('Quiz prompt revised');
+    expect(screen.getByRole('heading', { name: 'Changes saved' })).toBeInTheDocument();
+    expect(screen.queryByText(/Your newer changes are still unsaved/)).not.toBeInTheDocument();
+  });
+
+  it('leaves identities and newer edits intact when the request fails', async () => {
+    const user = userEvent.setup();
+    const finish = deferSave();
+    render(<NodeEditForm node={node} />);
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await user.type(screen.getByLabelText(/Title/), ' revised');
+    await finish({ error: 'Save rejected', checkpoints: [{ id: 'wrong-id', sortOrder: 0, questions: [] }] }, false);
+    expect(screen.getByText('Save rejected')).toBeInTheDocument();
+    expect(screen.queryByText(/Your newer changes are still unsaved/)).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(secondRequest().title).toBe('Existing node revised');
+    expect(secondRequest().checkpoints[0].id).toBe('cp-1');
   });
 });

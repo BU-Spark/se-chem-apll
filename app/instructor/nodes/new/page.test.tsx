@@ -1,3 +1,4 @@
+import { sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NewNodePage from './page';
@@ -125,6 +126,32 @@ describe('NewNodePage', () => {
     jest.restoreAllMocks();
   });
 
+  it('imports untimed content without a video and saves it as a draft', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    const text = sampleCheckpointCsv();
+    const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => text });
+    await user.upload(screen.getByLabelText('Choose checkpoint CSV file'), file);
+    await screen.findByText('2 checkpoints · 3 items · 1 need timestamps');
+    await user.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
+    expect(screen.getByText('1 of 2 groups assigned')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.isDraft).toBe(true);
+    expect(body.checkpoints[0]).toMatchObject({
+      checkpointKey: 'intro',
+      timeOffsetSeconds: null,
+      placementHint: 'After the introduction',
+    });
+    expect(body.checkpoints[0].questions).toHaveLength(2);
+    expect(body.checkpoints[0]).not.toHaveProperty('id');
+    expect(body.checkpoints[0].questions[0]).not.toHaveProperty('id');
+  });
+
   it('submits checkpoints and quiz questions separately', async () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
@@ -138,8 +165,12 @@ describe('NewNodePage', () => {
     await goToCheckpoints(user);
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
-    expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:00');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
     const checkpointPrompt = screen.getByLabelText(/Question prompt/);
     const questionCard = questionCardFor(checkpointPrompt);
     const checkpointCard = questionCard.parentElement as HTMLElement;
@@ -216,6 +247,10 @@ describe('NewNodePage', () => {
     await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     await goToCheckpoints(user);
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:00');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
     await user.selectOptions(screen.getByLabelText('Type:'), 'note');
 
     const note = screen.getByLabelText('Note text');
@@ -244,7 +279,7 @@ describe('NewNodePage', () => {
     ]);
   });
 
-  it('assigns the next free offset when adding checkpoints manually', async () => {
+  it('adds distinct untimed checkpoints without fabricated offsets', async () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
 
@@ -259,10 +294,16 @@ describe('NewNodePage', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
-    expect(screen.getByText(/Checkpoint 1 · 0:00/)).toBeInTheDocument();
-    expect(screen.getByText(/Checkpoint 2 · 1:00/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Checkpoint 1 at 0:00' })).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByRole('button', { name: 'Checkpoint 2 at 1:00' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
     expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(1);
   });
 
@@ -275,7 +316,9 @@ describe('NewNodePage', () => {
     await goToCheckpoints(user);
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
 
-    const firstCheckpoint = screen.getByText(/Checkpoint 1 · 0:00/).closest('[class*="checkpointCard"]') as HTMLElement;
+    const firstCheckpoint = screen
+      .getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })
+      .closest('[class*="checkpointCard"]') as HTMLElement;
     await user.type(within(firstCheckpoint).getByLabelText(/Question prompt/), 'First question');
     await user.click(within(firstCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
 
@@ -290,7 +333,7 @@ describe('NewNodePage', () => {
 
     await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
     const secondCheckpoint = screen
-      .getByText(/Checkpoint 2 · 1:00/)
+      .getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })
       .closest('[class*="checkpointCard"]') as HTMLElement;
     await user.click(within(secondCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
     const secondCheckpointQuestion = within(secondCheckpoint).getByRole('button', {
@@ -298,8 +341,8 @@ describe('NewNodePage', () => {
     });
     expect(secondCheckpointQuestion).toHaveAttribute('aria-expanded', 'true');
 
-    const firstCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 1 at 0:00' });
-    const secondCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 2 at 1:00' });
+    const firstCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' });
+    const secondCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' });
     expect(firstCheckpointToggle).toHaveAttribute('aria-expanded', 'false');
     expect(secondCheckpointToggle).toHaveAttribute('aria-expanded', 'true');
     expect(
