@@ -1,5 +1,6 @@
 'use client';
 
+import CourseTabs from '@/app/components/CourseTabs';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Course, Lesson, Enrollment, CourseContact, CourseLesson } from '@prisma/client';
@@ -159,6 +160,8 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
           {course.enrollments.length !== 1 ? 's' : ''}
         </p>
       </header>
+
+      <CourseTabs courseId={course.id} active="edit" />
 
       <form onSubmit={handleSubmit} className={styles.form}>
         <section className={styles.section}>
