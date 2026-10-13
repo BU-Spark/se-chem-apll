@@ -50,8 +50,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const result = gradeQuizAttempt(questions, answers, attempt.lessonNode.passingPercent);
 
-  await prisma.$transaction([
-    prisma.nodeResponse.createMany({
+  const saved = await prisma.$transaction(async (tx) => {
+    // Marking the attempt submitted only while it is still open means that if two submits
+    // race, only one of them wins; the other updates nothing and saves no answers.
+    const { count } = await tx.nodeAttempt.updateMany({
+      where: { id: attempt.id, completedAt: null },
+      data: { completedAt: new Date(), score: result.score, isPassing: result.isPassing },
+    });
+    if (count === 0) return false;
+
+    await tx.nodeResponse.createMany({
       data: result.responses.map((response) => ({
         attemptId: attempt.id,
         quizQuestionId: response.questionId,
@@ -60,12 +68,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         rawAnswer: response.rawAnswer,
         isCorrect: response.isCorrect,
       })),
-    }),
-    prisma.nodeAttempt.update({
-      where: { id: attempt.id },
-      data: { completedAt: new Date(), score: result.score, isPassing: result.isPassing },
-    }),
-  ]);
+    });
+    return true;
+  });
+  if (!saved) return NextResponse.json({ error: 'This quiz was already submitted' }, { status: 409 });
 
   return NextResponse.json({ score: result.score, isPassing: result.isPassing });
 }

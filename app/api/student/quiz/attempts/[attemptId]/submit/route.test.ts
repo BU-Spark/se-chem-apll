@@ -2,7 +2,7 @@ import { POST } from './route';
 
 const mockGetCurrentStudent = jest.fn();
 const mockAttemptFindFirst = jest.fn();
-const mockAttemptUpdate = jest.fn();
+const mockAttemptUpdateMany = jest.fn();
 const mockQuestionFindMany = jest.fn();
 const mockResponseCreateMany = jest.fn();
 const mockTransaction = jest.fn();
@@ -25,10 +25,8 @@ jest.mock('@/lib/prisma', () => ({
     $transaction: (...args: unknown[]) => mockTransaction(...args),
     nodeAttempt: {
       findFirst: (...args: unknown[]) => mockAttemptFindFirst(...args),
-      update: (...args: unknown[]) => mockAttemptUpdate(...args),
     },
     quizQuestion: { findMany: (...args: unknown[]) => mockQuestionFindMany(...args) },
-    nodeResponse: { createMany: (...args: unknown[]) => mockResponseCreateMany(...args) },
   },
 }));
 
@@ -58,9 +56,13 @@ describe('POST /api/student/quiz/attempts/[attemptId]/submit', () => {
     mockGetCurrentStudent.mockResolvedValue({ id: 'student-1' });
     mockAttemptFindFirst.mockResolvedValue(openAttempt());
     mockQuestionFindMany.mockResolvedValue(questions);
-    mockResponseCreateMany.mockReturnValue('createMany');
-    mockAttemptUpdate.mockReturnValue('update');
-    mockTransaction.mockResolvedValue([]);
+    mockAttemptUpdateMany.mockResolvedValue({ count: 1 });
+    mockTransaction.mockImplementation(async (callback) =>
+      callback({
+        nodeAttempt: { updateMany: mockAttemptUpdateMany },
+        nodeResponse: { createMany: mockResponseCreateMany },
+      })
+    );
   });
 
   it('grades the attempt and saves responses plus the result together', async () => {
@@ -101,11 +103,26 @@ describe('POST /api/student/quiz/attempts/[attemptId]/submit', () => {
         },
       ],
     });
-    expect(mockAttemptUpdate).toHaveBeenCalledWith({
-      where: { id: 'attempt-1' },
+    expect(mockAttemptUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'attempt-1', completedAt: null },
       data: { completedAt: expect.any(Date), score: 50, isPassing: true },
     });
-    expect(mockTransaction).toHaveBeenCalledWith(['createMany', 'update']);
+  });
+
+  it('saves nothing when a simultaneous submit already won', async () => {
+    mockAttemptUpdateMany.mockResolvedValue({ count: 0 });
+    const response = await POST(
+      request({
+        answers: [
+          { questionId: 'q1', selectedIndices: [1] },
+          { questionId: 'q2', rawAnswer: '42' },
+        ],
+      }),
+      context
+    );
+
+    expect(response.status).toBe(409);
+    expect(mockResponseCreateMany).not.toHaveBeenCalled();
   });
 
   it('fails the attempt below passingPercent', async () => {
