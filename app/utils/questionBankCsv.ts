@@ -59,11 +59,11 @@ export type CsvImportResult = {
 
 const FORMULA_PREFIX = /^[=+\-@]/;
 
-function guardTextCell(value: string): string {
+export function guardTextCell(value: string): string {
   return FORMULA_PREFIX.test(value) ? `'${value}` : value;
 }
 
-function unguardTextCell(value: string): string {
+export function unguardTextCell(value: string): string {
   return value.startsWith("'") && FORMULA_PREFIX.test(value.slice(1)) ? value.slice(1) : value;
 }
 
@@ -181,7 +181,11 @@ function isFiniteNumberString(raw: string): boolean {
   return trimmed !== '' && Number.isFinite(Number(trimmed));
 }
 
-function rowToQuestion(row: string[], map: Map<string, number>, rowNumber: number): AuthoringQuestion | CsvRowError {
+export function rowToQuestion(
+  row: string[],
+  map: Map<string, number>,
+  rowNumber: number
+): AuthoringQuestion | CsvRowError {
   const rowLabel = `Row ${rowNumber}`;
   const type = cellAt(row, map, 'type').trim().toLowerCase();
   // Prompt/choice content keeps its whitespace; only validation trims.
