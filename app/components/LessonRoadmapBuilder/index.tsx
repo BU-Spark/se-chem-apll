@@ -6,6 +6,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   Handle,
   BaseEdge,
   EdgeLabelRenderer,
@@ -29,6 +30,7 @@ import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types'
 import NodeSearchPopup from './NodeSearchPopup';
 import { generateClientId } from '@/lib/generateClientId';
 import { wouldCreateCycle } from '@/app/utils/dagValidation';
+import { layoutRoadmap } from '@/app/utils/roadmapLayout';
 import styles from './LessonRoadmapBuilder.module.css';
 import type { NodeSelectPayload } from './NodeSearchPopup';
 import NodeEditPopup from './NodeEditPopup';
@@ -92,6 +94,7 @@ function DeletableEdge({
   sourcePosition,
   targetPosition,
   markerEnd,
+  style,
   selected,
   data,
 }: EdgeProps<XYEdge<DeletableEdgeData>>) {
@@ -108,7 +111,7 @@ function DeletableEdge({
   // draws the line and arrow head, same as default edge rendering
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
       {selected && (
         <EdgeLabelRenderer>
           <button
@@ -155,15 +158,19 @@ function toXYEdges(
   onDelete: (edgeId: string) => void,
   selectedEdgeId: string | null
 ): XYEdge[] {
-  return edges.map((e) => ({
-    id: e.edgeId,
-    source: e.sourceInstanceId,
-    target: e.targetInstanceId,
-    type: 'deletable', // routes everything through DeletableEdge
-    selected: e.edgeId === selectedEdgeId, // Marks one edge as selected so the x pops up when you click on it
-    markerEnd: { type: MarkerType.ArrowClosed },
-    data: { onDelete }, // all edges get the same delete callback attached
-  }));
+  return edges.map((e) => {
+    const color = e.edgeId === selectedEdgeId ? '#2563eb' : '#475569';
+    return {
+      id: e.edgeId,
+      source: e.sourceInstanceId,
+      target: e.targetInstanceId,
+      type: 'deletable', // routes everything through DeletableEdge
+      selected: e.edgeId === selectedEdgeId, // Marks one edge as selected so the x pops up when you click on it
+      style: { stroke: color, strokeWidth: 3 },
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 20, height: 20, markerUnits: 'userSpaceOnUse' },
+      data: { onDelete }, // all edges get the same delete callback attached
+    };
+  });
 }
 
 function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdgesChange, onLessonNodesChange }: Props) {
@@ -174,7 +181,8 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
   // for storing positions
   const [pendingPosition, setPendingPosition] = useState<{ x: number; y: number } | null>(null);
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const [tidyVersion, setTidyVersion] = useState(0);
 
   const editingNode = lessonNodes.find((n) => n.instanceId === editingInstanceId) ?? null;
 
@@ -206,6 +214,41 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
 
   // this still uses the react flow convinience hook
   const [nodesState, setNodes, onNodesChange] = useNodesState(xyNodes);
+
+  const tidyRoadmap = useCallback(() => {
+    try {
+      const positions = layoutRoadmap(
+        lessonNodes.map((node) => {
+          const rendered = nodesState.find((entry) => entry.id === node.instanceId);
+          return {
+            id: node.instanceId,
+            width: rendered?.measured?.width ?? 160,
+            height: rendered?.measured?.height ?? 100,
+          };
+        }),
+        edges
+      );
+      positionsRef.current = positions;
+      setNodes((current) => current.map((node) => ({ ...node, position: positions[node.id] ?? node.position })));
+      setConnectError(null);
+      setSelectedEdgeId(null);
+      setPopupNode(false);
+      setEditingInstanceId(null);
+      setPendingPosition(null);
+      setTidyVersion((version) => version + 1);
+    } catch (error) {
+      setConnectError(error instanceof Error ? error.message : 'Unable to tidy the roadmap.');
+    }
+  }, [lessonNodes, nodesState, edges, setNodes]);
+
+  // Fit after React Flow has received the newly arranged positions.
+  useEffect(() => {
+    if (tidyVersion === 0) return;
+    const frame = requestAnimationFrame(() => {
+      void fitView({ padding: 0.2, maxZoom: 1, duration: 250 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tidyVersion, fitView]);
 
   // calls sedNodes(xyNodes) when lessonNodes changes to make sure that the graph updates when the popup closes
   useEffect(() => {
@@ -355,6 +398,20 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
           panOnScroll
         >
           <Background />
+          <Panel position="top-right">
+            <button
+              type="button"
+              className={styles.tidyButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                tidyRoadmap();
+              }}
+              disabled={lessonNodes.length < 2}
+              title="Arrange nodes from prerequisites at the top to dependents below"
+            >
+              Tidy
+            </button>
+          </Panel>
           <Controls />
           <MiniMap nodeStrokeWidth={3} />
         </ReactFlow>
@@ -389,7 +446,7 @@ function LessonRoadmapBuilderInner({ availableNodes, lessonNodes, edges, onEdges
       </div>
       {connectError && <p className={styles.error}>{connectError}</p>}
       <p className={styles.hint}>
-        Drag between blue dots to connect. Click a connection and use the{' '}
+        Use Tidy to arrange nodes from top to bottom. Drag between blue dots to connect. Click a connection and use the{' '}
         <span className={styles.edgeDeleteHintIcon}>×</span> button (or press <kbd>Backspace</kbd>) to delete it.
       </p>
     </>

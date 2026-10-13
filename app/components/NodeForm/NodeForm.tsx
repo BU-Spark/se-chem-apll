@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatTimeOffsetSeconds, validateCheckpointTimestamps } from '@/app/utils/questionTimestamps';
 import { validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
@@ -11,6 +11,12 @@ import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
 import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
 import { countIssuesBySeverity, validateQuestionBank } from '@/app/components/QuestionBank/validation';
 import type { AuthoringQuestion } from '@/app/components/QuestionBank/types';
+import CheckpointPlacement from './CheckpointPlacement';
+import CheckpointCsvDialog from './CheckpointCsvDialog';
+import { checkpointsToCsv, sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
+import { downloadCsvFile } from '@/app/utils/csv';
+import { validateNodeContent } from '@/app/utils/nodeContent';
+import { reconcileSavedCheckpoints, type SavedCheckpoint } from './reconcileSavedCheckpoints';
 import QevItemPreview from './QevItemPreview';
 import QuestionEditor from './QuestionEditor';
 import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer';
@@ -77,9 +83,13 @@ function removeChoiceInList(list: FormQuestion[], qId: string, choiceIdx: number
 
 function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
   return checkpoints.map((checkpoint, idx) => ({
+    ...(checkpoint.persistedId && { id: checkpoint.persistedId }),
+    checkpointKey: checkpoint.checkpointKey,
+    placementHint: checkpoint.placementHint,
     sortOrder: idx,
     timeOffsetSeconds: checkpoint.timeOffsetSeconds,
     questions: checkpoint.questions.map((q, qIdx) => ({
+      ...(q.persistedId && { id: q.persistedId }),
       sortOrder: qIdx,
       prompt: q.prompt,
       kind: q.questionType === 'note' ? 'note' : 'question',
@@ -96,9 +106,9 @@ function buildQuizPayload(quizQuestions: AuthoringQuestion[]) {
 function validateQuestionPayloads(
   checkpointPayload: ReturnType<typeof buildCheckpointPayload>,
   quizPayload: ReturnType<typeof buildQuizPayload>,
-  options: { requireCheckpointQuestions: boolean; includeQuiz: boolean }
+  options: { requireCheckpointQuestions: boolean; includeQuiz: boolean; allowUnplaced?: boolean }
 ): string | null {
-  const timestampError = validateCheckpointTimestamps(checkpointPayload);
+  const timestampError = validateCheckpointTimestamps(checkpointPayload, options.allowUnplaced);
   if (timestampError) return timestampError;
 
   if (options.requireCheckpointQuestions && checkpointPayload.some((c) => c.questions.length === 0)) {
@@ -131,6 +141,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [draftStatus, setDraftStatus] = useState(initial?.isDraft ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? '');
@@ -141,9 +152,14 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     return (initialValues.length > 0 ? initialValues : ['']).map((value) => makeLearningObjective(value));
   });
   const [activeCheckpointId, setActiveCheckpointId] = useState<string | null>(null);
+  const [placementOpen, setPlacementOpen] = useState(false);
+  const [showCheckpointImport, setShowCheckpointImport] = useState(false);
   const [checkpoints, setCheckpoints] = useState<FormCheckpoint[]>(() =>
-    (initial?.checkpoints ?? []).map((checkpoint) => ({
+    (initial?.checkpoints ?? []).map((checkpoint, index) => ({
       id: checkpoint.id,
+      persistedId: checkpoint.id,
+      checkpointKey: checkpoint.checkpointKey ?? `checkpoint-${index + 1}`,
+      placementHint: checkpoint.placementHint ?? null,
       timeOffsetSeconds: checkpoint.timeOffsetSeconds,
       questions: checkpoint.questions.map(dbQuestionToForm),
     }))
@@ -156,6 +172,16 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   const [quizQuestions, setQuizQuestions] = useState<AuthoringQuestion[]>(() =>
     (initial?.quizQuestions ?? []).map(dbQuestionToAuthoring)
   );
+
+  // Track committed editor changes independently of navigation and save status.
+  const contentSnapshot = useMemo(
+    () => ({ title, summary, videoUrl, tags, tagDraft, learningObjectives, checkpoints, quizQuestions }),
+    [title, summary, videoUrl, tags, tagDraft, learningObjectives, checkpoints, quizQuestions]
+  );
+  const latestContent = useRef(contentSnapshot);
+  useLayoutEffect(() => {
+    latestContent.current = contentSnapshot;
+  }, [contentSnapshot]);
 
   const youtubeId = parseYouTubeId(videoUrl.trim());
   const objectiveValues = learningObjectives.map((objective) => objective.value.trim()).filter(Boolean);
@@ -175,8 +201,8 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     });
   }
 
-  function addCheckpointAt(timeOffsetSeconds: number) {
-    const existing = checkpoints.find((c) => c.timeOffsetSeconds === timeOffsetSeconds);
+  function addCheckpointAt(timeOffsetSeconds: number | null) {
+    const existing = checkpoints.find((c) => timeOffsetSeconds !== null && c.timeOffsetSeconds === timeOffsetSeconds);
     if (existing) {
       setExpandedQuestionByCheckpoint((prev) =>
         prev[existing.id] === undefined ? { ...prev, [existing.id]: existing.questions[0]?.id ?? null } : prev
@@ -185,7 +211,10 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
       return;
     }
     const checkpoint = makeCheckpoint(timeOffsetSeconds);
-    setCheckpoints((prev) => [...prev, checkpoint].sort((a, b) => a.timeOffsetSeconds - b.timeOffsetSeconds));
+    let number = checkpoints.length + 1;
+    while (checkpoints.some((c) => c.checkpointKey === `checkpoint-${number}`)) number += 1;
+    checkpoint.checkpointKey = `checkpoint-${number}`;
+    setCheckpoints((prev) => [...prev, checkpoint]);
     setExpandedQuestionByCheckpoint((prev) => ({
       ...prev,
       [checkpoint.id]: checkpoint.questions[0]?.id ?? null,
@@ -250,13 +279,6 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     setExpandedQuestionByCheckpoint((prev) =>
       prev[checkpointId] === questionId ? { ...prev, [checkpointId]: fallbackId } : prev
     );
-  }
-
-  function nextManualCheckpointOffset(): number {
-    const used = new Set(checkpoints.map((c) => c.timeOffsetSeconds));
-    let offset = 0;
-    while (used.has(offset)) offset += 60;
-    return offset;
   }
 
   function handleAddCheckpointFromVideo() {
@@ -327,11 +349,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     return null;
   }
 
-  function validateCheckpointsStep(): string | null {
+  function validateCheckpointsStep(allowUnplaced = true): string | null {
     const checkpointPayload = buildCheckpointPayload(checkpoints);
     return validateQuestionPayloads(checkpointPayload, [], {
       requireCheckpointQuestions: true,
       includeQuiz: false,
+      allowUnplaced,
     });
   }
 
@@ -354,7 +377,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   function validateAll(): string | null {
     return (
       validateBasicsStep() ??
-      validateCheckpointsStep() ??
+      validateCheckpointsStep(false) ??
       validateQuizStep() ??
       validateQuestionPayloads(buildCheckpointPayload(checkpoints), buildQuizPayload(quizQuestions), {
         requireCheckpointQuestions: true,
@@ -364,8 +387,12 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function handleNext() {
+    if (placementOpen) {
+      setPlacementOpen(false);
+      return;
+    }
     let stepError: string | null = null;
-    if (step === 'basics') stepError = validateBasicsStep();
+    if (step === 'basics') stepError = null;
     if (step === 'checkpoints') stepError = validateCheckpointsStep();
     if (step === 'quiz') stepError = validateQuizStep();
 
@@ -380,6 +407,10 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function handleBack() {
+    if (placementOpen) {
+      setPlacementOpen(false);
+      return;
+    }
     if (step === 'done') {
       leaveDoneTo('review');
       return;
@@ -396,6 +427,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   }
 
   function handleStepTabClick(target: WizardStep) {
+    setPlacementOpen(false);
     if (target === 'done') return;
     if (step === 'done') {
       leaveDoneTo(target);
@@ -410,7 +442,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
     }
     // Only allow forward within already-visited steps after re-validating current
     let stepError: string | null = null;
-    if (step === 'basics') stepError = validateBasicsStep();
+    if (step === 'basics') stepError = null;
     if (step === 'checkpoints') stepError = validateCheckpointsStep();
     if (step === 'quiz') stepError = validateQuizStep();
     if (stepError) {
@@ -423,6 +455,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
   async function persistNode(asDraft: boolean) {
     if (saving) return;
     setError(null);
+    setSaveNotice(null);
     if (!asDraft) {
       const allError = validateAll();
       if (allError) {
@@ -433,7 +466,16 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
     const checkpointPayload = buildCheckpointPayload(checkpoints);
     const quizPayload = buildQuizPayload(quizQuestions);
+    const structureError = validateNodeContent(
+      { checkpoints: checkpointPayload, quizQuestions: quizPayload },
+      asDraft ? 'draft' : 'publish'
+    );
+    if (structureError) {
+      setError(structureError);
+      return;
+    }
     const updatingExisting = Boolean(savedNodeId);
+    const submittedContent = contentSnapshot;
 
     setSaving(true);
     try {
@@ -457,14 +499,25 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
 
+      const editedDuringSave = latestContent.current !== submittedContent;
+      if (Array.isArray(data.checkpoints)) {
+        setCheckpoints((prev) =>
+          reconcileSavedCheckpoints(prev, submittedContent.checkpoints, data.checkpoints as SavedCheckpoint[])
+        );
+      }
       const idFromResponse = typeof data.id === 'string' ? data.id : null;
       setSavedNodeId(idFromResponse ?? savedNodeId ?? nodeId ?? null);
+      setDraftStatus(asDraft);
+      if (editedDuringSave) {
+        setSaveNotice(
+          'The submitted version was saved. Your newer changes are still unsaved. Save again to keep them.'
+        );
+        return;
+      }
       if (asDraft) {
-        setDraftStatus(true);
         router.push('/instructor/nodes');
         return;
       }
-      setDraftStatus(false);
       setCreatedThisSession(!updatingExisting && mode === 'create');
       goToStep('done');
     } catch (err) {
@@ -537,6 +590,11 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
         <div className={styles.previewBlock}>
           <h3 className={styles.previewHeading}>Checkpoints ({checkpoints.length})</h3>
+          {checkpoints.some((c) => c.timeOffsetSeconds === null) && (
+            <p role="status">
+              Assign timestamps to all checkpoints before publishing. You can save this node as a draft.
+            </p>
+          )}
           {checkpoints.length === 0 ? (
             <p className={styles.sectionNote} style={{ margin: 0 }}>
               No checkpoints.
@@ -767,9 +825,87 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           </section>
         )}
 
-        {step === 'checkpoints' && (
+        {step === 'checkpoints' && placementOpen && (
+          <CheckpointPlacement
+            checkpoints={checkpoints}
+            videoId={youtubeId}
+            onChange={setCheckpoints}
+            onSaveDraft={() => persistNode(true)}
+            saving={saving}
+          />
+        )}
+        {step === 'checkpoints' && !placementOpen && (
           <section className={`${styles.section} ${styles.checkpointSection}`}>
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
+            <div className={styles.checkpointToolbar}>
+              <button type="button" className={styles.addQuestionBtn} onClick={() => setShowCheckpointImport(true)}>
+                Import CSV
+              </button>
+              <button
+                type="button"
+                className={styles.addQuestionBtn}
+                disabled={!checkpoints.length}
+                onClick={() => {
+                  try {
+                    downloadCsvFile('checkpoints.csv', checkpointsToCsv(checkpoints));
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                className={styles.addQuestionBtn}
+                onClick={() => downloadCsvFile('checkpoints-sample.csv', sampleCheckpointCsv())}
+              >
+                Download sample CSV
+              </button>
+              {checkpoints.length > 0 && checkpoints.every((c) => c.timeOffsetSeconds !== null) && (
+                <button
+                  type="button"
+                  className={styles.seekBtn}
+                  onClick={() => {
+                    playerRef.current = null;
+                    setPlacementOpen(true);
+                  }}
+                >
+                  Edit timestamps
+                </button>
+              )}
+            </div>
+            {checkpoints.some((c) => c.timeOffsetSeconds === null) && (
+              <div className={styles.placementNotice}>
+                <span>{checkpoints.filter((c) => c.timeOffsetSeconds === null).length} groups need timestamps</span>
+                <button
+                  type="button"
+                  className={styles.seekBtn}
+                  onClick={() => {
+                    playerRef.current = null;
+                    setPlacementOpen(true);
+                  }}
+                >
+                  Assign timestamps
+                </button>
+              </div>
+            )}
+            {showCheckpointImport && (
+              <CheckpointCsvDialog
+                existing={checkpoints}
+                onApply={(next) => {
+                  setCheckpoints(next);
+                  playerRef.current = null;
+                  setPlacementOpen(true);
+                  setActiveCheckpointId(next[0]?.id ?? null);
+                  setExpandedQuestionByCheckpoint(
+                    Object.fromEntries(next.map((c) => [c.id, c.questions[0]?.id ?? null]))
+                  );
+                  setError(null);
+                }}
+                onClose={() => setShowCheckpointImport(false)}
+              />
+            )}
             <p className={styles.sectionNote}>
               Watch the video and click Add checkpoint to capture the current timestamp. Each checkpoint can hold
               multiple questions or notes.
@@ -778,8 +914,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             {!youtubeId && (
               <p className={styles.videoHint}>
                 Enter a YouTube URL on the Basics step to scrub the video and capture checkpoints at the current
-                playback time. Without a video, add checkpoints manually — each gets the next free offset (0:00, 1:00,
-                2:00, …).
+                playback time. You can also import or add untimed checkpoints and place them later.
               </p>
             )}
 
@@ -834,39 +969,45 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                             checkpoint.timeOffsetSeconds
                           )}`}
                         >
-                          <span className={styles.questionIndex}>
-                            Checkpoint {checkpointIdx + 1} · {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
+                          <span className={styles.checkpointName} title={checkpoint.checkpointKey}>
+                            {checkpoint.checkpointKey || `Checkpoint ${checkpointIdx + 1}`}
+                          </span>
+                          <span className={styles.checkpointTime}>
+                            {formatTimeOffsetSeconds(checkpoint.timeOffsetSeconds)}
                           </span>
                           <span className={styles.checkpointQuestionCount}>
                             {checkpoint.questions.length} item{checkpoint.questions.length === 1 ? '' : 's'}
                           </span>
-                          <span className={styles.questionChevron} aria-hidden="true">
+                          <span className={styles.checkpointChevron} aria-hidden="true">
                             {activeCheckpointId === checkpoint.id ? '−' : '+'}
                           </span>
-                        </button>
-                        {youtubeId && (
-                          <button
-                            type="button"
-                            className={styles.seekBtn}
-                            onClick={() => {
-                              setActiveCheckpointId(checkpoint.id);
-                              playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true);
-                            }}
-                          >
-                            Seek to time
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className={styles.removeBtn}
-                          onClick={() => removeCheckpoint(checkpoint.id)}
-                        >
-                          Remove checkpoint
                         </button>
                       </div>
 
                       {activeCheckpointId === checkpoint.id && (
                         <div className={styles.checkpointBody} id={`checkpoint-${checkpoint.id}-questions`}>
+                          <div className={styles.checkpointActions}>
+                            {youtubeId && checkpoint.timeOffsetSeconds !== null && (
+                              <button
+                                type="button"
+                                className={styles.seekBtn}
+                                onClick={() => {
+                                  setActiveCheckpointId(checkpoint.id);
+                                  if (checkpoint.timeOffsetSeconds !== null)
+                                    playerRef.current?.seekTo(checkpoint.timeOffsetSeconds, true);
+                                }}
+                              >
+                                Seek to time
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={styles.removeBtn}
+                              onClick={() => removeCheckpoint(checkpoint.id)}
+                            >
+                              Remove checkpoint
+                            </button>
+                          </div>
                           {checkpoint.questions.map((q, qIdx) => (
                             <QuestionEditor
                               key={q.id}
@@ -934,11 +1075,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                     </div>
                   ))}
 
-                  <button
-                    type="button"
-                    className={styles.addQuestionBtn}
-                    onClick={() => addCheckpointAt(nextManualCheckpointOffset())}
-                  >
+                  <button type="button" className={styles.addQuestionBtn} onClick={() => addCheckpointAt(null)}>
                     + Add checkpoint manually
                   </button>
                 </div>
@@ -985,6 +1122,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
           </section>
         )}
 
+        {saveNotice && <p role="status">{saveNotice}</p>}
         {error && <p className={styles.error}>{error}</p>}
 
         <div className={styles.actions}>
@@ -1005,15 +1143,21 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               </>
             ) : (
               <>
-                <button type="button" className={styles.draftBtn} onClick={() => persistNode(true)} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save as draft'}
-                </button>
-                {currentStepIndex > 0 && (
+                {placementOpen ? (
+                  <button type="button" className={styles.submitBtn} onClick={() => setPlacementOpen(false)}>
+                    Continue to checkpoint editor
+                  </button>
+                ) : (
+                  <button type="button" className={styles.draftBtn} onClick={() => persistNode(true)} disabled={saving}>
+                    {saving ? 'Saving…' : 'Save as draft'}
+                  </button>
+                )}
+                {currentStepIndex > 0 && !placementOpen && (
                   <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
                     Back
                   </button>
                 )}
-                {step !== 'review' ? (
+                {placementOpen ? null : step !== 'review' ? (
                   <button type="button" className={styles.submitBtn} onClick={handleNext}>
                     Next
                   </button>

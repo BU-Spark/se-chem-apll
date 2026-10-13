@@ -1,26 +1,41 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import styles from './page.module.css';
+import styles from '../../components/InstructorGrid/grid.module.css';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import LessonsGrid from './LessonsGrid';
+import { readLessonFilters, type SearchParams } from './listFilters';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LessonsPage() {
+export default async function LessonsPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
-  const lessons = await prisma.lesson.findMany({
-    where: {
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
-    },
-    include: {
-      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
-    },
-    orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
-  });
-
+  if (!userId) redirect('/sign-in');
+  const filters = readLessonFilters((await searchParams) ?? {});
+  const [lessons, courses] = await Promise.all([
+    prisma.lesson.findMany({
+      where: { OR: [{ createdByClerkId: userId }, { createdByClerkId: null }] },
+      select: {
+        id: true,
+        title: true,
+        summary: true,
+        isDraft: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { lessonNodes: true } },
+        courseLessons: {
+          where: { course: { createdByClerkId: userId } },
+          select: { course: { select: { id: true, title: true } } },
+        },
+      },
+      orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
+    }),
+    prisma.course.findMany({
+      where: { createdByClerkId: userId },
+      select: { id: true, title: true },
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+    }),
+  ]);
   return (
     <div>
       <div className={styles.header}>
@@ -29,30 +44,7 @@ export default async function LessonsPage() {
           + New lesson
         </Link>
       </div>
-
-      {lessons.length === 0 ? (
-        <p className={styles.empty}>No lessons yet. Create your first one above.</p>
-      ) : (
-        <ul className={styles.list}>
-          {lessons.map((lesson) => (
-            <li key={lesson.id} className={styles.card}>
-              <div className={styles.cardBody}>
-                <div className={styles.cardTitleRow}>
-                  <p className={styles.cardTitle}>{lesson.title || 'Untitled lesson'}</p>
-                  {lesson.isDraft && <span className={styles.draftBadge}>Draft</span>}
-                </div>
-                <p className={styles.cardMeta}>
-                  {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
-                </p>
-                <p className={styles.cardSlug}>{lesson.slug ? `/lessons/${lesson.slug}` : 'Slug not set'}</p>
-              </div>
-              <Link href={`/instructor/lessons/${lesson.id}/edit`} className={styles.editLink}>
-                Edit
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <LessonsGrid lessons={lessons} courses={courses} initialFilters={filters} />
     </div>
   );
 }

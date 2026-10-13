@@ -2,6 +2,20 @@ import { authoringQuestionToPayload, dbQuestionToAuthoring, summarizeAnswer } fr
 import { makeChoice, makeMultipleChoiceQuestion, makeShortAnswerQuestion } from '../types';
 
 describe('dbQuestionToAuthoring', () => {
+  it('round trips incomplete numeric drafts without converting blanks to zero or multiple choice', () => {
+    for (const answer of [
+      { mode: 'exact' as const, expected: '' },
+      { mode: 'range' as const, minimum: '1', maximum: '' },
+    ]) {
+      const original = { ...makeShortAnswerQuestion('q1'), answer };
+      const payload = authoringQuestionToPayload(original, 0);
+      expect(dbQuestionToAuthoring({ ...payload, id: 'q1', correctIndices: [] })).toMatchObject({
+        type: 'shortAnswer',
+        answer,
+      });
+    }
+  });
+
   it('converts a multiple-choice record with correct flags', () => {
     const q = dbQuestionToAuthoring({
       id: 'q1',

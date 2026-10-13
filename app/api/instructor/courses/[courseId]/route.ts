@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 interface RouteContext {
   params: Promise<{ courseId: string }>;
@@ -48,13 +49,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     section?: string | null;
     title?: string;
     description?: string | null;
-    lessons?: Array<{
-      lessonId: string;
-      openDate?: string | null;
-      dueDate?: string | null;
-      accessibleAfterDue?: boolean;
-      sortOrder: number;
-    }>;
+    lessons?: Array<
+      LessonPolicyInput & {
+        lessonId: string;
+        sortOrder: number;
+      }
+    >;
   };
 
   const owned = await prisma.course.findFirst({
@@ -95,9 +95,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       if (!row.lessonId) {
         return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
       }
-      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
-        return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
-      }
+      const policyError = validateLessonPolicy(row);
+      if (policyError) return NextResponse.json({ error: policyError }, { status: 422 });
     }
 
     const lessonIds = [...new Set(lessons.map((row) => row.lessonId))];
@@ -112,6 +111,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  if (
+    lessons !== undefined &&
+    (await prisma.courseLesson.count({
+      where: { courseId, lessonId: { notIn: lessons.map((row) => row.lessonId) }, progress: { some: {} } },
+    }))
+  ) {
+    return NextResponse.json({ error: 'Assignments with student activity cannot be removed.' }, { status: 409 });
+  }
   const course = await prisma.course.update({
     where: { id: courseId },
     data: {
@@ -121,13 +128,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(lessons !== undefined && {
         courseLessons: {
-          deleteMany: {},
-          create: lessons.map((row) => ({
-            lessonId: row.lessonId,
-            openDate: row.openDate ? new Date(row.openDate) : null,
-            dueDate: row.dueDate ? new Date(row.dueDate) : null,
-            accessibleAfterDue: row.accessibleAfterDue ?? false,
-            sortOrder: row.sortOrder,
+          deleteMany: { lessonId: { notIn: lessons.map((row) => row.lessonId) } },
+          upsert: lessons.map((row) => ({
+            where: { courseId_lessonId: { courseId, lessonId: row.lessonId } },
+            create: { lessonId: row.lessonId, ...lessonPolicyData(row), sortOrder: row.sortOrder },
+            update: { ...lessonPolicyData(row), sortOrder: row.sortOrder },
           })),
         },
       }),
@@ -161,6 +166,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  if (await prisma.courseLessonProgress.count({ where: { courseLesson: { courseId } } }))
+    return NextResponse.json({ error: 'Courses with student activity cannot be deleted.' }, { status: 409 });
   await prisma.course.delete({ where: { id: courseId } });
   return new NextResponse(null, { status: 204 });
 }

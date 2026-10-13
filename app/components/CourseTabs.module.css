@@ -1,0 +1,25 @@
+.tabs {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 1px solid #d5deea;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+.tabs a {
+  padding: 0.7rem 0.2rem;
+  text-decoration: none;
+  color: #526174;
+  border-bottom: 3px solid transparent;
+}
+.tabs a[aria-current='page'] {
+  color: #1f5fab;
+  border-color: #1f5fab;
+  font-weight: 600;
+}
+.tabs a:hover {
+  color: #1f5fab;
+}
+.tabs a:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: -2px;
+}

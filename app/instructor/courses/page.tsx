@@ -1,30 +1,31 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import styles from './page.module.css';
+import styles from '../../components/InstructorGrid/grid.module.css';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import CoursesGrid from './CoursesGrid';
+import { readCourseFilters, type SearchParams } from './listFilters';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CoursesPage() {
+export default async function CoursesPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
-
-  // OR is so the seed data is included
+  if (!userId) redirect('/sign-in');
+  const filters = readCourseFilters((await searchParams) ?? {});
   const courses = await prisma.course.findMany({
-    where: {
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+    where: { OR: [{ createdByClerkId: userId }, { createdByClerkId: null }] },
+    select: {
+      id: true,
+      title: true,
+      code: true,
+      section: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { courseLessons: true, enrollments: { where: { role: 'STUDENT' } } } },
     },
-    include: {
-      courseLessons: true,
-      enrollments: true,
-      contacts: true,
-    },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
   });
-
   return (
     <div>
       <div className={styles.header}>
@@ -33,35 +34,7 @@ export default async function CoursesPage() {
           + New course
         </Link>
       </div>
-
-      {courses.length === 0 ? (
-        <p className={styles.empty}>No courses yet. Create your first one above.</p>
-      ) : (
-        <ul className={styles.list}>
-          {courses.map((course) => (
-            <li key={course.id} className={styles.card}>
-              <div className={styles.cardBody}>
-                <p className={styles.cardTitle}>{course.title}</p>
-                {course.description && <p className={styles.cardDescription}>{course.description}</p>}
-                <p className={styles.cardMeta}>
-                  {course.code}
-                  {course.section && ` · Section ${course.section}`} · {course.courseLessons.length} lesson
-                  {course.courseLessons.length !== 1 ? 's' : ''} · {course.enrollments.length} student
-                  {course.enrollments.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className={styles.cardActions}>
-                <Link href={`/instructor/courses/${course.id}/students`} className={styles.studentsLink}>
-                  Students
-                </Link>
-                <Link href={`/instructor/courses/${course.id}/edit`} className={styles.editLink}>
-                  Edit
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CoursesGrid courses={courses} initialFilters={filters} />
     </div>
   );
 }

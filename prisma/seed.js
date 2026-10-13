@@ -34,6 +34,7 @@ async function createDemoNode(index) {
           {
             sortOrder: 0,
             timeOffsetSeconds: 30 + index * 10,
+            checkpointKey: 'checkpoint-1',
             questions: {
               create: [
                 {
@@ -134,9 +135,9 @@ async function main() {
     select: { id: true },
   });
   if (demoCourses.length > 0) {
-    await prisma.course.deleteMany({
-      where: { id: { in: demoCourses.map((c) => c.id) } },
-    });
+    await require('./seedSubmissions')(prisma);
+    console.log('Existing demo content preserved; course-specific demo submissions added.');
+    return;
   }
 
   await prisma.lesson.deleteMany({
@@ -176,7 +177,6 @@ async function main() {
   ];
 
   const createdCourseIds = [];
-  const createdLessonIds = [];
 
   for (const courseData of courses) {
     const course = await prisma.course.create({
@@ -194,14 +194,13 @@ async function main() {
       const start = (i * 3) % demoNodes.length;
       const lessonNodes = demoNodes.slice(start, start + 3);
 
-      const lesson = await createDemoLesson({
+      await createDemoLesson({
         courseId: course.id,
         title: lessonSpec.title,
         summary: lessonSpec.summary,
         sortOrder: i,
         nodes: lessonNodes,
       });
-      createdLessonIds.push(lesson.id);
     }
   }
 
@@ -223,109 +222,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  const createdLessons = await prisma.lesson.findMany({
-    where: { id: { in: createdLessonIds } },
-    orderBy: { createdAt: 'asc' },
-    include: {
-      lessonNodes: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
-          node: {
-            include: {
-              quizQuestions: { orderBy: { sortOrder: 'asc' } },
-              checkpoints: {
-                include: { questions: { orderBy: { sortOrder: 'asc' } } },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  for (let i = 0; i < createdLessons.length; i += 1) {
-    const lesson = createdLessons[i];
-    const status = i % 3 === 0 ? 'COMPLETED' : i % 3 === 1 ? 'IN_PROGRESS' : 'NOT_STARTED';
-    const percentComplete = status === 'COMPLETED' ? 100 : status === 'IN_PROGRESS' ? 45 : 0;
-
-    await prisma.lessonProgress.upsert({
-      where: {
-        studentId_lessonId: {
-          studentId: demoStudent.id,
-          lessonId: lesson.id,
-        },
-      },
-      update: {
-        status,
-        percentComplete,
-        startedAt: status !== 'NOT_STARTED' ? new Date() : null,
-        completedAt: status === 'COMPLETED' ? new Date() : null,
-      },
-      create: {
-        studentId: demoStudent.id,
-        lessonId: lesson.id,
-        status,
-        percentComplete,
-        startedAt: status !== 'NOT_STARTED' ? new Date() : null,
-        completedAt: status === 'COMPLETED' ? new Date() : null,
-      },
-    });
-
-    const primaryLessonNode = lesson.lessonNodes[0];
-    if (!primaryLessonNode) continue;
-
-    const quizQuestions = primaryLessonNode.node.quizQuestions;
-    const checkpointQuestions = primaryLessonNode.node.checkpoints
-      .flatMap((c) => c.questions)
-      .filter((question) => question.kind === 'QUESTION');
-
-    if (quizQuestions.length > 0) {
-      const shouldFail = i % 2 === 0;
-      const quizAttempt = await prisma.nodeAttempt.create({
-        data: {
-          lessonNodeId: primaryLessonNode.id,
-          userId: demoStudent.id,
-          isPassing: !shouldFail,
-          score: shouldFail ? 50 : 100,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        },
-      });
-
-      await prisma.nodeResponse.createMany({
-        data: quizQuestions.slice(0, 1).map((q) => ({
-          attemptId: quizAttempt.id,
-          quizQuestionId: q.id,
-          studentId: demoStudent.id,
-          selectedIndices: [shouldFail ? 0 : 1],
-          isCorrect: !shouldFail,
-        })),
-      });
-    }
-
-    if (checkpointQuestions.length > 0 && i % 2 === 1) {
-      const checkpointAttempt = await prisma.nodeAttempt.create({
-        data: {
-          lessonNodeId: primaryLessonNode.id,
-          userId: demoStudent.id,
-          isPassing: true,
-          score: 100,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        },
-      });
-
-      await prisma.nodeResponse.createMany({
-        data: checkpointQuestions.map((q) => ({
-          attemptId: checkpointAttempt.id,
-          checkpointQuestionId: q.id,
-          studentId: demoStudent.id,
-          selectedIndices: [0],
-          isCorrect: true,
-        })),
-      });
-    }
-  }
+  await require('./seedSubmissions')(prisma);
 
   console.log(
     'Seed complete: demo courses, lessons, nodes, roadmap edges, YouTube videos, checkpoints, and quiz bank attempts created.'

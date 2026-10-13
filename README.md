@@ -131,3 +131,34 @@ Most projects will require the use of other technologies. Below are a few guides
 - [Clerk Setup w/ Next.js](https://clerk.com/docs/quickstarts/nextjs) - Clerk will be the default user authentication software for all new Spark! projects. Please reach out to Omar for creating and retrieving API keys for your project. Do NOT use firebase/auth even if your project uses Firestore.
 - ### Component Libraries
   All new projects will be required to use a [design system](https://www.figma.com/blog/design-systems-101-what-is-a-design-system/) You will receive designs from your DS488 design team which will utilize a design kit. Use the corresponding component library to implement those designs on the front end of your project.
+
+## Checkpoint CSV authoring
+
+The node editor's **Checkpoints** step supports CSV import, export, and a downloadable sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Existing quiz-bank CSV files retain their original format.
+
+Checkpoint CSV uses one row per question or informational note. Its header is:
+
+```csv
+checkpoint_key,checkpoint_order,item_order,checkpoint_seconds,placement_hint,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer
+```
+
+- All columns must be present. `checkpoint_seconds` and `placement_hint` cells may be blank.
+- `checkpoint_key` is a case-sensitive label scoped to the node. Matching keys group rows, even if they are not adjacent. Keys are preserved on export and are not database IDs.
+- `checkpoint_order` and `item_order` are positive integers; gaps are allowed. Group order must agree across its rows, and item order must be unique within each group.
+- Nonblank timestamps and placement hints must agree within a group. Timestamps are non-negative whole seconds and cannot be shared by different groups. Blank timing remains unplaced; zero means the start of the video.
+- Types are `multipleChoice`, `shortAnswer`, and `note`. Notes use `prompt` and leave all answer cells blank. Multiple choice supports 2–8 choices and one-based correct indices, such as `"1,3"`. Numeric answers use `exact` or `range` mode.
+- Import previews the groups and errors before applying anything. Any error blocks the entire import. Limits are 2 MB and 5,000 item records.
+- Append places imported groups after existing groups and rejects key/time collisions. Replace requires confirmation. Neither mode saves automatically.
+- After CSV import, use the separate **Assign checkpoint timestamps** screen to review collapsible groups, assign the current video time, or enter a time as minutes:seconds. **Assign timestamps** reopens this screen from the checkpoint editor. Group tags in the editor are read-only. Drafts can remain unplaced; publication cannot.
+- Timing and ordering edits retain checkpoint/question IDs. Content with student responses cannot be replaced, removed, or rewritten; create a new node for revised content.
+
+Before deploying this feature, apply the `20261012000000_untimed_checkpoints` Prisma migration with your normal migration deployment process (`npx prisma migrate deploy`). It backfills keys for existing checkpoints and allows null timestamps without changing existing IDs or responses. Regenerate the Prisma client with `npx prisma generate` after updating the schema.
+
+
+To run the opt-in PostgreSQL checkpoint tests, provision a **dedicated local database** whose name starts with `spark_checkpoint_test`, with the current schema and migrations applied, then run:
+
+```bash
+CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test' npm test -- --runInBand --runTestsByPath app/utils/saveCheckpoints.integration.test.ts
+```
+
+The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
