@@ -4,6 +4,7 @@ const mockGetCurrentStudent = jest.fn();
 const mockLessonNodeFindFirst = jest.fn();
 const mockCourseLessonFindFirst = jest.fn();
 const mockAttemptCreate = jest.fn();
+const mockAttemptFindFirst = jest.fn();
 
 jest.mock('@/lib/currentStudent', () => ({
   getCurrentStudent: () => mockGetCurrentStudent(),
@@ -22,7 +23,10 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     lessonNode: { findFirst: (...args: unknown[]) => mockLessonNodeFindFirst(...args) },
     courseLesson: { findFirst: (...args: unknown[]) => mockCourseLessonFindFirst(...args) },
-    nodeAttempt: { create: (...args: unknown[]) => mockAttemptCreate(...args) },
+    nodeAttempt: {
+      create: (...args: unknown[]) => mockAttemptCreate(...args),
+      findFirst: (...args: unknown[]) => mockAttemptFindFirst(...args),
+    },
   },
 }));
 
@@ -49,6 +53,7 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
     mockLessonNodeFindFirst.mockResolvedValue(lessonNode(2, ['q1', 'q2', 'q3']));
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson());
     mockAttemptCreate.mockResolvedValue({ id: 'attempt-1' });
+    mockAttemptFindFirst.mockResolvedValue(null);
   });
 
   it('creates an attempt with quizQuestionCount random questions from the bank', async () => {
@@ -130,5 +135,26 @@ describe('POST /api/student/quiz/[lessonNodeId]/start', () => {
     const response = await POST({} as never, context);
     expect(response.status).toBe(422);
     expect(mockAttemptCreate).not.toHaveBeenCalled();
+  });
+
+  it('resumes the unfinished attempt instead of picking new questions', async () => {
+    mockAttemptFindFirst.mockResolvedValue({ id: 'open-1', quizQuestionIds: ['q3', 'q1'] });
+    const response = await POST({} as never, context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ attemptId: 'open-1' });
+    expect(mockAttemptFindFirst).toHaveBeenCalledWith({
+      where: { lessonNodeId: 'ln-1', userId: 'student-1', completedAt: null, quizQuestionIds: { isEmpty: false } },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(mockAttemptCreate).not.toHaveBeenCalled();
+  });
+
+  it('starts a new attempt when the instructor removed a question from the unfinished one', async () => {
+    mockAttemptFindFirst.mockResolvedValue({ id: 'stale-1', quizQuestionIds: ['deleted-question'] });
+    const response = await POST({} as never, context);
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ attemptId: 'attempt-1' });
   });
 });

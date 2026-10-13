@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentStudent } from '@/lib/currentStudent';
+import { isQuizAttempt } from '@/lib/attemptQuestions';
 import { pickRandomQuizQuestions } from '@/app/utils/quizQuestionCount';
 import { getLessonAvailability } from '@/app/utils/lessonAvailability';
 
@@ -35,6 +36,17 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
 
   if (!getLessonAvailability(courseLesson).isOpen) {
     return NextResponse.json({ error: 'This lesson is not open right now' }, { status: 403 });
+  }
+
+  // Resume an unfinished attempt so leaving and coming back keeps the same questions,
+  // unless the instructor has since removed any of them.
+  const bankIds = new Set(lessonNode.node.quizQuestions.map((question) => question.id));
+  const openAttempt = await prisma.nodeAttempt.findFirst({
+    where: { lessonNodeId, userId: student.id, completedAt: null, ...isQuizAttempt },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (openAttempt && openAttempt.quizQuestionIds.every((id) => bankIds.has(id))) {
+    return NextResponse.json({ attemptId: openAttempt.id });
   }
 
   // Empty bank or a quizQuestionCount of 0 both mean there is no quiz to take.

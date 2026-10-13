@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentStudent } from '@/lib/currentStudent';
-import { getAttemptQuestions } from '@/lib/attemptQuestions';
+import { getAttemptQuestions, isQuizAttempt } from '@/lib/attemptQuestions';
 import { gradeQuizAttempt, validateQuizAnswers, type QuizAnswerInput } from '@/app/utils/quizGrading';
 
 interface RouteContext {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // Only the student who owns the attempt can submit it.
   const attempt = await prisma.nodeAttempt.findFirst({
-    where: { id: attemptId, userId: student.id, quizQuestionIds: { isEmpty: false } },
+    where: { id: attemptId, userId: student.id, ...isQuizAttempt },
     include: { lessonNode: { select: { passingPercent: true } } },
   });
   if (!attempt) return NextResponse.json({ error: 'Quiz attempt not found' }, { status: 404 });

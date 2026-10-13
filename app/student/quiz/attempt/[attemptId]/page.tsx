@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getCurrentStudent } from '@/lib/currentStudent';
-import { getAttemptQuestions } from '@/lib/attemptQuestions';
+import { getAttemptQuestions, isQuizAttempt } from '@/lib/attemptQuestions';
 import { toStudentQuizQuestion } from '@/app/utils/studentQuizQuestion';
 import QuizPlayer from './QuizPlayer';
 import QuizResult from './QuizResult';
@@ -22,7 +22,7 @@ export default async function QuizAttemptPage({ params }: PageProps) {
 
   // Only the student who owns the attempt can open it.
   const attempt = await prisma.nodeAttempt.findFirst({
-    where: { id: attemptId, userId: student.id, quizQuestionIds: { isEmpty: false } },
+    where: { id: attemptId, userId: student.id, ...isQuizAttempt },
     include: { lessonNode: { select: { id: true, passingPercent: true, node: { select: { title: true } } } } },
   });
   if (!attempt) notFound();
