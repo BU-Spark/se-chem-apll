@@ -1,10 +1,12 @@
 'use client';
 
 import selectStyles from '@/app/components/Select/Select.module.css';
-
 import { useState } from 'react';
 import MarkdownField from './MarkdownField';
 import QuestionPreview from './QuestionPreview';
+import VariantsEditor from './VariantsEditor';
+import MultipleChoiceVariantsEditor from './MultipleChoiceVariantsEditor';
+import { generateClientId } from '@/lib/generateClientId';
 import type { QuestionIssue } from './validation';
 import {
   MAX_CHOICES,
@@ -62,27 +64,44 @@ function MultipleChoiceEditor({
 
   function removeChoice(choiceId: string) {
     if (question.choices.length <= MIN_CHOICES) return;
-    onChange({ ...question, choices: question.choices.filter((choice) => choice.id !== choiceId) });
+    onChange({
+      ...question,
+      choices: question.choices.filter((choice) => choice.id !== choiceId),
+      ...(question.variants
+        ? {
+            variants: question.variants.map((row) => ({
+              ...row,
+              answer: { ...row.answer, correctChoiceIds: row.answer.correctChoiceIds.filter((id) => id !== choiceId) },
+            })),
+          }
+        : {}),
+    });
   }
 
   const choicesIssue = issuesForField(issues, 'choices');
 
   return (
     <div className={styles.choiceEditor}>
-      <p className={styles.choiceEditorLabel}>Answer choices — check every correct answer</p>
+      <p className={styles.choiceEditorLabel}>
+        {question.variants
+          ? 'Shared answer choices — choose correct answers in each variant below'
+          : 'Answer choices — check every correct answer'}
+      </p>
       {question.choices.map((choice, idx) => (
         <div key={choice.id} className={styles.choiceEditorRow}>
-          <input
-            type="checkbox"
-            className={styles.choiceCorrect}
-            checked={choice.correct}
-            onChange={(e) => updateChoice(choice.id, { correct: e.target.checked })}
-            aria-label={`Choice ${idx + 1} is correct`}
-            title="Mark as correct"
-          />
+          {!question.variants && (
+            <input
+              type="checkbox"
+              className={styles.choiceCorrect}
+              checked={choice.correct}
+              onChange={(e) => updateChoice(choice.id, { correct: e.target.checked })}
+              aria-label={`Choice ${idx + 1} is correct`}
+              title="Mark as correct"
+            />
+          )}
           <div className={styles.choiceEditorField}>
             <MarkdownField
-              label={`Choice ${idx + 1}`}
+              label={`Choice ${idx + 1}${question.variants ? ` (${String.fromCharCode(65 + idx)})` : ''}`}
               compact
               value={choice.content}
               onChange={(content) => updateChoice(choice.id, { content })}
@@ -312,9 +331,57 @@ export default function QuestionDetailEditor({
           />
 
           {question.type === 'multipleChoice' ? (
-            <MultipleChoiceEditor question={question} issues={issues} onChange={onChange} />
+            <>
+              {!question.variants && <MultipleChoiceEditor question={question} issues={issues} onChange={onChange} />}
+              {question.variants ? (
+                <MultipleChoiceVariantsEditor
+                  question={question}
+                  onChange={onChange}
+                  error={issuesForField(issues, 'variants')}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className={styles.addChoiceBtn}
+                  onClick={() =>
+                    onChange({
+                      ...question,
+                      variants: [
+                        {
+                          id: generateClientId('variant'),
+                          values: {},
+                          answer: {
+                            type: 'multipleChoice',
+                            choices: question.choices.map(({ id, content }) => ({ id, content })),
+                            correctChoiceIds: question.choices.filter((c) => c.correct).map((c) => c.id),
+                          },
+                        },
+                      ],
+                    })
+                  }
+                >
+                  Add question variants
+                </button>
+              )}
+            </>
+          ) : question.variants ? (
+            <VariantsEditor question={question} onChange={onChange} error={issuesForField(issues, 'variants')} />
           ) : (
-            <ShortAnswerEditor question={question} issues={issues} onChange={onChange} />
+            <>
+              <ShortAnswerEditor question={question} issues={issues} onChange={onChange} />
+              <button
+                type="button"
+                className={styles.addChoiceBtn}
+                onClick={() =>
+                  onChange({
+                    ...question,
+                    variants: [{ id: generateClientId('variant'), values: {}, answer: { ...question.answer } }],
+                  })
+                }
+              >
+                Add question variants
+              </button>
+            </>
           )}
         </>
       )}

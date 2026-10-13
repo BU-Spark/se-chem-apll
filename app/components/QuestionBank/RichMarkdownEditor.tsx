@@ -23,6 +23,7 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   compact?: boolean;
+  autoFocus?: boolean;
   contentEditableId: string;
   labelledBy: string;
   describedBy?: string;
@@ -43,6 +44,7 @@ export default function RichMarkdownEditor({
   onChange,
   placeholder,
   compact = false,
+  autoFocus = false,
   contentEditableId,
   labelledBy,
   describedBy,
@@ -119,6 +121,7 @@ export default function RichMarkdownEditor({
       }}
     >
       <MDXEditor
+        autoFocus={autoFocus}
         ref={editorRef}
         markdown={value}
         onChange={(nextValue) => {

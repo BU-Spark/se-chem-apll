@@ -70,8 +70,22 @@ function matchesSearch(q: AuthoringQuestion, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (needle === '') return true;
   if (q.prompt.toLowerCase().includes(needle)) return true;
+  if (q.type === 'shortAnswer' && q.variants) {
+    return q.variants.some(
+      (row) =>
+        Object.values(row.values).some((value) => value.toLowerCase().includes(needle)) ||
+        (row.answer.mode === 'exact'
+          ? row.answer.expected.includes(needle)
+          : row.answer.minimum.includes(needle) || row.answer.maximum.includes(needle))
+    );
+  }
+  if (q.variants?.some((row) => Object.values(row.values).some((value) => value.toLowerCase().includes(needle))))
+    return true;
   if (q.type === 'multipleChoice') {
-    return q.choices.some((choice) => choice.content.toLowerCase().includes(needle));
+    return (
+      q.choices.some((choice) => choice.content.toLowerCase().includes(needle)) ||
+      !!q.variants?.some((row) => row.answer.choices?.some((choice) => choice.content.toLowerCase().includes(needle)))
+    );
   }
   if (q.answer.mode === 'exact') return q.answer.expected.includes(needle);
   return q.answer.minimum.includes(needle) || q.answer.maximum.includes(needle);
