@@ -42,15 +42,34 @@ it('links titles, new-tab icons, and student counts including zero', async () =>
   expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 });
 it('combines native text and numeric filters live and clears them', async () => {
-  setup();
-  fireEvent.input(await screen.findByLabelText('Course code Filter Input'), { target: { value: 'chem' } });
-  fireEvent.input(screen.getByLabelText('Section Filter Input'), { target: { value: 'A' } });
-  await userEvent.type(screen.getByRole('spinbutton', { name: 'Students Filter Input' }), '2');
-  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 of 2 courses'));
-  await waitFor(() => expect(new URLSearchParams(window.location.search).get('filters')).toContain('studentCount'));
-  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 of 2 courses'));
-  expect(screen.getByLabelText('Course code Filter Input')).toHaveValue('');
+  jest.useFakeTimers();
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  const view = setup();
+  try {
+    fireEvent.input(await screen.findByLabelText('Course code Filter Input'), { target: { value: 'chem' } });
+    fireEvent.input(screen.getByLabelText('Section Filter Input'), { target: { value: 'A' } });
+    await user.type(screen.getByRole('spinbutton', { name: 'Students Filter Input' }), '2');
+    // Apply AG Grid's 150 ms debounce without depending on coverage/runner speed.
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(200);
+    });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 of 2 courses'));
+    expect(JSON.parse(new URLSearchParams(window.location.search).get('filters') ?? '{}')).toEqual({
+      code: { filterType: 'text', type: 'contains', filter: 'chem' },
+      section: { filterType: 'text', type: 'contains', filter: 'A' },
+      studentCount: { filterType: 'number', type: 'equals', filter: 2 },
+    });
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 of 2 courses'));
+    expect(screen.getByLabelText('Course code Filter Input')).toHaveValue('');
+    expect(screen.getByLabelText('Section Filter Input')).toHaveValue('');
+    expect(screen.getByRole('spinbutton', { name: 'Students Filter Input' })).toHaveValue(null);
+    expect(new URLSearchParams(window.location.search).has('filters')).toBe(false);
+  } finally {
+    view.unmount();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  }
 });
 it('sorts headers, restores history filters and resets to newest updates', async () => {
   const { container } = setup();
