@@ -1,10 +1,11 @@
+import { saveCheckpoints, CheckpointSaveConflict } from '@/app/utils/saveCheckpoints';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import {
   nodeInclude,
-  serializeCheckpointCreate,
+  questionContentKey,
   serializeQuestionCreate,
   validateNodeContent,
   type CheckpointPayload,
@@ -101,7 +102,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 
   const replacingCheckpoints = checkpoints !== undefined;
-  const replacingQuizQuestions = quizQuestions !== undefined;
 
   const savingAsDraft = isDraft ?? owned.isDraft;
   {
@@ -131,64 +131,57 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
-  const node = await prisma.$transaction(async (tx) => {
-    if (replacingCheckpoints) {
-      const existingCheckpoints = await tx.nodeCheckpoint.findMany({
-        where: { nodeId },
-        select: { id: true, questions: { select: { id: true } } },
+  const quizContent = (questions: QuestionPayload[]) =>
+    JSON.stringify(questions.map((q) => [q.sortOrder, questionContentKey(q)]));
+  const replacingQuizQuestions =
+    quizQuestions !== undefined && quizContent(quizQuestions) !== quizContent(owned.quizQuestions);
+
+  let node;
+  try {
+    node = await prisma.$transaction(async (tx) => {
+      if (replacingCheckpoints) await saveCheckpoints(tx, nodeId, checkpoints!);
+
+      if (replacingQuizQuestions) {
+        const quizQuestionIds = (await tx.quizQuestion.findMany({ where: { nodeId }, select: { id: true } })).map(
+          (q) => q.id
+        );
+        if (quizQuestionIds.length > 0) {
+          await tx.nodeResponse.deleteMany({
+            where: { quizQuestionId: { in: quizQuestionIds } },
+          });
+        }
+        await tx.quizQuestion.deleteMany({ where: { nodeId } });
+      }
+
+      const normalizedTags =
+        tags === undefined ? undefined : tags.map((item) => item.trim()).filter((item) => item.length > 0);
+      const normalizedLearningObjectives =
+        learningObjectives === undefined
+          ? undefined
+          : learningObjectives.map((item) => item.trim()).filter((item) => item.length > 0);
+
+      return tx.node.update({
+        where: { id: nodeId },
+        data: {
+          ...(title !== undefined && { title: title.trim() }),
+          ...(summary !== undefined && { summary: summary.trim() || null }),
+          ...(videoUrl !== undefined && { videoUrl: (videoUrl ?? '').trim() || null }),
+          ...(normalizedTags !== undefined && { tags: normalizedTags }),
+          ...(normalizedLearningObjectives !== undefined && { learningObjectives: normalizedLearningObjectives }),
+          ...(isDraft !== undefined && { isDraft }),
+          ...(replacingQuizQuestions && {
+            quizQuestions: {
+              create: quizQuestions!.map(serializeQuestionCreate),
+            },
+          }),
+        },
+        include: nodeInclude,
       });
-      const checkpointQuestionIds = existingCheckpoints.flatMap((c) => c.questions.map((q) => q.id));
-      if (checkpointQuestionIds.length > 0) {
-        await tx.nodeResponse.deleteMany({
-          where: { checkpointQuestionId: { in: checkpointQuestionIds } },
-        });
-      }
-      await tx.nodeCheckpoint.deleteMany({ where: { nodeId } });
-    }
-
-    if (replacingQuizQuestions) {
-      const quizQuestionIds = (await tx.quizQuestion.findMany({ where: { nodeId }, select: { id: true } })).map(
-        (q) => q.id
-      );
-      if (quizQuestionIds.length > 0) {
-        await tx.nodeResponse.deleteMany({
-          where: { quizQuestionId: { in: quizQuestionIds } },
-        });
-      }
-      await tx.quizQuestion.deleteMany({ where: { nodeId } });
-    }
-
-    const normalizedTags =
-      tags === undefined ? undefined : tags.map((item) => item.trim()).filter((item) => item.length > 0);
-    const normalizedLearningObjectives =
-      learningObjectives === undefined
-        ? undefined
-        : learningObjectives.map((item) => item.trim()).filter((item) => item.length > 0);
-
-    return tx.node.update({
-      where: { id: nodeId },
-      data: {
-        ...(title !== undefined && { title: title.trim() }),
-        ...(summary !== undefined && { summary: summary.trim() || null }),
-        ...(videoUrl !== undefined && { videoUrl: (videoUrl ?? '').trim() || null }),
-        ...(normalizedTags !== undefined && { tags: normalizedTags }),
-        ...(normalizedLearningObjectives !== undefined && { learningObjectives: normalizedLearningObjectives }),
-        ...(isDraft !== undefined && { isDraft }),
-        ...(replacingCheckpoints && {
-          checkpoints: {
-            create: checkpoints!.map(serializeCheckpointCreate),
-          },
-        }),
-        ...(replacingQuizQuestions && {
-          quizQuestions: {
-            create: quizQuestions!.map(serializeQuestionCreate),
-          },
-        }),
-      },
-      include: nodeInclude,
     });
-  });
-
+  } catch (error) {
+    if (error instanceof CheckpointSaveConflict) return NextResponse.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
   return NextResponse.json(node);
 }
 

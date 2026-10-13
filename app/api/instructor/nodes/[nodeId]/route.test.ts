@@ -4,6 +4,12 @@ const mockAuth = jest.fn();
 const mockCheckpointFindMany = jest.fn();
 const mockQuizFindMany = jest.fn();
 const mockResponseDeleteMany = jest.fn();
+const mockCheckpointCreate = jest.fn();
+const mockCheckpointUpdate = jest.fn();
+const mockItemUpdate = jest.fn();
+const mockItemCreate = jest.fn();
+const mockItemDeleteMany = jest.fn();
+const mockResponseCount = jest.fn();
 const mockCheckpointDeleteMany = jest.fn();
 const mockQuizDeleteMany = jest.fn();
 const mockUpdate = jest.fn();
@@ -58,19 +64,26 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
       ],
     });
     mockCheckpointFindMany.mockResolvedValue([]);
+    mockCheckpointCreate.mockImplementation(async ({ data }) =>
+      data.map((c: { sortOrder: number }) => ({ id: `created-${c.sortOrder}`, sortOrder: c.sortOrder }))
+    );
+    mockResponseCount.mockResolvedValue(0);
     mockQuizFindMany.mockResolvedValue([]);
     mockUpdate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
     mockTransaction.mockImplementation(async (callback) =>
       callback({
         nodeCheckpoint: {
           findMany: mockCheckpointFindMany,
+          createManyAndReturn: mockCheckpointCreate,
+          update: mockCheckpointUpdate,
           deleteMany: mockCheckpointDeleteMany,
         },
         quizQuestion: {
           findMany: mockQuizFindMany,
           deleteMany: mockQuizDeleteMany,
         },
-        nodeResponse: { deleteMany: mockResponseDeleteMany },
+        checkpointQuestion: { update: mockItemUpdate, createMany: mockItemCreate, deleteMany: mockItemDeleteMany },
+        nodeResponse: { deleteMany: mockResponseDeleteMany, count: mockResponseCount },
         node: { update: mockUpdate },
       })
     );
@@ -108,23 +121,20 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockCheckpointDeleteMany).toHaveBeenCalledWith({ where: { nodeId: 'node-1' } });
+    expect(mockCheckpointDeleteMany).not.toHaveBeenCalled();
     expect(mockQuizDeleteMany).toHaveBeenCalledWith({ where: { nodeId: 'node-1' } });
+    expect(mockCheckpointCreate).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ nodeId: 'node-1', timeOffsetSeconds: 125 })],
+      select: { id: true, sortOrder: true },
+    });
+    expect(mockItemCreate).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ checkpointId: 'created-0', prompt: 'Checkpoint' })],
+    });
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           tags: ['Safety'],
           learningObjectives: ['Work safely.', 'Recognize hazards.'],
-          checkpoints: {
-            create: [
-              expect.objectContaining({
-                timeOffsetSeconds: 125,
-                questions: {
-                  create: [expect.objectContaining({ prompt: 'Checkpoint' })],
-                },
-              }),
-            ],
-          },
           quizQuestions: {
             create: [expect.objectContaining({ prompt: 'Quiz', correctIndices: [0, 2] })],
           },
@@ -175,27 +185,16 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          checkpoints: {
-            create: [
-              expect.objectContaining({
-                questions: {
-                  create: [
-                    expect.objectContaining({
-                      kind: 'NOTE',
-                      prompt: 'Pause and observe the safety gauge.',
-                      correctIndices: [],
-                    }),
-                  ],
-                },
-              }),
-            ],
-          },
+    expect(mockItemCreate).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          checkpointId: 'created-0',
+          kind: 'NOTE',
+          prompt: 'Pause and observe the safety gauge.',
+          correctIndices: [],
         }),
-      })
-    );
+      ],
+    });
   });
 
   it.each([
@@ -261,6 +260,30 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     );
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('checkpoints');
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
+  });
+
+  it('updates node metadata without checkpoint writes when included checkpoints are unchanged', async () => {
+    const checkpoint = {
+      id: 'cp-1',
+      checkpointKey: 'intro',
+      placementHint: null,
+      sortOrder: 0,
+      timeOffsetSeconds: 30,
+      questions: [
+        { id: 'cq-1', sortOrder: 0, kind: 'NOTE', prompt: 'Observe.', options: { type: 'note' }, correctIndices: [] },
+      ],
+    };
+    mockCheckpointFindMany.mockResolvedValue([checkpoint]);
+    const response = await PATCH(patchRequest({ title: 'Renamed', checkpoints: [checkpoint] }) as never, context);
+    expect(response.status).toBe(200);
+    expect(mockCheckpointUpdate).not.toHaveBeenCalled();
+    expect(mockCheckpointCreate).not.toHaveBeenCalled();
+    expect(mockCheckpointDeleteMany).not.toHaveBeenCalled();
+    expect(mockItemUpdate).not.toHaveBeenCalled();
+    expect(mockItemCreate).not.toHaveBeenCalled();
+    expect(mockItemDeleteMany).not.toHaveBeenCalled();
+    expect(mockResponseCount).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { title: 'Renamed' } }));
   });
 
   it('clears learning objectives when given an empty array', async () => {
@@ -337,27 +360,18 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
     expect(response.status).toBe(200);
     expect(mockQuizDeleteMany).not.toHaveBeenCalled();
     expect(mockQuizFindMany).not.toHaveBeenCalled();
-    expect(mockCheckpointDeleteMany).toHaveBeenCalledWith({ where: { nodeId: 'node-1' } });
-    expect(mockUpdate.mock.calls[0][0].data).toEqual(
-      expect.objectContaining({
-        checkpoints: {
-          create: [
-            expect.objectContaining({
-              timeOffsetSeconds: 45,
-              questions: {
-                create: [expect.objectContaining({ prompt: 'Checkpoint only' })],
-              },
-            }),
-          ],
-        },
-      })
-    );
+    expect(mockCheckpointDeleteMany).not.toHaveBeenCalled();
+    expect(mockCheckpointCreate).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ timeOffsetSeconds: 45 })],
+      select: { id: true, sortOrder: true },
+    });
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty('quizQuestions');
   });
 
-  it('deletes related responses before replacing each collection', async () => {
+  it('blocks checkpoint replacement when items have student responses', async () => {
     mockCheckpointFindMany.mockResolvedValue([{ id: 'cp-1', questions: [{ id: 'cq-1' }, { id: 'cq-2' }] }]);
     mockQuizFindMany.mockResolvedValue([{ id: 'qq-1' }]);
+    mockResponseCount.mockResolvedValue(1);
 
     const response = await PATCH(
       patchRequest({
@@ -387,13 +401,10 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
       context
     );
 
-    expect(response.status).toBe(200);
-    expect(mockResponseDeleteMany).toHaveBeenCalledWith({
-      where: { checkpointQuestionId: { in: ['cq-1', 'cq-2'] } },
-    });
-    expect(mockResponseDeleteMany).toHaveBeenCalledWith({
-      where: { quizQuestionId: { in: ['qq-1'] } },
-    });
+    expect(response.status).toBe(409);
+    expect(mockResponseDeleteMany).not.toHaveBeenCalled();
+    expect(mockCheckpointDeleteMany).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it('returns 422 when video URL is empty or invalid', async () => {
@@ -403,6 +414,65 @@ describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   });
   it('returns 422 when quiz questions are replaced with an empty list', async () => {
     const response = await PATCH(patchRequest({ quizQuestions: [] }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('untimed checkpoint drafts', () => {
+  const untimed = {
+    checkpointKey: 'intro',
+    sortOrder: 0,
+    timeOffsetSeconds: null,
+    placementHint: 'After intro',
+    questions: [{ sortOrder: 0, kind: 'note', prompt: 'Observe.' }],
+  };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockCheckpointFindMany.mockResolvedValue([]);
+    mockCheckpointCreate.mockImplementation(async ({ data }) =>
+      data.map((c: { sortOrder: number }) => ({ id: `created-${c.sortOrder}`, sortOrder: c.sortOrder }))
+    );
+    mockQuizFindMany.mockResolvedValue([]);
+    mockResponseCount.mockResolvedValue(0);
+    mockFindFirst.mockResolvedValue({
+      id: 'node-1',
+      title: 'Node',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      isDraft: true,
+      checkpoints: [untimed],
+      quizQuestions: [],
+    });
+    mockTransaction.mockImplementation(async (callback) =>
+      callback({
+        nodeCheckpoint: {
+          findMany: mockCheckpointFindMany,
+          createManyAndReturn: mockCheckpointCreate,
+          deleteMany: mockCheckpointDeleteMany,
+        },
+        checkpointQuestion: { createMany: mockItemCreate },
+        node: { update: mockUpdate },
+      })
+    );
+  });
+  it('saves a draft with an unplaced checkpoint and metadata', async () => {
+    const response = await PATCH(patchRequest({ checkpoints: [untimed], isDraft: true }) as never, context);
+    expect(response.status).toBe(200);
+    expect(mockCheckpointCreate).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ timeOffsetSeconds: null, checkpointKey: 'intro', placementHint: 'After intro' }),
+      ],
+      select: { id: true, sortOrder: true },
+    });
+  });
+  it('validates stored checkpoints when publishing with omitted content', async () => {
+    const response = await PATCH(patchRequest({ isDraft: false }) as never, context);
+    expect(response.status).toBe(422);
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+  it('rejects malformed draft items before opening a transaction', async () => {
+    const response = await PATCH(patchRequest({ checkpoints: [{ ...untimed, questions: [null] }] }) as never, context);
     expect(response.status).toBe(422);
     expect(mockTransaction).not.toHaveBeenCalled();
   });
