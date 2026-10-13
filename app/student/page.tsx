@@ -6,6 +6,9 @@ import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentD
 import NodePreview from '@/app/components/NodePreview/NodePreview';
 import StudentQuizTaskList from '@/app/components/StudentQuizTaskList/StudentQuizTaskList';
 import { getFoundationalAccess } from '@/app/utils/foundationalAccess';
+import { describeLatePenalty, isLessonHidden, submissionStatus } from '@/app/utils/lessonSubmissionPolicy';
+
+const formatDeadline = (date: Date) => date.toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' });
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +40,7 @@ export default async function StudentHomePage() {
   }
 
   // Fetch enrolled courses with their lessons, nodes and student progress
-  const enrollments = await prisma.enrollment.findMany({
+  const enrolledCourses = await prisma.enrollment.findMany({
     where: { studentId: student.id },
     include: {
       course: {
@@ -91,6 +94,15 @@ export default async function StudentHomePage() {
     orderBy: { createdAt: 'asc' },
   });
 
+  const now = new Date();
+  const enrollments = enrolledCourses.map((enrollment) => ({
+    ...enrollment,
+    course: {
+      ...enrollment.course,
+      courseLessons: enrollment.course.courseLessons.filter((assignment) => !isLessonHidden(assignment, now)),
+    },
+  }));
+
   // Build a lightweight "today" shape for the StudentDailyTimeline component
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -102,7 +114,7 @@ export default async function StudentHomePage() {
       const lessonsToday = course.courseLessons
         .filter((cl) => {
           const open = cl.openDate ? new Date(cl.openDate) : null;
-          const due = cl.dueDate ? new Date(cl.dueDate) : null;
+          const due = cl.lateDeadline ?? cl.dueDate;
           const progress = (cl.lesson.progress && cl.lesson.progress[0]) ?? null;
           const startedAt = progress?.startedAt ? new Date(progress.startedAt) : null;
           const completedAt = progress?.completedAt ? new Date(progress.completedAt) : null;
@@ -168,13 +180,11 @@ export default async function StudentHomePage() {
                       ...cl.lesson,
                       openDate: cl.openDate,
                       dueDate: cl.dueDate,
-                      accessibleAfterDue: cl.accessibleAfterDue,
                     };
-                    const now = new Date();
                     const isUpcoming = lesson.openDate !== null && now < lesson.openDate;
                     const isPastDue = lesson.dueDate !== null && now > lesson.dueDate;
-                    const isClosed = isPastDue && !lesson.accessibleAfterDue;
-                    const cardClass = isUpcoming || isClosed ? styles.lessonCardUnavailable : styles.lessonCard;
+                    const isClosed = submissionStatus(cl, now) === 'CLOSED';
+                    const cardClass = isUpcoming ? styles.lessonCardUnavailable : styles.lessonCard;
 
                     return (
                       <li key={lesson.id} className={cardClass}>
@@ -183,32 +193,33 @@ export default async function StudentHomePage() {
                             <p className={styles.lessonTitle}>{lesson.title}</p>
                             {isUpcoming && (
                               <span className={`${styles.lessonStatus} ${styles.lessonStatusUpcoming}`}>
-                                Opens {new Date(lesson.openDate!).toLocaleDateString()}
+                                Opens {formatDeadline(lesson.openDate!)}
                               </span>
                             )}
                             {isClosed && (
-                              <span className={`${styles.lessonStatus} ${styles.lessonStatusClosed}`}>Closed</span>
+                              <span className={`${styles.lessonStatus} ${styles.lessonStatusClosed}`}>
+                                Submissions closed
+                              </span>
                             )}
                           </div>
                           <p className={styles.lessonMeta}>
                             {lesson.lessonNodes.length} node
                             {lesson.lessonNodes.length !== 1 ? 's' : ''}
                             {lesson.estimatedMinutes ? ` · ~${lesson.estimatedMinutes} min` : ''}
-                            {lesson.openDate && !isUpcoming
-                              ? ` · Opened ${new Date(lesson.openDate).toLocaleDateString()}`
-                              : ''}
-                            {lesson.dueDate && !isPastDue
-                              ? ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`
-                              : ''}
+                            {lesson.openDate && !isUpcoming ? ` · Opened ${formatDeadline(lesson.openDate)}` : ''}
+                            {lesson.dueDate && !isPastDue ? ` · Due ${formatDeadline(lesson.dueDate)}` : ''}
                             {isPastDue && lesson.dueDate ? (
                               <>
                                 {' · '}
-                                <span className={styles.wasDue}>
-                                  Was Due on {new Date(lesson.dueDate).toLocaleDateString()}
-                                </span>
+                                <span className={styles.wasDue}>Was Due on {formatDeadline(lesson.dueDate)}</span>
                               </>
                             ) : null}
                           </p>
+                          {cl.lateDeadline && (
+                            <p className={styles.lessonMeta}>
+                              Late submission deadline: {formatDeadline(cl.lateDeadline)} · {describeLatePenalty(cl)}
+                            </p>
+                          )}
                           {lesson.summary && <p className={styles.lessonSummary}>{lesson.summary}</p>}
                         </div>
 

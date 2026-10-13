@@ -3,15 +3,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
+import LessonScheduleFields from '@/app/components/LessonScheduleFields';
+import {
+  emptyLessonSchedule,
+  schedulePayload,
+  validateLessonPolicy,
+  type LessonScheduleValue,
+} from '@/app/utils/lessonSubmissionPolicy';
 
 type AvailableLesson = { id: string; title: string; slug: string };
 
-type ImportedLesson = {
+type ImportedLesson = LessonScheduleValue & {
   lessonId: string;
   title: string;
-  openDate: string;
-  dueDate: string;
-  accessibleAfterDue: boolean;
 };
 
 interface Props {
@@ -45,9 +49,7 @@ export default function CourseCreateForm({ availableLessons }: Props) {
       {
         lessonId: lesson.id,
         title: lesson.title,
-        openDate: '',
-        dueDate: '',
-        accessibleAfterDue: false,
+        ...emptyLessonSchedule,
       },
     ]);
     setLessonQuery('');
@@ -64,8 +66,9 @@ export default function CourseCreateForm({ availableLessons }: Props) {
     e.preventDefault();
     setError(null);
     for (const row of importedLessons) {
-      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
-        setError(`Open date must be before due date for "${row.title}".`);
+      const policyError = validateLessonPolicy(schedulePayload(row));
+      if (policyError) {
+        setError(`${row.title}: ${policyError}`);
         return;
       }
     }
@@ -81,9 +84,7 @@ export default function CourseCreateForm({ availableLessons }: Props) {
           description: description || null,
           lessons: importedLessons.map((row, idx) => ({
             lessonId: row.lessonId,
-            openDate: row.openDate || null,
-            dueDate: row.dueDate || null,
-            accessibleAfterDue: row.accessibleAfterDue,
+            ...schedulePayload(row),
             sortOrder: idx,
           })),
         }),
@@ -197,32 +198,7 @@ export default function CourseCreateForm({ availableLessons }: Props) {
               {importedLessons.map((row) => (
                 <li key={row.lessonId} className={styles.importItem}>
                   <p className={styles.importTitle}>{row.title}</p>
-                  <div className={styles.fieldRow2}>
-                    <label className={styles.field}>
-                      Open date
-                      <input
-                        type="date"
-                        value={row.openDate}
-                        onChange={(e) => updateImported(row.lessonId, { openDate: e.target.value })}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      Due date
-                      <input
-                        type="date"
-                        value={row.dueDate}
-                        onChange={(e) => updateImported(row.lessonId, { dueDate: e.target.value })}
-                      />
-                    </label>
-                  </div>
-                  <label className={styles.checkboxField}>
-                    <input
-                      type="checkbox"
-                      checked={row.accessibleAfterDue}
-                      onChange={(e) => updateImported(row.lessonId, { accessibleAfterDue: e.target.checked })}
-                    />
-                    Keep accessible after due date
-                  </label>
+                  <LessonScheduleFields value={row} onChange={(patch) => updateImported(row.lessonId, patch)} />
                   <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
                     Remove
                   </button>

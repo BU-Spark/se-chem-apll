@@ -60,4 +60,70 @@ describe('POST /api/instructor/courses', () => {
     });
     expect(mockCourseCreate).not.toHaveBeenCalled();
   });
+  it.each([
+    { lateDeadline: '2026-10-14T12:00:00Z', hideAfterDue: true },
+    { lateDeadline: '2026-10-11T12:00:00Z' },
+    { latePenaltyPercent: 101 },
+    { latePenaltyType: 'HOURLY', lateDeadline: null },
+    { dueDate: 'not-a-date' },
+  ])('rejects invalid policy before writing: %j', async (patch) => {
+    const response = await POST(
+      postRequest({
+        code: 'TEST101',
+        title: 'Test',
+        lessons: [
+          {
+            lessonId: 'lesson-1',
+            sortOrder: 0,
+            dueDate: '2026-10-12T12:00:00Z',
+            lateDeadline: '2026-10-14T12:00:00Z',
+            hideAfterDue: false,
+            latePenaltyType: 'HOURLY',
+            latePenaltyPercent: 1,
+            ...patch,
+          },
+        ],
+      }) as never
+    );
+    expect(response.status).toBe(422);
+    expect(mockCourseCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists the daily rate, visibility, and exact deadlines', async () => {
+    const response = await POST(
+      postRequest({
+        code: 'TEST101',
+        title: 'Test',
+        lessons: [
+          {
+            lessonId: 'lesson-1',
+            sortOrder: 0,
+            dueDate: '2026-10-12T12:00:00Z',
+            lateDeadline: '2026-10-14T12:00:00Z',
+            hideAfterDue: false,
+            latePenaltyType: 'DAILY',
+            latePenaltyPercent: 10,
+          },
+        ],
+      }) as never
+    );
+    expect(response.status).toBe(201);
+    expect(mockCourseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          courseLessons: expect.objectContaining({
+            create: [
+              expect.objectContaining({
+                dueDate: new Date('2026-10-12T12:00:00Z'),
+                lateDeadline: new Date('2026-10-14T12:00:00Z'),
+                hideAfterDue: false,
+                latePenaltyType: 'DAILY',
+                latePenaltyPercent: 10,
+              }),
+            ],
+          }),
+        }),
+      })
+    );
+  });
 });

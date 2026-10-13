@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 // GET /api/instructor/courses
 export async function GET() {
@@ -41,13 +42,12 @@ export async function POST(req: NextRequest) {
     section?: string | null;
     title?: string;
     description?: string | null;
-    lessons?: Array<{
-      lessonId: string;
-      openDate?: string | null;
-      dueDate?: string | null;
-      accessibleAfterDue?: boolean;
-      sortOrder: number;
-    }>;
+    lessons?: Array<
+      LessonPolicyInput & {
+        lessonId: string;
+        sortOrder: number;
+      }
+    >;
   };
 
   if (!code?.trim()) return NextResponse.json({ error: 'code is required' }, { status: 422 });
@@ -76,9 +76,8 @@ export async function POST(req: NextRequest) {
     if (!row.lessonId) {
       return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
     }
-    if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
-      return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
-    }
+    const policyError = validateLessonPolicy(row);
+    if (policyError) return NextResponse.json({ error: policyError }, { status: 422 });
   }
 
   const lessonIds = [...new Set(lessonInputs.map((row) => row.lessonId))];
@@ -102,9 +101,7 @@ export async function POST(req: NextRequest) {
       courseLessons: {
         create: lessonInputs.map((row) => ({
           lessonId: row.lessonId,
-          openDate: row.openDate ? new Date(row.openDate) : null,
-          dueDate: row.dueDate ? new Date(row.dueDate) : null,
-          accessibleAfterDue: row.accessibleAfterDue ?? false,
+          ...lessonPolicyData(row),
           sortOrder: row.sortOrder,
         })),
       },

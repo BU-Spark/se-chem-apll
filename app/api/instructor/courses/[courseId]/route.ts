@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 interface RouteContext {
   params: Promise<{ courseId: string }>;
@@ -48,13 +49,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     section?: string | null;
     title?: string;
     description?: string | null;
-    lessons?: Array<{
-      lessonId: string;
-      openDate?: string | null;
-      dueDate?: string | null;
-      accessibleAfterDue?: boolean;
-      sortOrder: number;
-    }>;
+    lessons?: Array<
+      LessonPolicyInput & {
+        lessonId: string;
+        sortOrder: number;
+      }
+    >;
   };
 
   const owned = await prisma.course.findFirst({
@@ -95,9 +95,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       if (!row.lessonId) {
         return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
       }
-      if (row.openDate && row.dueDate && new Date(row.openDate) >= new Date(row.dueDate)) {
-        return NextResponse.json({ error: 'Open date must be before due date' }, { status: 422 });
-      }
+      const policyError = validateLessonPolicy(row);
+      if (policyError) return NextResponse.json({ error: policyError }, { status: 422 });
     }
 
     const lessonIds = [...new Set(lessons.map((row) => row.lessonId))];
@@ -124,9 +123,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
           deleteMany: {},
           create: lessons.map((row) => ({
             lessonId: row.lessonId,
-            openDate: row.openDate ? new Date(row.openDate) : null,
-            dueDate: row.dueDate ? new Date(row.dueDate) : null,
-            accessibleAfterDue: row.accessibleAfterDue ?? false,
+            ...lessonPolicyData(row),
             sortOrder: row.sortOrder,
           })),
         },
