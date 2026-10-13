@@ -1,3 +1,4 @@
+jest.mock('@/lib/auth/server', () => ({ requireStudent: async () => ({ id: 'student-1', name: 'Student' }) }));
 import { render, screen } from '@testing-library/react';
 import StudentHomePage from './page';
 

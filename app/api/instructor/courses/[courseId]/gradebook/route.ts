@@ -1,11 +1,9 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 export async function GET(request: Request, { params }: { params: Promise<{ courseId: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = await currentUser();
-  if (user?.unsafeMetadata?.role !== 'instructor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
   const { courseId } = await params;
   const search = new URL(request.url).searchParams;
   const studentId = search.get('studentId');
@@ -17,7 +15,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ cour
       id: assignmentId,
       courseId,
       course: {
-        OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+        ...contentScope(user),
         enrollments: { some: { studentId, role: 'STUDENT' } },
       },
     },
