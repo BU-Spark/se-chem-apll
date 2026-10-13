@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentStudent } from '@/lib/currentStudent';
 import { pickRandomQuizQuestions } from '@/app/utils/quizQuestionCount';
+import { getLessonAvailability } from '@/app/utils/lessonAvailability';
 
 interface RouteContext {
   params: Promise<{ lessonNodeId: string }>;
@@ -32,10 +33,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'You are not enrolled in a course with this lesson' }, { status: 403 });
   }
 
-  const now = new Date();
-  const notOpenYet = courseLesson.openDate !== null && now < courseLesson.openDate;
-  const closed = courseLesson.dueDate !== null && now > courseLesson.dueDate && !courseLesson.accessibleAfterDue;
-  if (notOpenYet || closed) {
+  if (!getLessonAvailability(courseLesson).isOpen) {
     return NextResponse.json({ error: 'This lesson is not open right now' }, { status: 403 });
   }
 

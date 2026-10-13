@@ -5,6 +5,7 @@ import { getCurrentStudent } from '@/lib/currentStudent';
 import { getAttemptQuestions } from '@/lib/attemptQuestions';
 import { toStudentQuizQuestion } from '@/app/utils/studentQuizQuestion';
 import QuizPlayer from './QuizPlayer';
+import QuizResult from './QuizResult';
 import styles from '../../quiz.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -30,30 +31,18 @@ export default async function QuizAttemptPage({ params }: PageProps) {
 
   // A submitted attempt shows its saved result (also after a refresh).
   if (attempt.completedAt) {
-    const totalQuestions = attempt.quizQuestionIds.length;
     const correctCount = await prisma.nodeResponse.count({ where: { attemptId: attempt.id, isCorrect: true } });
 
     return (
-      <div className={styles.screen}>
-        <div className={styles.intro}>
-          <p className={styles.eyebrow}>{title}</p>
-          <h1 className={styles.introTitle}>{attempt.isPassing ? 'Passed' : 'Not passed yet'}</h1>
-          <p className={styles.resultScore}>{Math.round(attempt.score ?? 0)}%</p>
-          <p className={styles.introText}>
-            {correctCount} of {totalQuestions} correct · {attempt.lessonNode.passingPercent}% needed to pass
-          </p>
-          <div className={styles.actions}>
-            <Link href="/student" className={styles.secondaryButton}>
-              Back to My Courses
-            </Link>
-            {!attempt.isPassing && (
-              <Link href={`/student/quiz/${attempt.lessonNode.id}`} className={styles.primaryButton}>
-                Try again
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
+      <QuizResult
+        title={title}
+        isPassing={attempt.isPassing === true}
+        score={attempt.score ?? 0}
+        correctCount={correctCount}
+        totalQuestions={attempt.quizQuestionIds.length}
+        passingPercent={attempt.lessonNode.passingPercent}
+        retryHref={`/student/quiz/${attempt.lessonNode.id}`}
+      />
     );
   }
 

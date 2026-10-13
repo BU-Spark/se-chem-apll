@@ -6,6 +6,7 @@ import StudentDailyTimeline from '@/app/components/StudentDailyTimeline/StudentD
 import NodePreview from '@/app/components/NodePreview/NodePreview';
 import StudentQuizTaskList from '@/app/components/StudentQuizTaskList/StudentQuizTaskList';
 import { getFoundationalAccess } from '@/app/utils/foundationalAccess';
+import { getLessonAvailability } from '@/app/utils/lessonAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -170,10 +171,7 @@ export default async function StudentHomePage() {
                       dueDate: cl.dueDate,
                       accessibleAfterDue: cl.accessibleAfterDue,
                     };
-                    const now = new Date();
-                    const isUpcoming = lesson.openDate !== null && now < lesson.openDate;
-                    const isPastDue = lesson.dueDate !== null && now > lesson.dueDate;
-                    const isClosed = isPastDue && !lesson.accessibleAfterDue;
+                    const { isUpcoming, isPastDue, isClosed } = getLessonAvailability(lesson);
                     const cardClass = isUpcoming || isClosed ? styles.lessonCardUnavailable : styles.lessonCard;
 
                     return (
@@ -215,7 +213,8 @@ export default async function StudentHomePage() {
                         {lesson.lessonNodes.length > 0 && (
                           <ul className={styles.nodeList}>
                             {lesson.lessonNodes.map((ln) => {
-                              const quizBankCount = ln.node._count.quizQuestions;
+                              // A quizQuestionCount of 0 means the instructor hasn't set up a quiz yet.
+                              const quizBankCount = ln.quizQuestionCount > 0 ? ln.node._count.quizQuestions : 0;
                               const checkpointQuestionCount = ln.node.checkpoints.reduce(
                                 (sum, checkpoint) => sum + checkpoint._count.questions,
                                 0

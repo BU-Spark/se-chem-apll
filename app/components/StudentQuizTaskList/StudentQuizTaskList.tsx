@@ -104,7 +104,6 @@ export default function StudentQuizTaskList({
               <span className={`${styles.statusPill} ${statusClass(task.status)}`}>{statusLabel(task.status)}</span>
             </div>
             {task.status === 'completed' ? (
-              // Reviewing a finished quiz comes with the result screen.
               <button type="button" className={styles.actionBtn} disabled>
                 {task.actionLabel}
               </button>
