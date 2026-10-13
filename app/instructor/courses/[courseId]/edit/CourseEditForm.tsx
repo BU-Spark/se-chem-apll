@@ -166,7 +166,9 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
 
           <div className={styles.fieldRow2}>
             <label className={styles.field}>
-              Course code <span className={styles.required}>*</span>
+              <span>
+                Course code <span className={styles.required}>*</span>
+              </span>
               <input
                 required
                 value={code}
@@ -187,7 +189,9 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
           </div>
 
           <label className={styles.field}>
-            Title <span className={styles.required}>*</span>
+            <span>
+              Title <span className={styles.required}>*</span>
+            </span>
             <input
               required
               value={title}
