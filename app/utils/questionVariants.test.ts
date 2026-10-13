@@ -9,6 +9,7 @@ import {
 import { questionContentKey, validateNodeContent } from './nodeContent';
 import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
 import { duplicateQuestion, type ShortAnswerQuestion } from '@/app/components/QuestionBank/types';
+import { csvToQuestions, questionsToCsv } from './questionBankCsv';
 import { gradeAnswer } from '@/lib/submissions/grading';
 
 const prompt = 'How many moles of $\\ce{ {{compound}} }$ are in {{mass}} g?';
@@ -60,6 +61,7 @@ it('round-trips variants and incomplete rows through the authoring and database 
   expect(copy.variants![0].id).not.toBe(q.variants![0].id);
   copy.variants![0].values.mass = '10';
   expect(q.variants![0].values.mass).toBe('58.44');
+  expect(csvToQuestions(questionsToCsv([q])).questions).toEqual([]); // Incomplete group is rejected in full.
 });
 
 it.each([

@@ -9,6 +9,7 @@ import { questionContentKey, serializeQuestionCreate, validateNodeContent } from
 import { authoringQuestionToPayload, dbQuestionToAuthoring } from '@/app/components/QuestionBank/adapters';
 import { duplicateQuestion } from '@/app/components/QuestionBank/types';
 import { gradeAnswer } from '@/lib/submissions/grading';
+import { csvToQuestions, questionsToCsv } from './questionBankCsv';
 
 const options: MultipleChoiceVariantOptions = {
   type: 'variantMultipleChoice',
@@ -79,6 +80,7 @@ it('persists separate rows, round-trips stable choice IDs and remaps IDs when du
   );
   expect(copy.variants![0].answer.choices![0].id).not.toBe(q.variants![0].answer.choices![0].id);
   expect(copy.variants![0].id).not.toBe(q.variants![0].id);
+  expect(csvToQuestions(questionsToCsv([q])).errors).toEqual([]);
   const reordered = structuredClone(q);
   reordered.variants![0].answer.choices!.reverse();
   const resolved = resolveQuizVariant(prompt, quizVariantOptions(authoringQuestionToPayload(reordered, 0))!, 0);

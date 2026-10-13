@@ -1,8 +1,8 @@
 import Papa from 'papaparse';
 import {
-  QUIZ_CSV_HEADERS,
+  QUESTION_CSV_HEADERS,
   rowToQuestion,
-  questionsToCsv,
+  questionToCsvCells,
   guardTextCell,
   unguardTextCell,
   type CsvRowError,
@@ -18,7 +18,7 @@ export const CHECKPOINT_CSV_HEADERS = [
   'item_order',
   'checkpoint_seconds',
   'placement_hint',
-  ...QUIZ_CSV_HEADERS,
+  ...QUESTION_CSV_HEADERS,
 ] as const;
 export const CHECKPOINT_CSV_MAX_BYTES = 2 * 1024 * 1024;
 export const CHECKPOINT_CSV_MAX_ROWS = 5000;
@@ -108,7 +108,7 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
     if (cell('type').trim().toLowerCase() === 'note') {
       const prompt = unguardTextCell(cell('prompt'));
       if (!prompt.trim()) fail(record, `${key}: note prompt is required.`);
-      if (QUIZ_CSV_HEADERS.filter((h) => h !== 'type' && h !== 'prompt').some((h) => cell(h).trim()))
+      if (QUESTION_CSV_HEADERS.filter((h) => h !== 'type' && h !== 'prompt').some((h) => cell(h).trim()))
         fail(record, `${key}: notes must leave answer fields blank.`);
       item = dbQuestionToForm({
         id: generateClientId('question'),
@@ -176,16 +176,14 @@ export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
       const questionCells =
         item.questionType === 'note'
           ? ['note', guardTextCell(item.prompt), ...Array<string>(13).fill('')]
-          : Papa.parse<string[]>(
-              questionsToCsv([
-                dbQuestionToAuthoring({
-                  id: item.id,
-                  prompt: item.prompt,
-                  options: serializeQuestionOptions(item),
-                  correctIndices: item.correctIndices,
-                }),
-              ])
-            ).data[1];
+          : questionToCsvCells(
+              dbQuestionToAuthoring({
+                id: item.id,
+                prompt: item.prompt,
+                options: serializeQuestionOptions(item),
+                correctIndices: item.correctIndices,
+              })
+            );
       rows.push([
         guardTextCell(checkpoint.checkpointKey ?? `checkpoint-${index + 1}`),
         String(index + 1),

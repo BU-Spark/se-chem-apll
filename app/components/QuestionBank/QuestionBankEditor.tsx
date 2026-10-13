@@ -328,6 +328,9 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
 
   const getCommandAvailability = useCallback(
     (availability: CommandAvailability, commandId?: QuestionBankCommandId): { enabled: boolean; reason?: string } => {
+      if (commandId === 'export-csv' && questions.some((q) => q.variants?.length === 0)) {
+        return { enabled: false, reason: 'Add at least one variant to each variant question before exporting.' };
+      }
       if (commandId === 'save-node' && saving) {
         return { enabled: false, reason: 'The node is already being saved.' };
       }
@@ -354,7 +357,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           return { enabled: true };
       }
     },
-    [commandTargetIds, activeQuestion, activeIndex, questions.length, saving]
+    [commandTargetIds, activeQuestion, activeIndex, questions, saving]
   );
 
   const runCommand = useCallback(
@@ -388,6 +391,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           setImportOpen(true);
           return;
         case 'export-csv':
+          if (questions.some((q) => q.variants?.length === 0)) return;
           downloadCsvFile('quiz-questions.csv', questionsToCsv(questions));
           return;
         case 'save-node':
@@ -563,7 +567,8 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
         <button
           type="button"
           className={styles.toolbarBtn}
-          disabled={questions.length === 0}
+          disabled={!getCommandAvailability('has-questions', 'export-csv').enabled}
+          title={getCommandAvailability('has-questions', 'export-csv').reason}
           onClick={() => runCommand('export-csv')}
         >
           Export CSV

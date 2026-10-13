@@ -1,21 +1,17 @@
 import Papa from 'papaparse';
 import { makeChoice, type AuthoringQuestion } from '@/app/components/QuestionBank/types';
+import { questionVariables } from './questionVariants';
 import { generateClientId } from '@/lib/generateClientId';
 
 /**
- * CSV import/export for the quiz question bank.
- *
- * The header row below is the canonical interchange contract — do not change
- * it without a versioned migration. The authoring UI never exposes these
- * columns directly; this module is the boundary between CSV rows and
- * AuthoringQuestion objects.
- *
- * Round-trip is semantic, not lexical: numeric answers pass through Number(),
- * and text cells that begin with a spreadsheet-formula character (=, +, -, @)
- * are prefixed with an apostrophe on export and stripped again on import.
+ * Canonical quiz CSV: one row per question or variant, grouped by question_key.
+ * var:<name> columns preserve case and supply literal template substitutions.
+ * File-local keys are regenerated on export; database identities are never exported.
+ * Text cells beginning with formula characters are guarded for spreadsheet use.
  */
 
-export const QUIZ_CSV_HEADERS = [
+// Shared answer columns; checkpoint CSV deliberately excludes quiz grouping and variables.
+export const QUESTION_CSV_HEADERS = [
   'type',
   'prompt',
   'choice_1',
@@ -33,13 +29,94 @@ export const QUIZ_CSV_HEADERS = [
   'maximum_answer',
 ] as const;
 
-type QuizCsvHeader = (typeof QUIZ_CSV_HEADERS)[number];
+export const QUIZ_CSV_HEADERS = ['question_key', 'variant_key', ...QUESTION_CSV_HEADERS] as const;
+
+const SAMPLE_VARIABLES = ['compound', 'mass', 'category', 'example'];
+const SAMPLE_HEADERS = [...QUIZ_CSV_HEADERS, ...SAMPLE_VARIABLES.map((name) => `var:${name}`)];
+const sampleRow = (cells: Record<string, string>): string[] => SAMPLE_HEADERS.map((header) => cells[header] ?? '');
 
 export const SAMPLE_QUESTION_BANK_CSV_ROWS: string[][] = [
-  ['multipleChoice', 'What is 2 + 2?', '3', '4', '5', '22', '', '', '', '', '2', '', '', '', ''],
-  ['multipleChoice', 'Which are prime numbers?', '2', '3', '4', '9', '', '', '', '', '1,2', '', '', '', ''],
-  ['shortAnswer', 'What is the square root of 16?', '', '', '', '', '', '', '', '', '', 'exact', '4', '', ''],
-  ['shortAnswer', 'Estimate pi (acceptable range)', '', '', '', '', '', '', '', '', '', 'range', '', '3.1', '3.2'],
+  sampleRow({
+    question_key: 'arithmetic',
+    type: 'multipleChoice',
+    prompt: 'What is 2 + 2?',
+    choice_1: '3',
+    choice_2: '4',
+    choice_3: '5',
+    choice_4: '22',
+    correct: '2',
+  }),
+  sampleRow({
+    question_key: 'primes',
+    type: 'multipleChoice',
+    prompt: 'Which are prime numbers?',
+    choice_1: '2',
+    choice_2: '3',
+    choice_3: '4',
+    choice_4: '9',
+    correct: '1,2',
+  }),
+  sampleRow({
+    question_key: 'square-root',
+    type: 'shortAnswer',
+    prompt: 'What is the square root of 16?',
+    answer_mode: 'exact',
+    expected_answer: '4',
+  }),
+  sampleRow({
+    question_key: 'pi',
+    type: 'shortAnswer',
+    prompt: 'Estimate pi (acceptable range)',
+    answer_mode: 'range',
+    minimum_answer: '3.1',
+    maximum_answer: '3.2',
+  }),
+  sampleRow({
+    question_key: 'moles',
+    variant_key: 'water',
+    type: 'shortAnswer',
+    prompt: 'How many moles of {{compound}} are present in {{mass}}? Use rounded molar masses.',
+    answer_mode: 'exact',
+    expected_answer: '5',
+    'var:compound': '$\\ce{H2O}$',
+    'var:mass': '90 g',
+  }),
+  sampleRow({
+    question_key: 'moles',
+    variant_key: 'methane',
+    type: 'shortAnswer',
+    prompt: 'How many moles of {{compound}} are present in {{mass}}? Use rounded molar masses.',
+    answer_mode: 'range',
+    minimum_answer: '4.98',
+    maximum_answer: '5.02',
+    'var:compound': '$\\ce{CH4}$',
+    'var:mass': '80 g',
+  }),
+  sampleRow({
+    question_key: 'elements',
+    variant_key: 'metals',
+    type: 'multipleChoice',
+    prompt: 'Which of these are {{category}}? Select every correct answer.',
+    choice_1: '{{example}}',
+    choice_2: 'Helium',
+    choice_3: 'Carbon',
+    correct: '1',
+    'var:category': 'alkali metals',
+    'var:example': 'Sodium',
+  }),
+  sampleRow({
+    question_key: 'elements',
+    variant_key: 'diatomic',
+    type: 'multipleChoice',
+    prompt: 'Which of these are {{category}}? Select every correct answer.',
+    choice_1: '{{example}}',
+    choice_2: 'Neon',
+    choice_3: 'Nitrogen',
+    choice_4: 'Argon',
+    correct: '1,3',
+    'var:category': 'diatomic elements at room temperature',
+    'var:example': 'Oxygen',
+  }),
 ];
 
 export type CsvRowError = {
@@ -79,42 +156,79 @@ function correctIndicesToCsv(choices: { correct: boolean }[]): string {
   return choices.flatMap((choice, idx) => (choice.correct ? [String(idx + 1)] : [])).join(',');
 }
 
-export function questionsToCsv(questions: AuthoringQuestion[]): string {
-  const rows: string[][] = [[...QUIZ_CSV_HEADERS]];
-  for (const q of questions) {
-    if (q.type === 'multipleChoice') {
-      const choices = emptyChoices();
-      q.choices.slice(0, 8).forEach((choice, idx) => {
-        choices[idx] = guardTextCell(choice.content);
-      });
-      rows.push([
-        'multipleChoice',
-        guardTextCell(q.prompt),
-        ...choices,
-        correctIndicesToCsv(q.choices),
-        '',
-        '',
-        '',
-        '',
-      ]);
-    } else {
-      rows.push([
-        'shortAnswer',
-        guardTextCell(q.prompt),
-        ...emptyChoices(),
-        '',
-        q.answer.mode,
-        q.answer.mode === 'exact' ? q.answer.expected : '',
-        q.answer.mode === 'range' ? q.answer.minimum : '',
-        q.answer.mode === 'range' ? q.answer.maximum : '',
-      ]);
-    }
+/** Shared scalar answer cells, without quiz grouping or variant metadata. */
+export function questionToCsvCells(question: AuthoringQuestion): string[] {
+  const choices = emptyChoices();
+  if (question.type === 'multipleChoice') {
+    question.choices.slice(0, 8).forEach((choice, idx) => {
+      choices[idx] = guardTextCell(choice.content);
+    });
   }
+  const answer = question.type === 'shortAnswer' ? question.answer : undefined;
+  return [
+    question.type,
+    guardTextCell(question.prompt),
+    ...choices,
+    question.type === 'multipleChoice' ? correctIndicesToCsv(question.choices) : '',
+    answer?.mode ?? '',
+    answer?.mode === 'exact' ? answer.expected : '',
+    answer?.mode === 'range' ? answer.minimum : '',
+    answer?.mode === 'range' ? answer.maximum : '',
+  ];
+}
+
+export function questionsToCsv(questions: AuthoringQuestion[]): string {
+  if (questions.some((q) => q.variants?.length === 0)) {
+    throw new Error('Add at least one variant to each variant question before exporting.');
+  }
+  const variables = [
+    ...new Set(
+      questions.flatMap((q) => [
+        ...questionVariables(q.prompt),
+        ...(q.variants ?? []).flatMap((v) => [
+          ...Object.keys(v.values),
+          ...('type' in v.answer && v.answer.type === 'multipleChoice'
+            ? (v.answer.choices ?? []).flatMap((c) => questionVariables(c.content))
+            : []),
+        ]),
+      ])
+    ),
+  ];
+  const rows: string[][] = [[...QUIZ_CSV_HEADERS, ...variables.map((name) => `var:${name}`)]];
+  questions.forEach((q, questionIndex) => {
+    const append = (question: AuthoringQuestion, variantKey = '', values: Record<string, string> = {}) => {
+      rows.push([
+        `q${questionIndex + 1}`,
+        variantKey,
+        ...questionToCsvCells(question),
+        ...variables.map((name) => guardTextCell(Object.hasOwn(values, name) ? values[name] : '')),
+      ]);
+    };
+    if (q.type === 'multipleChoice' && q.variants) {
+      q.variants.forEach((variant, index) =>
+        append(
+          {
+            ...q,
+            choices: (variant.answer.choices ?? []).map((choice) => ({
+              ...choice,
+              correct: variant.answer.correctChoiceIds.includes(choice.id),
+            })),
+          },
+          `v${index + 1}`,
+          variant.values
+        )
+      );
+    } else if (q.type === 'shortAnswer' && q.variants) {
+      q.variants.forEach((variant, index) => append({ ...q, answer: variant.answer }, `v${index + 1}`, variant.values));
+    } else {
+      append(q);
+    }
+  });
   return Papa.unparse(rows, { newline: '\n' });
 }
 
 export function sampleQuestionBankCsv(): string {
-  return Papa.unparse([[...QUIZ_CSV_HEADERS], ...SAMPLE_QUESTION_BANK_CSV_ROWS], { newline: '\n' });
+  return Papa.unparse([SAMPLE_HEADERS, ...SAMPLE_QUESTION_BANK_CSV_ROWS], { newline: '\n' });
 }
 
 // ---------------------------------------------------------------------------
@@ -125,8 +239,12 @@ function headerIndexMap(headerRow: string[]): Map<string, number> | CsvRowError[
   const map = new Map<string, number>();
   const errors: CsvRowError[] = [];
   headerRow.forEach((cell, idx) => {
-    const key = cell.trim().toLowerCase();
-    if (!key) return;
+    const trimmed = cell.trim();
+    const key = /^var:/i.test(trimmed) ? `var:${trimmed.slice(4)}` : trimmed.toLowerCase();
+    if (!QUIZ_CSV_HEADERS.some((header) => header === key) && !/^var:[A-Za-z][A-Za-z0-9_]*$/.test(key)) {
+      errors.push({ row: 1, message: `Unknown or invalid column "${key}". Variable columns use var:name.` });
+      return;
+    }
     if (map.has(key)) {
       errors.push({ row: 1, message: `Duplicate column "${key}".` });
       return;
@@ -142,7 +260,7 @@ function headerIndexMap(headerRow: string[]): Map<string, number> | CsvRowError[
   return errors.length > 0 ? errors : map;
 }
 
-function cellAt(row: string[], map: Map<string, number>, header: QuizCsvHeader): string {
+function cellAt(row: string[], map: Map<string, number>, header: string): string {
   const idx = map.get(header);
   if (idx === undefined) return '';
   return row[idx] ?? '';
@@ -269,47 +387,128 @@ export function rowToQuestion(
   };
 }
 
-/**
- * Parse CSV text into authoring questions plus row-level errors. Valid rows
- * are returned even when other rows fail, so the import UI can offer an
- * explicit "import valid rows only" path.
- */
-export function csvToQuestions(text: string): CsvImportResult {
+/** Import complete question groups only; a bad variant excludes its whole group. */
+export function csvToQuestions(text: string, maxRows = 5000): CsvImportResult {
   if (text.trim() === '') {
     return { questions: [], errors: [{ row: 1, message: 'CSV is empty.' }] };
   }
-
   const parsed = Papa.parse<string[]>(text, { skipEmptyLines: 'greedy' });
-  const errors: CsvRowError[] = [];
-
-  for (const papaError of parsed.errors) {
-    if (papaError.code === 'TooFewFields' || papaError.code === 'TooManyFields') continue;
-    errors.push({
-      row: typeof papaError.row === 'number' ? papaError.row + 1 : 1,
-      message: `CSV parse error (${papaError.code}): ${papaError.message ?? 'malformed input'}`,
-    });
+  // Broken quoting makes record boundaries unreliable. Do not partially import.
+  if (parsed.errors.length) {
+    return {
+      questions: [],
+      errors: parsed.errors.map((error) => ({
+        row: typeof error.row === 'number' ? error.row + 1 : 1,
+        message: `CSV parse error (${error.code}): ${error.message}`,
+      })),
+    };
   }
-
   const rows = parsed.data;
-  if (rows.length === 0) {
-    errors.push({ row: 1, message: 'CSV is empty.' });
-    return { questions: [], errors };
+  if (rows.length - 1 > maxRows) {
+    return {
+      questions: [],
+      errors: [{ row: 1, message: `The import limit is ${maxRows} data rows, including variants.` }],
+    };
   }
-
   const headerMap = headerIndexMap(rows[0]);
-  if (Array.isArray(headerMap)) {
-    return { questions: [], errors: [...errors, ...headerMap] };
-  }
-
-  const questions: AuthoringQuestion[] = [];
-  rows.slice(1).forEach((row, idx) => {
-    const result = rowToQuestion(row, headerMap, idx + 2);
-    if ('message' in result) {
-      errors.push(result);
-    } else {
-      questions.push(result);
+  if (Array.isArray(headerMap)) return { questions: [], errors: headerMap };
+  const variables = [...headerMap.keys()].filter((key) => key.startsWith('var:'));
+  const errors: CsvRowError[] = [];
+  const groups = new Map<string, { row: string[]; number: number }[]>();
+  rows.slice(1).forEach((row, index) => {
+    const key = cellAt(row, headerMap, 'question_key').trim();
+    if (!key) {
+      errors.push({ row: index + 2, message: `Row ${index + 2}: question_key is required.` });
+      return;
     }
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push({ row, number: index + 2 });
   });
-
-  return { questions, errors };
+  const questions: AuthoringQuestion[] = [];
+  for (const [key, records] of groups) {
+    const startErrors = errors.length;
+    const variants = new Set<string>();
+    const entries: { question: AuthoringQuestion; values: Record<string, string> }[] = [];
+    const isVariant = records.some(({ row }) => cellAt(row, headerMap, 'variant_key').trim() !== '');
+    for (const { row, number } of records) {
+      const fail = (message: string) =>
+        errors.push({ row: number, message: `Row ${number} (question "${key}"): ${message} Entire question skipped.` });
+      if (row.length !== rows[0].length) {
+        fail('Column count does not match the header.');
+        continue;
+      }
+      const variantKey = cellAt(row, headerMap, 'variant_key').trim();
+      if (isVariant && (!variantKey || variants.has(variantKey))) {
+        fail('Each variant_key must be nonempty and unique within its question.');
+      }
+      if (!isVariant && records.length > 1) fail('An ordinary question_key must occur only once.');
+      variants.add(variantKey);
+      const question = rowToQuestion(row, headerMap, number);
+      if ('message' in question) {
+        fail(question.message);
+        continue;
+      }
+      const first = entries[0]?.question;
+      if (first && (first.type !== question.type || first.prompt !== question.prompt)) {
+        fail('All variants must have the same type and prompt template.');
+      }
+      const required = questionVariables(
+        [question.prompt, ...(question.type === 'multipleChoice' ? question.choices.map((c) => c.content) : [])].join(
+          '\n'
+        )
+      );
+      const values = Object.fromEntries(
+        variables.flatMap((column) => {
+          const value = unguardTextCell(cellAt(row, headerMap, column));
+          return value !== '' ? [[column.slice(4), value]] : [];
+        })
+      );
+      if (!isVariant && (required.length || Object.keys(values).length))
+        fail('Template variables require a variant_key.');
+      if (isVariant) {
+        if (question.type === 'shortAnswer' && !questionVariables(question.prompt).length) {
+          fail('Numeric variants require a variable in the prompt.');
+        }
+        for (const name of required) {
+          if (!Object.hasOwn(values, name) || !values[name].trim())
+            fail(`Missing value for {{${name}}}; fill var:${name}.`);
+        }
+      }
+      entries.push({ question, values });
+    }
+    if (errors.length !== startErrors || !entries.length) continue;
+    const first = entries[0].question;
+    if (!isVariant) {
+      questions.push(first);
+      continue;
+    }
+    if (first.type === 'multipleChoice') {
+      questions.push({
+        ...first,
+        choices: [],
+        variants: entries.map(({ question, values }) => {
+          if (question.type !== 'multipleChoice') throw new Error('Inconsistent validated question type');
+          return {
+            id: generateClientId('variant'),
+            values,
+            answer: {
+              type: 'multipleChoice',
+              choices: question.choices.map(({ id, content }) => ({ id, content })),
+              correctChoiceIds: question.choices.filter((c) => c.correct).map((c) => c.id),
+            },
+          };
+        }),
+      });
+    } else {
+      questions.push({
+        ...first,
+        answer: { mode: 'exact', expected: '' },
+        variants: entries.map(({ question, values }) => {
+          if (question.type !== 'shortAnswer') throw new Error('Inconsistent validated question type');
+          return { id: generateClientId('variant'), values, answer: question.answer };
+        }),
+      });
+    }
+  }
+  return { questions, errors: errors.sort((a, b) => a.row - b.row) };
 }

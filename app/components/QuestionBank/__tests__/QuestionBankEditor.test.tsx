@@ -2,6 +2,10 @@ import { useState } from 'react';
 import type { ComponentType } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { downloadCsvFile } from '@/app/utils/csv';
+import { csvToQuestions } from '@/app/utils/questionBankCsv';
+
+jest.mock('@/app/utils/csv', () => ({ downloadCsvFile: jest.fn() }));
 import QuestionBankEditor from '../QuestionBankEditor';
 import { QUESTION_BANK_COMMANDS, commandShortcutLabel } from '../commands';
 import { makeChoice, makeMultipleChoiceQuestion, makeShortAnswerQuestion, type AuthoringQuestion } from '../types';
@@ -228,6 +232,44 @@ function validMcQuestion(id: string, prompt: string): AuthoringQuestion {
 }
 
 describe('QuestionBankEditor', () => {
+  it('creates a numeric variant question and enables CSV export', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Short answer' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Question prompt/ }), {
+      target: { value: 'Moles of {{compound}} in {{mass}} g?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add question variants' }));
+    fireEvent.change(screen.getByLabelText('Variant 1 compound'), { target: { value: 'NaCl' } });
+    fireEvent.change(screen.getByLabelText('Variant 1 mass'), { target: { value: '58.44' } });
+    fireEvent.change(screen.getByLabelText('Variant 1 answer'), { target: { value: '1' } });
+    expect(harnessQuestions()).toEqual([
+      expect.objectContaining({
+        type: 'shortAnswer',
+        variants: [
+          expect.objectContaining({
+            values: { compound: 'NaCl', mass: '58.44' },
+            answer: { mode: 'exact', expected: '1' },
+          }),
+        ],
+      }),
+    ]);
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    const [filename, csv] = jest.mocked(downloadCsvFile).mock.calls.at(-1)!;
+    expect(filename).toBe('quiz-questions.csv');
+    const imported = csvToQuestions(csv);
+    expect(imported.errors).toEqual([]);
+    expect(imported.questions[0].variants![0]).toMatchObject({
+      values: { compound: 'NaCl', mass: '58.44' },
+      answer: { mode: 'exact', expected: '1' },
+    });
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'NaCl' } });
+    expect(
+      within(screen.getByTestId('ag-grid-mock')).getByRole('button', {
+        name: 'Moles of {{compound}} in {{mass}} g?',
+      })
+    ).toBeInTheDocument();
+  });
   it('opens an uncommitted blank question when the bank is empty', async () => {
     render(<Harness />);
     expect(screen.getByText('No questions yet.')).toBeInTheDocument();

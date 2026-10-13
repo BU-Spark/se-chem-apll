@@ -134,7 +134,7 @@ Most projects will require the use of other technologies. Below are a few guides
 
 ## Checkpoint CSV authoring
 
-The node editor's **Checkpoints** step supports CSV import, export, and a downloadable sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Existing quiz-bank CSV files retain their original format.
+The node editor's **Checkpoints** step supports CSV import, export, and a downloadable sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Quiz questions use the separate variant-aware format documented below.
 
 Checkpoint CSV uses one row per question or informational note. Its header is:
 
@@ -162,6 +162,27 @@ CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test'
 ```
 
 The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
+
+
+## Quiz CSV authoring
+
+The quiz bank's sample CSV download inside **Import CSV** includes ordinary MCQ and numeric questions, numeric template variants with exact/range answers, and MCQ variants with different choices and different numbers of correct answers. The same demo is checked in at [samples/quiz-questions.csv](samples/quiz-questions.csv).
+
+The required columns are:
+
+```csv
+question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer
+```
+
+- Use one row for an ordinary question and leave `variant_key` blank. For variants, repeat `question_key` and assign each row a unique, nonempty `variant_key`. Keys only group rows within the file; import generates fresh internal IDs.
+- All rows in a question group must share the same type and prompt template. First appearance determines question order; row order determines variant order.
+- Add case-sensitive columns such as `var:compound` and `var:mass` to supply `{{compound}}` and `{{mass}}` placeholders. Variables work in prompts and MCQ choices; substitution is literal, with no formulas or answer calculation. Variable names start with a letter and contain only letters, numbers, and underscores. Each row must supply every variable it references; columns used only by other questions may stay blank.
+- Each MCQ variant supplies its own 2–8 choices, with trailing unused choice cells blank. `correct` contains 1-based choice positions, such as `1` or the quoted CSV cell `"1,3"` for multiple correct answers. Choice counts and correct-answer counts can differ per variant.
+- Numeric rows use `answer_mode` = `exact` with `expected_answer`, or `range` with `minimum_answer` and `maximum_answer`. Numeric variants require a prompt variable.
+- Markdown, LaTeX and chemistry notation are preserved. Quote CSV cells containing commas, quotes or newlines; spreadsheet apps handle this automatically on export.
+- Import validates complete question groups. If any variant is invalid, the entire question is skipped and errors identify the source rows. Other valid questions can still be imported. The limit is 5,000 data rows, including variants, and 2 MB per file.
+
+This is the canonical quiz CSV format; older headers without grouping keys are not accepted. Checkpoint CSV is unchanged and does not support variants.
 
 
 ## Instructor dropdown styles
