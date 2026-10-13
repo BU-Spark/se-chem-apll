@@ -1,0 +1,231 @@
+/* Shared styles for the quiz intro and quiz screens. */
+.screen {
+  position: relative;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  background: #fffcf6;
+  border-radius: 1rem;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.close {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  font-size: 1.25rem;
+  color: #6b625a;
+  text-decoration: none;
+}
+
+/* ── Intro ────────────────────────────────── */
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.eyebrow {
+  font-size: 0.85rem;
+  color: #6b625a;
+}
+
+.introTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.introText {
+  color: #374151;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+/* ── Quiz ─────────────────────────────────── */
+.quizScreen {
+  width: 100%;
+  max-width: 60rem;
+  margin: 0 auto;
+  min-height: 70vh;
+  background: #fffcf6;
+  border-radius: 1rem;
+  padding: 2.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.quizHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.quizClose {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #6b625a;
+  text-decoration: none;
+}
+
+.quizTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.75rem;
+}
+
+.progress {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.progressDone,
+.progressTodo {
+  width: 1.75rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+}
+
+.progressDone {
+  background: #5ab0c8;
+}
+
+.progressTodo {
+  background: #f0e6d6;
+}
+
+.progressLabel {
+  font-size: 0.8rem;
+  color: #6b625a;
+  margin-top: 0.5rem;
+}
+
+.question {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  font-size: 1.25rem;
+  color: #111827;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.choice,
+.choiceSelected {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.choiceLetter {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  border: 4px solid #f0e6d6;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.choiceSelected .choiceLetter {
+  border-color: #5ab0c8;
+  background: #5ab0c8;
+  color: #fff;
+}
+
+.shortAnswer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.numberInput {
+  max-width: 14rem;
+  border: 3px solid #f0e6d6;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: #5ab0c8;
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: #6b625a;
+}
+
+.quizFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  margin-top: auto;
+}
+
+.quizFooter .primaryButton,
+.quizFooter .secondaryButton {
+  min-width: 9rem;
+  padding: 0.85rem 2rem;
+  font-size: 1.15rem;
+}
+
+/* ── Buttons ──────────────────────────────── */
+.primaryButton,
+.secondaryButton {
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.65rem 1.4rem;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: #5ab0c8;
+  color: #fff;
+}
+
+.secondaryButton {
+  background: #f0e6d6;
+  color: #4b4038;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}

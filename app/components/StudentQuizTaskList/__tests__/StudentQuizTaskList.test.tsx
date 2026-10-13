@@ -69,7 +69,7 @@ describe('buildQuizTasks', () => {
 });
 
 describe('StudentQuizTaskList', () => {
-  it('renders quiz task as coming soon', () => {
+  it('links an available quiz to its intro screen', () => {
     render(
       <StudentQuizTaskList
         isFoundational
@@ -81,7 +81,28 @@ describe('StudentQuizTaskList', () => {
     );
 
     expect(screen.getByText('Quiz')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Start quiz \(coming soon\)/ })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Start quiz' })).toHaveAttribute('href', '/student/quiz/ln-1');
     expect(screen.queryByText('Pre-quiz')).not.toBeInTheDocument();
+  });
+
+  it('links a failed quiz to retry', () => {
+    render(
+      <StudentQuizTaskList
+        isFoundational={false}
+        quizBankCount={3}
+        checkpointQuestionCount={0}
+        attempts={[
+          {
+            id: 'a1',
+            isPassing: false,
+            completedAt: new Date(),
+            responses: [{ quizQuestionId: 'q1', checkpointQuestionId: null }],
+          },
+        ]}
+        lessonNodeId="ln-1"
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'Retry quiz' })).toHaveAttribute('href', '/student/quiz/ln-1');
   });
 });

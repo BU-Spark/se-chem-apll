@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import styles from './StudentQuizTaskList.module.css';
 
 type Attempt = {
@@ -82,6 +83,7 @@ export default function StudentQuizTaskList({
   quizBankCount,
   checkpointQuestionCount,
   attempts,
+  lessonNodeId,
 }: BuildQuizTasksInput & { lessonNodeId: string }) {
   const tasks = buildQuizTasks({
     isFoundational,
@@ -101,9 +103,16 @@ export default function StudentQuizTaskList({
               <span className={styles.taskName}>{task.label}</span>
               <span className={`${styles.statusPill} ${statusClass(task.status)}`}>{statusLabel(task.status)}</span>
             </div>
-            <button type="button" className={styles.actionBtn} disabled>
-              {task.actionLabel} (coming soon)
-            </button>
+            {task.status === 'completed' ? (
+              // Reviewing a finished quiz comes with the result screen.
+              <button type="button" className={styles.actionBtn} disabled>
+                {task.actionLabel}
+              </button>
+            ) : (
+              <Link href={`/student/quiz/${lessonNodeId}`} className={styles.actionLink}>
+                {task.actionLabel}
+              </Link>
+            )}
           </li>
         ))}
       </ul>
