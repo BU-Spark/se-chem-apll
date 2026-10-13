@@ -166,7 +166,7 @@ The suite uses only this explicit URL, creates and removes its own fixtures, and
 
 ## Quiz CSV authoring
 
-The quiz bank's sample CSV download inside **Import CSV** includes ordinary MCQ and numeric questions, numeric template variants with exact/range answers, and MCQ variants with different choices and different numbers of correct answers. The same demo is checked in at [samples/quiz-questions.csv](samples/quiz-questions.csv).
+The quiz bank's **Download sample CSV** toolbar button (also available inside **Import CSV**) includes ordinary MCQ and numeric questions, numeric template variants with exact/range answers, and MCQ variants with different choices and different numbers of correct answers. The same demo is checked in at [samples/quiz-questions.csv](samples/quiz-questions.csv).
 
 The required columns are:
 

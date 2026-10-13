@@ -15,8 +15,41 @@
   gap: 0.5rem;
 }
 
-.toolbarSpacer {
-  flex: 1;
+.toolbarFilters {
+  display: flex;
+  flex: 1 1 30rem;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.toolbarActions > button {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .toolbarFilters .searchInput {
+    flex-basis: 100%;
+  }
+
+  .toolbarFilters .filterSelect {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toolbarActions {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .searchInput {
@@ -793,21 +826,50 @@
   padding-top: 0.6rem;
 }
 
+.statusBarHelp {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-left: auto;
+}
+
 .statusBarHint {
   color: #9ca3af;
 }
 
-.statusBarHint button {
+.statusBarHint > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.commandsHelpButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
+  border: 1px solid #cbd5e1;
+  border-radius: 50%;
+  background: #fff;
+  color: #64748b;
   font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.statusBarHint button:hover {
+.commandsHelpButton:hover {
   color: #1f5fab;
+  border-color: #1f5fab;
+  background: #eff6ff;
+}
+
+.commandsHelpButton:focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 3px;
 }
 
 .srOnly {

@@ -677,7 +677,7 @@ describe('QuestionBankEditor', () => {
     await user.keyboard('{Control>}s{/Control}');
     expect(onSave).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole('button', { name: 'Commands' }));
+    await user.click(screen.getByRole('button', { name: 'Commands and keyboard shortcuts' }));
     await user.click(screen.getByRole('option', { name: /^Save node/ }));
     expect(onSave).toHaveBeenCalledTimes(2);
   });
@@ -693,7 +693,7 @@ describe('QuestionBankEditor', () => {
 
     try {
       render(<Harness initial={[validMcQuestion('q1', 'First')]} />);
-      await user.click(screen.getByRole('button', { name: 'Commands' }));
+      await user.click(screen.getByRole('button', { name: 'Commands and keyboard shortcuts' }));
       const search = screen.getByRole('combobox', { name: 'Search commands and formatting help' });
       const initialActiveId = search.getAttribute('aria-activedescendant');
 
@@ -727,7 +727,7 @@ describe('QuestionBankEditor', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     render(<Harness initial={[validMcQuestion('q1', 'First')]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Commands' }));
+    await user.click(screen.getByRole('button', { name: 'Commands and keyboard shortcuts' }));
     await user.type(screen.getByRole('combobox', { name: 'Search commands and formatting help' }), 'chemtex');
     await user.click(screen.getByRole('option', { name: /Chemical formulas with mhchem/ }));
 
@@ -743,7 +743,7 @@ describe('QuestionBankEditor', () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await user.click(screen.getByRole('button', { name: 'Commands' }));
+    await user.click(screen.getByRole('button', { name: 'Commands and keyboard shortcuts' }));
     const duplicate = screen.getByRole('option', { name: /Duplicate selected questions or active question/ });
     expect(duplicate).toHaveAttribute('aria-disabled', 'true');
     expect(duplicate).toHaveTextContent('Select or open a question first.');
@@ -768,7 +768,7 @@ describe('QuestionBankEditor', () => {
     const user = userEvent.setup();
     render(<Harness initial={[validMcQuestion('q1', 'First')]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Commands' }));
+    await user.click(screen.getByRole('button', { name: 'Commands and keyboard shortcuts' }));
     const search = screen.getByRole('combobox', { name: 'Search commands and formatting help' });
     await user.type(search, 'new numeric short-answer');
     await user.keyboard('{Enter}');
