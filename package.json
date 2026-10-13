@@ -13,6 +13,7 @@
     "test:coverage": "jest --coverage",
     "prepare": "husky",
     "db:seed": "prisma db seed",
+    "db:verify-migrations": "node scripts/verify-migrations.cjs",
     "admin:grant": "node scripts/grant-admin.cjs"
   },
   "prisma": {
