@@ -1,3 +1,9 @@
+/*
+ * Cream layer covering the whole screen, behind the page content.
+ * Without it there are two blue lines on the sides of the screen, coming from the blue
+ * background in app/globals.css. We don't change app/globals.css because that would also
+ * change the instructor pages. See PageBackground.tsx.
+ */
 .background {
   position: fixed;
   inset: 0;
