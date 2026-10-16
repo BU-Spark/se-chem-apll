@@ -1,27 +1,15 @@
+import a11y from '@/app/styles/a11y.module.css';
 import styles from './loading.module.css';
 
+// Placeholder shown while a student page loads: a title and two course cards.
 export default function StudentLoading() {
   return (
     <div className={styles.root} aria-busy="true" aria-live="polite">
+      <span className={a11y.srOnly}>Loading…</span>
       <div className={`${styles.bone} ${styles.title}`} />
-
-      <div className={styles.courseList}>
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className={styles.courseCard}>
-            <div className={styles.courseHeader}>
-              <div className={styles.cardBody}>
-                <div className={`${styles.bone} ${styles.lineLg}`} />
-                <div className={`${styles.bone} ${styles.lineSm}`} />
-              </div>
-              <div className={`${styles.bone} ${styles.badge}`} />
-            </div>
-            <div className={`${styles.bone} ${styles.lineMd}`} />
-            <div className={styles.lessonStack}>
-              <div className={`${styles.bone} ${styles.lesson}`} />
-              <div className={`${styles.bone} ${styles.lesson}`} />
-            </div>
-          </div>
-        ))}
+      <div className={styles.cards}>
+        <div className={`${styles.bone} ${styles.card}`} />
+        <div className={`${styles.bone} ${styles.card}`} />
       </div>
     </div>
   );
