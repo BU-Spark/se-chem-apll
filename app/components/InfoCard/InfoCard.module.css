@@ -1,0 +1,12 @@
+.card {
+  width: 100%;
+  max-width: 21.5rem;
+  background: var(--apll-sand);
+  border-radius: 1rem;
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 2.75rem;
+  row-gap: 1.25rem;
+  color: var(--apll-text);
+}

@@ -1,42 +1,57 @@
+import { render, screen, within } from '@testing-library/react';
 import StudentHomePage from './page';
 
-const mockAuth = jest.fn();
-const mockCurrentUser = jest.fn();
-const mockUserFindUnique = jest.fn();
-const mockEnrollmentFindMany = jest.fn();
+const mockGetOrCreateStudent = jest.fn();
+const mockGetEnrolledCourses = jest.fn();
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-  currentUser: () => mockCurrentUser(),
-}));
-
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    user: {
-      findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-    enrollment: { findMany: (...args: unknown[]) => mockEnrollmentFindMany(...args) },
-  },
+jest.mock('@/lib/getOrCreateStudent', () => ({ getOrCreateStudent: () => mockGetOrCreateStudent() }));
+jest.mock('@/lib/studentCourses', () => ({
+  getEnrolledCourses: (...args: unknown[]) => mockGetEnrolledCourses(...args),
 }));
 
 describe('StudentHomePage', () => {
-  it('filters draft lessons and draft nodes from the student dashboard query', async () => {
-    mockAuth.mockResolvedValue({ userId: 'student-clerk-1' });
-    mockCurrentUser.mockResolvedValue({
-      emailAddresses: [{ emailAddress: 'student@example.com' }],
-      fullName: 'Student Example',
-      firstName: 'Student',
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetOrCreateStudent.mockResolvedValue({
+      id: 'student-1',
+      name: 'Student Example',
+      email: 'student@example.com',
     });
-    mockUserFindUnique.mockResolvedValue({ id: 'student-1', email: 'student@example.com', name: 'Student Example' });
-    mockEnrollmentFindMany.mockResolvedValue([]);
+    mockGetEnrolledCourses.mockResolvedValue([
+      {
+        id: 'c1',
+        title: 'Organic Chemistry',
+        description: 'Introduction to carbon-based molecules and reactions.',
+        progressPercent: 50,
+      },
+      { id: 'c2', title: 'Lab Safety', description: null, progressPercent: 0 },
+    ]);
+  });
 
-    await StudentHomePage();
+  it("greets the student and loads the student's courses", async () => {
+    render(await StudentHomePage());
 
-    const query = mockEnrollmentFindMany.mock.calls[0][0];
-    const courseLessons = query.include.course.include.courseLessons;
-    expect(courseLessons.where).toEqual({ lesson: { isDraft: false } });
-    expect(courseLessons.include.lesson.include.lessonNodes.where).toEqual({ node: { isDraft: false } });
+    expect(screen.getByRole('heading', { name: 'Welcome Student' })).toBeInTheDocument();
+    expect(screen.getByText('My courses')).toBeInTheDocument();
+    expect(mockGetEnrolledCourses).toHaveBeenCalledWith('student-1');
+  });
+
+  it("shows each course card with its progress, linked to that course's page", async () => {
+    render(await StudentHomePage());
+
+    const first = screen.getByRole('link', { name: /Organic Chemistry/ });
+    expect(first).toHaveAttribute('href', '/student/courses/c1');
+    expect(within(first).getByText('50%')).toBeInTheDocument();
+    expect(within(first).getByText('In progress')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Lab Safety/ })).getByText('Not started')).toBeInTheDocument();
+    expect(screen.queryByText(/not enrolled/)).not.toBeInTheDocument();
+  });
+
+  it('tells a student with no courses, and still shows the placeholder invite', async () => {
+    mockGetEnrolledCourses.mockResolvedValue([]);
+    render(await StudentHomePage());
+
+    expect(screen.getByText(/not enrolled in any courses yet/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/student/coming-soon');
   });
 });
