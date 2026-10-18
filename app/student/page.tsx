@@ -8,11 +8,6 @@ import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
 
-// Mock progress until the new student flow defines how course progress is calculated.
-function mockProgressPercent(courseIndex: number) {
-  return courseIndex === 0 ? 98 : 0;
-}
-
 export default async function StudentHomePage() {
   const student = await getOrCreateStudent();
   if (!student) redirect(ROUTES.signIn);
@@ -29,13 +24,13 @@ export default async function StudentHomePage() {
       {courses.length === 0 && <p className={styles.empty}>You&rsquo;re not enrolled in any courses yet.</p>}
 
       <ul className={styles.cards}>
-        {courses.map((course, index) => (
+        {courses.map((course) => (
           <li key={course.id}>
             <CourseCard
               title={course.title}
               description={course.description}
-              percent={mockProgressPercent(index)}
-              href={ROUTES.comingSoon}
+              percent={course.progressPercent}
+              href={ROUTES.studentCourse(course.id)}
             />
           </li>
         ))}

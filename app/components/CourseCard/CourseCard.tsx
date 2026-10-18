@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import ProgressRing from '@/app/components/ProgressRing/ProgressRing';
+import { PROGRESS_LABELS, statusFromPercent } from '@/app/utils/progressStatus';
 import styles from './CourseCard.module.css';
 
 interface CourseCardProps {
@@ -7,12 +8,6 @@ interface CourseCardProps {
   description: string | null;
   percent: number;
   href: string;
-}
-
-export function progressLabel(percent: number) {
-  if (percent === 0) return 'Not started';
-  if (percent === 100) return 'Completed';
-  return 'In progress';
 }
 
 export default function CourseCard({ title, description, percent, href }: CourseCardProps) {
@@ -23,7 +18,7 @@ export default function CourseCard({ title, description, percent, href }: Course
       <div className={styles.body}>
         <p className={styles.title}>{title}</p>
         {description && <p className={styles.description}>{description}</p>}
-        <p className={styles.status}>{progressLabel(percent)}</p>
+        <p className={styles.status}>{PROGRESS_LABELS[statusFromPercent(percent)]}</p>
       </div>
     </Link>
   );

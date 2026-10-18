@@ -1,15 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
-import CourseCard, { progressLabel } from '../CourseCard';
-
-describe('progressLabel', () => {
-  it.each([
-    [0, 'Not started'],
-    [42, 'In progress'],
-    [100, 'Completed'],
-  ])('labels %p%% as %p', (percent, label) => {
-    expect(progressLabel(percent)).toBe(label);
-  });
-});
+import CourseCard from '../CourseCard';
 
 describe('CourseCard', () => {
   it('links to its destination and shows title, description, progress and status', () => {

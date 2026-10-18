@@ -18,8 +18,13 @@ describe('StudentHomePage', () => {
       email: 'student@example.com',
     });
     mockGetEnrolledCourses.mockResolvedValue([
-      { id: 'c1', title: 'Organic Chemistry', description: 'Introduction to carbon-based molecules and reactions.' },
-      { id: 'c2', title: 'Lab Safety', description: null },
+      {
+        id: 'c1',
+        title: 'Organic Chemistry',
+        description: 'Introduction to carbon-based molecules and reactions.',
+        progressPercent: 50,
+      },
+      { id: 'c2', title: 'Lab Safety', description: null, progressPercent: 0 },
     ]);
   });
 
@@ -31,12 +36,12 @@ describe('StudentHomePage', () => {
     expect(mockGetEnrolledCourses).toHaveBeenCalledWith('student-1');
   });
 
-  it('shows each course card with mock progress, linked to the coming soon page', async () => {
+  it("shows each course card with its progress, linked to that course's page", async () => {
     render(await StudentHomePage());
 
     const first = screen.getByRole('link', { name: /Organic Chemistry/ });
-    expect(first).toHaveAttribute('href', '/student/coming-soon');
-    expect(within(first).getByText('98%')).toBeInTheDocument();
+    expect(first).toHaveAttribute('href', '/student/courses/c1');
+    expect(within(first).getByText('50%')).toBeInTheDocument();
     expect(within(first).getByText('In progress')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Lab Safety/ })).getByText('Not started')).toBeInTheDocument();
     expect(screen.queryByText(/not enrolled/)).not.toBeInTheDocument();
