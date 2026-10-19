@@ -1,23 +1,9 @@
-// These content tests stub identity; auth and provisioning have dedicated tests.
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
-  getAppUser: async () => {
-    const clerk = jest.requireMock('@clerk/nextjs/server');
-    const session = await clerk.auth();
-    if (!session?.userId) return null;
-    const profile = clerk.currentUser ? await clerk.currentUser() : null;
-    return {
-      id: 'local-user',
-      clerkUserId: session.userId,
-      email: 'instructor@example.com',
-      name: null,
-      appRole: clerk.currentUser ? (profile?.unsafeMetadata?.role?.toUpperCase() ?? null) : 'INSTRUCTOR',
-      platformRole: 'MEMBER',
-    };
-  },
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
 }));
 import { PATCH } from './route';
 
-const mockAuth = jest.fn();
 const mockCheckpointFindMany = jest.fn();
 const mockQuizFindMany = jest.fn();
 const mockResponseDeleteMany = jest.fn();
@@ -33,9 +19,6 @@ const mockUpdate = jest.fn();
 const mockTransaction = jest.fn();
 const mockFindFirst = jest.fn();
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-}));
 
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -64,7 +47,7 @@ function patchRequest(body: unknown) {
 describe('PATCH /api/instructor/nodes/[nodeId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockFindFirst.mockResolvedValue({
       id: 'node-1',
       title: 'Existing node',
@@ -446,7 +429,7 @@ describe('untimed checkpoint drafts', () => {
   };
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockCheckpointFindMany.mockResolvedValue([]);
     mockCheckpointCreate.mockImplementation(async ({ data }) =>
       data.map((c: { sortOrder: number }) => ({ id: `created-${c.sortOrder}`, sortOrder: c.sortOrder }))

@@ -1,33 +1,16 @@
-// These content tests stub identity; auth and provisioning have dedicated tests.
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
-  getAppUser: async () => {
-    const clerk = jest.requireMock('@clerk/nextjs/server');
-    const session = await clerk.auth();
-    if (!session?.userId) return null;
-    const profile = clerk.currentUser ? await clerk.currentUser() : null;
-    return {
-      id: 'local-user',
-      clerkUserId: session.userId,
-      email: 'instructor@example.com',
-      name: null,
-      appRole: clerk.currentUser ? (profile?.unsafeMetadata?.role?.toUpperCase() ?? null) : 'INSTRUCTOR',
-      platformRole: 'MEMBER',
-    };
-  },
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
 }));
 import { render, screen } from '@testing-library/react';
 import NodesPage from './page';
 
-const mockAuth = jest.fn();
 const mockFindMany = jest.fn();
 const mockLessons = jest.fn();
 
 const mockGrid = jest.fn((props: { nodes: unknown[] }) => <div data-testid="nodes-grid">{props.nodes.length}</div>);
 jest.mock('./NodesGrid', () => ({ __esModule: true, default: (props: unknown) => mockGrid(props as never) }));
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-}));
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -39,7 +22,7 @@ jest.mock('@/lib/prisma', () => ({
 describe('NodesPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockLessons.mockResolvedValue([{ id: 'my-lesson', title: 'My lesson', isDraft: true }]);
     mockFindMany.mockResolvedValue([
       {

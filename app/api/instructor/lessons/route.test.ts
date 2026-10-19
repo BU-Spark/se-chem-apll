@@ -1,32 +1,15 @@
 jest.mock('@/lib/auth/content', () => ({ referencedContentAllowed: async () => true }));
-// These content tests stub identity; auth and provisioning have dedicated tests.
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
-  getAppUser: async () => {
-    const clerk = jest.requireMock('@clerk/nextjs/server');
-    const session = await clerk.auth();
-    if (!session?.userId) return null;
-    const profile = clerk.currentUser ? await clerk.currentUser() : null;
-    return {
-      id: 'local-user',
-      clerkUserId: session.userId,
-      email: 'instructor@example.com',
-      name: null,
-      appRole: clerk.currentUser ? (profile?.unsafeMetadata?.role?.toUpperCase() ?? null) : 'INSTRUCTOR',
-      platformRole: 'MEMBER',
-    };
-  },
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
 }));
 import { POST } from './route';
 
-const mockAuth = jest.fn();
 const mockNodeFindFirst = jest.fn();
 const mockLessonCreate = jest.fn();
 const mockLessonFindUnique = jest.fn();
 const mockEdgeCreateMany = jest.fn();
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-}));
 
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -55,7 +38,7 @@ function postRequest(body: unknown) {
 describe('POST /api/instructor/lessons', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockNodeFindFirst.mockResolvedValue(null);
     mockLessonCreate.mockResolvedValue({ id: 'lesson-1', lessonNodes: [] });
     mockLessonFindUnique.mockResolvedValue({ id: 'lesson-1', lessonNodes: [], lessonNodeEdges: [] });
