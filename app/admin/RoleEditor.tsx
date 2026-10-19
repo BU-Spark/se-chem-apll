@@ -34,7 +34,7 @@ export default function RoleEditor({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ appRole: appRole || null, platformRole }),
           });
-          const result = await response.json();
+          const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result.error ?? 'Unable to update roles.');
           setSaved({ appRole, platformRole });
           setMessage('Saved');

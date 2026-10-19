@@ -29,7 +29,7 @@ export default function RoleSelector({
         body: JSON.stringify({ appRole }),
       });
       if (!response.ok) {
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         throw new Error(result.error ?? 'Unable to change role.');
       }
       router.push(appRole === 'INSTRUCTOR' ? '/instructor' : appRole === 'STUDENT' ? '/student' : '/select-role');

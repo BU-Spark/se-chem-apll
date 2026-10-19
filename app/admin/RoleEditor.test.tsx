@@ -30,6 +30,18 @@ it('disables admin promotion for an unlinked account', () => {
   render(<RoleEditor user={{ ...user, clerkUserId: null }} />);
   expect(screen.getByRole('option', { name: 'Admin' })).toBeDisabled();
 });
+it('shows the fallback error for a non-JSON failure and allows retrying', async () => {
+  mockFetch.mockResolvedValue({
+    ok: false,
+    json: async () => { throw new SyntaxError('Unexpected token <'); },
+  });
+  render(<RoleEditor user={user} />);
+  await userEvent.selectOptions(screen.getByLabelText('Platform access for a@example.com'), 'ADMIN');
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(screen.getByRole('status')).toHaveTextContent('Unable to update roles.');
+  expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  expect(mockRefresh).not.toHaveBeenCalled();
+});
 it('shows the last-admin error without refreshing away the feedback', async () => {
   mockFetch.mockResolvedValue({ ok: false, json: async () => ({ error: 'The last admin cannot be removed.' }) });
   render(<RoleEditor user={{ ...user, platformRole: 'ADMIN' }} />);
