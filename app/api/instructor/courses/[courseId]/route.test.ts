@@ -9,7 +9,6 @@ const mockCourseFindFirst = jest.fn();
 const mockCourseUpdate = jest.fn();
 const mockLessonFindFirst = jest.fn();
 
-
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (body: unknown, init?: { status?: number }) => ({

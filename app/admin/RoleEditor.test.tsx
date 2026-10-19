@@ -33,7 +33,9 @@ it('disables admin promotion for an unlinked account', () => {
 it('shows the fallback error for a non-JSON failure and allows retrying', async () => {
   mockFetch.mockResolvedValue({
     ok: false,
-    json: async () => { throw new SyntaxError('Unexpected token <'); },
+    json: async () => {
+      throw new SyntaxError('Unexpected token <');
+    },
   });
   render(<RoleEditor user={user} />);
   await userEvent.selectOptions(screen.getByLabelText('Platform access for a@example.com'), 'ADMIN');

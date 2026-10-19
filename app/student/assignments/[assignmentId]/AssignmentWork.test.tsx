@@ -24,6 +24,75 @@ beforeEach(() => {
 afterAll(() => {
   global.fetch = originalFetch;
 });
+
+it('renders the saved variant on reload and submits against that same attempt without starting another', async () => {
+  const activeAttempt = {
+    id: 'saved-attempt',
+    lessonNodeId: 'n1',
+    nodeTitle: 'Node',
+    kind: 'QUIZ',
+    completedAt: null,
+    score: null,
+    questions: [{ id: 'q1', prompt: 'Moles of NaCl in 58.44 g?', choices: null }],
+  };
+  const restored = { ...initial, activeAttempt };
+  const firstRender = render(<AssignmentWork initial={restored} />);
+  expect(screen.getByText('Moles of NaCl in 58.44 g?')).toBeInTheDocument();
+  firstRender.unmount();
+  render(<AssignmentWork initial={restored} />);
+  expect(mockFetch).not.toHaveBeenCalled();
+  mockFetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...activeAttempt, completedAt: '2026-01-01', score: 100 }),
+    })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ ...initial, activeAttempt: null }) });
+  fireEvent.change(screen.getByLabelText('Numeric answer'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save answers' }));
+  await screen.findByText('Attempt recorded: 100%');
+  expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
+    action: 'finish',
+    attemptId: 'saved-attempt',
+    answers: [{ questionId: 'q1', rawAnswer: '1' }],
+  });
+});
+it('sends the displayed attempt ID on Resume and omits it when starting a different node', async () => {
+  const activeAttempt = {
+    id: 'older-attempt',
+    lessonNodeId: 'n1',
+    nodeTitle: 'Node',
+    kind: 'QUIZ',
+    completedAt: null,
+    score: null,
+    questions: [{ id: 'q1', prompt: 'Saved variant', choices: null }],
+  };
+  mockFetch
+    .mockResolvedValueOnce({ ok: true, json: async () => activeAttempt })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ ...activeAttempt, id: 'other', lessonNodeId: 'n2' }) });
+  render(
+    <AssignmentWork
+      initial={{
+        ...initial,
+        activeAttempt,
+        nodes: [
+          { ...initial.nodes[0], tasks: [{ kind: 'QUIZ', completed: false, score: null, inProgress: true }] },
+          { ...initial.nodes[0], id: 'n2' },
+        ],
+      }}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Resume/ }));
+  await waitFor(() => expect(screen.getByRole('button', { name: /Resume/ })).toBeEnabled());
+  expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
+    action: 'start',
+    nodeId: 'n1',
+    kind: 'QUIZ',
+    attemptId: 'older-attempt',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Quiz · Not completed' }));
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(mockFetch.mock.calls[1][1].body)).not.toHaveProperty('attemptId');
+});
 it('sends answers to the assignment endpoint, then shows a server-calculated receipt', async () => {
   const receipt = {
     number: 1,

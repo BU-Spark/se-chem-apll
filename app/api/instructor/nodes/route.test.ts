@@ -6,7 +6,6 @@ import { POST } from './route';
 
 const mockCreate = jest.fn();
 
-
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (body: unknown, init?: { status?: number }) => ({
@@ -31,6 +30,89 @@ describe('POST /api/instructor/nodes', () => {
     jest.clearAllMocks();
     mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockCreate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
+  });
+
+  it('persists variant rows together and rejects incomplete published variants', async () => {
+    const options = {
+      type: 'variantShortAnswer',
+      version: 1,
+      variants: [
+        {
+          id: 'salt',
+          values: { compound: 'NaCl', mass: '58.44' },
+          answer: { type: 'shortAnswer', answerMode: 'exact', expectedAnswer: 1 },
+        },
+      ],
+    };
+    const body = {
+      title: 'Moles',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      quizQuestions: [{ sortOrder: 0, prompt: '{{compound}} at {{mass}} g?', options, correctIndices: [] }],
+    };
+    expect((await POST(postRequest(body) as never)).status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toMatchObject({
+      options: { type: 'variantShortAnswer', version: 1 },
+      variants: { create: [{ ...options.variants[0], sortOrder: 0 }] },
+    });
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0].options).not.toHaveProperty('variants');
+    options.variants[0].values.mass = '';
+    expect((await POST(postRequest(body) as never)).status).toBe(422);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores quiz-only MCQ variants as relational creates with per-row answer sets', async () => {
+    const question = {
+      sortOrder: 0,
+      prompt: 'Select all even numbers.',
+      correctIndices: [],
+      options: {
+        type: 'variantMultipleChoice',
+        version: 1,
+        choices: [
+          { id: 'a', content: '{{a}}' },
+          { id: 'b', content: '{{b}}' },
+        ],
+      },
+      variants: [
+        { id: 'single', values: { a: '2', b: '3' }, answer: { type: 'multipleChoice', correctChoiceIds: ['a'] } },
+        { id: 'multi', values: { a: '2', b: '4' }, answer: { type: 'multipleChoice', correctChoiceIds: ['a', 'b'] } },
+      ],
+    };
+    const body = {
+      title: 'MCQ variants',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      quizQuestions: [question],
+    };
+    expect((await POST(postRequest(body) as never)).status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toMatchObject({
+      options: { type: 'variantMultipleChoice', version: 2 },
+      variants: {
+        create: question.variants.map((row, sortOrder) => ({
+          ...row,
+          sortOrder,
+          answer: {
+            ...row.answer,
+            choices: [
+              { id: 'a', content: row.values.a },
+              { id: 'b', content: row.values.b },
+            ],
+          },
+        })),
+      },
+    });
+    expect(
+      (
+        await POST(
+          postRequest({
+            ...body,
+            quizQuestions: [],
+            checkpoints: [{ sortOrder: 0, timeOffsetSeconds: 0, questions: [question] }],
+          }) as never
+        )
+      ).status
+    ).toBe(422);
+    question.variants[1].answer.correctChoiceIds = [];
+    expect((await POST(postRequest(body) as never)).status).toBe(422);
   });
 
   it('creates multiple untimed draft checkpoints with persistent keys and hints', async () => {

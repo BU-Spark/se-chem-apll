@@ -19,7 +19,6 @@ const mockUpdate = jest.fn();
 const mockTransaction = jest.fn();
 const mockFindFirst = jest.fn();
 
-
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (body: unknown, init?: { status?: number }) => ({

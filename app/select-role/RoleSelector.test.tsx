@@ -38,7 +38,9 @@ it('shows a failed save without navigating', async () => {
 it('shows the fallback error for a non-JSON failure and allows retrying', async () => {
   mockFetch.mockResolvedValue({
     ok: false,
-    json: async () => { throw new SyntaxError('Unexpected token <'); },
+    json: async () => {
+      throw new SyntaxError('Unexpected token <');
+    },
   });
   render(<RoleSelector currentRole={null} admin={false} />);
   await userEvent.click(screen.getByRole('button', { name: /Student/ }));

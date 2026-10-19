@@ -10,7 +10,6 @@ const mockLessonCreate = jest.fn();
 const mockLessonFindUnique = jest.fn();
 const mockEdgeCreateMany = jest.fn();
 
-
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (body: unknown, init?: { status?: number }) => ({

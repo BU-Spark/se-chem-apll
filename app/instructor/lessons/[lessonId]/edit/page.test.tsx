@@ -7,7 +7,6 @@ import EditLessonPage from './page';
 const mockLessonFindFirst = jest.fn();
 const mockNodeFindMany = jest.fn();
 
-
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     lesson: { findFirst: (...args: unknown[]) => mockLessonFindFirst(...args) },

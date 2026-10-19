@@ -1,4 +1,6 @@
 import { MAX_CHOICES, MIN_CHOICES, type AuthoringQuestion } from './types';
+import { validateQuizVariants, quizVariantOptions } from '@/app/utils/questionVariants';
+import { authoringQuestionToPayload } from './adapters';
 
 /**
  * Structured validation for authoring questions.
@@ -37,6 +39,12 @@ export function validateQuestion(q: AuthoringQuestion): QuestionIssue[] {
 
   if (q.prompt.trim() === '') {
     issues.push(error(q.id, 'prompt', 'PROMPT_REQUIRED', 'Prompt is required.'));
+  }
+
+  if (q.variants) {
+    const message = validateQuizVariants(q.prompt, quizVariantOptions(authoringQuestionToPayload(q, 0))!);
+    if (message) issues.push(error(q.id, 'variants', 'VARIANTS_INVALID', message));
+    return issues;
   }
 
   if (q.type === 'multipleChoice') {

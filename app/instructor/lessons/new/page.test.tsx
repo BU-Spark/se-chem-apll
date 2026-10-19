@@ -6,7 +6,6 @@ import NewLessonPage from './page';
 
 const mockNodeFindMany = jest.fn();
 
-
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     node: { findMany: (...args: unknown[]) => mockNodeFindMany(...args) },

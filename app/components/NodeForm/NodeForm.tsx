@@ -1,5 +1,7 @@
 'use client';
 
+import QuestionPreview from '@/app/components/QuestionBank/QuestionPreview';
+
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatTimeOffsetSeconds, validateCheckpointTimestamps } from '@/app/utils/questionTimestamps';
@@ -640,38 +642,44 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <ul className={styles.previewList}>
               {quizQuestions.map((q, idx) => (
                 <li key={q.id}>
-                  <div className={styles.previewQuestionPrompt}>
-                    <strong>Q{idx + 1}</strong>
-                    {q.prompt.trim() === '' ? (
-                      <span>(empty prompt)</span>
-                    ) : (
-                      <div className={styles.previewRenderedContent}>
-                        <MarkdownPreview content={q.prompt} />
-                      </div>
-                    )}
-                  </div>
-                  {q.type === 'multipleChoice' ? (
-                    <ul className={styles.previewSublist}>
-                      {q.choices.map((choice, choiceIdx) => (
-                        <li key={choice.id} className={styles.previewChoice}>
-                          <span>{choiceIdx + 1}.</span>
-                          <div className={styles.previewRenderedContent}>
-                            {choice.content.trim() === '' ? (
-                              <span>(empty choice)</span>
-                            ) : (
-                              <MarkdownPreview content={choice.content} />
-                            )}
-                          </div>
-                          {choice.correct && <span className={styles.previewCorrect}>Correct</span>}
-                        </li>
-                      ))}
-                    </ul>
+                  {q.variants ? (
+                    <QuestionPreview question={q} />
                   ) : (
-                    <p className={styles.previewAnswer}>
-                      {q.answer.mode === 'exact'
-                        ? `Expected answer: ${q.answer.expected.trim() || '—'}`
-                        : `Accepted range: ${q.answer.minimum.trim() || '—'}–${q.answer.maximum.trim() || '—'}`}
-                    </p>
+                    <>
+                      <div className={styles.previewQuestionPrompt}>
+                        <strong>Q{idx + 1}</strong>
+                        {q.prompt.trim() === '' ? (
+                          <span>(empty prompt)</span>
+                        ) : (
+                          <div className={styles.previewRenderedContent}>
+                            <MarkdownPreview content={q.prompt} />
+                          </div>
+                        )}
+                      </div>
+                      {q.type === 'multipleChoice' ? (
+                        <ul className={styles.previewSublist}>
+                          {q.choices.map((choice, choiceIdx) => (
+                            <li key={choice.id} className={styles.previewChoice}>
+                              <span>{choiceIdx + 1}.</span>
+                              <div className={styles.previewRenderedContent}>
+                                {choice.content.trim() === '' ? (
+                                  <span>(empty choice)</span>
+                                ) : (
+                                  <MarkdownPreview content={choice.content} />
+                                )}
+                              </div>
+                              {choice.correct && <span className={styles.previewCorrect}>Correct</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className={styles.previewAnswer}>
+                          {q.answer.mode === 'exact'
+                            ? `Expected answer: ${q.answer.expected.trim() || '—'}`
+                            : `Accepted range: ${q.answer.minimum.trim() || '—'}–${q.answer.maximum.trim() || '—'}`}
+                        </p>
+                      )}
+                    </>
                   )}
                 </li>
               ))}

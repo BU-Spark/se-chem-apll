@@ -24,8 +24,7 @@
   font-size: 0.875rem;
   color: #374151;
 }
-.field input,
-.field select {
+.field input {
   min-width: 0;
   padding: 0.5rem;
   border: 1px solid #d1d5db;
@@ -34,8 +33,7 @@
   background: #fff;
   color: #111827;
 }
-.field input:focus-visible,
-.field select:focus-visible {
+.field input:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }

@@ -11,7 +11,6 @@ const mockLessons = jest.fn();
 const mockGrid = jest.fn((props: { nodes: unknown[] }) => <div data-testid="nodes-grid">{props.nodes.length}</div>);
 jest.mock('./NodesGrid', () => ({ __esModule: true, default: (props: unknown) => mockGrid(props as never) }));
 
-
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     lesson: { findMany: (...args: unknown[]) => mockLessons(...args) },

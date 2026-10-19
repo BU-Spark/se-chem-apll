@@ -20,6 +20,8 @@ type Props = {
   /** Render a compact single-line-height editor for answer choices. */
   compact?: boolean;
   error?: string;
+  hideLabel?: boolean;
+  autoFocus?: boolean;
 };
 
 /** Visual editor backed by Markdown, with a source repair fallback for unsupported content. */
@@ -32,6 +34,8 @@ export default function MarkdownField({
   required = false,
   compact = false,
   error,
+  hideLabel = false,
+  autoFocus = false,
 }: Props) {
   const [visualError, setVisualError] = useState<string | null>(null);
   const [isRepairingSource, setIsRepairingSource] = useState(false);
@@ -39,6 +43,8 @@ export default function MarkdownField({
   const labelId = `${id}-label`;
   const errorId = `${id}-error`;
   const descriptionId = error || visualError ? `${id}-description` : undefined;
+  const requiredPlaceholder = !value.trim() && Boolean(error?.endsWith(' is required.'));
+  const effectivePlaceholder = requiredPlaceholder ? 'Required' : placeholder;
 
   function updateValue(nextValue: string) {
     setVisualError(null);
@@ -47,7 +53,7 @@ export default function MarkdownField({
 
   return (
     <div className={styles.markdownField}>
-      <div className={styles.markdownFieldHeader}>
+      <div className={hideLabel ? styles.srOnly : styles.markdownFieldHeader}>
         <label className={styles.markdownFieldLabel} htmlFor={id} id={labelId}>
           {label}
           {required && <span className={styles.required}>*</span>}
@@ -57,9 +63,10 @@ export default function MarkdownField({
       {!isRepairingSource ? (
         <div className={compact ? styles.richMarkdownSlotCompact : styles.richMarkdownSlot}>
           <RichMarkdownEditor
+            autoFocus={autoFocus}
             value={value}
             onChange={updateValue}
-            placeholder={placeholder}
+            placeholder={effectivePlaceholder}
             compact={compact}
             contentEditableId={id}
             labelledBy={labelId}
@@ -74,12 +81,13 @@ export default function MarkdownField({
       ) : (
         <div className={styles.markdownRepair}>
           <textarea
+            autoFocus={autoFocus}
             id={id}
             className={compact ? styles.markdownInputCompact : styles.markdownInput}
             rows={compact ? 1 : rows}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
+            placeholder={effectivePlaceholder}
             aria-invalid={Boolean(error || visualError)}
             aria-describedby={descriptionId}
           />
@@ -97,7 +105,11 @@ export default function MarkdownField({
       )}
 
       {(error || visualError) && (
-        <p className={styles.fieldError} id={descriptionId ?? errorId} role="alert">
+        <p
+          className={requiredPlaceholder && !visualError ? styles.srOnly : styles.fieldError}
+          id={descriptionId ?? errorId}
+          role="alert"
+        >
           {error ?? 'This content could not be opened visually. Edit the source, then try the visual editor again.'}
         </p>
       )}

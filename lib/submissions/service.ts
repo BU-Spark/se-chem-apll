@@ -3,6 +3,12 @@ import { Prisma, type AttemptKind } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isLessonHidden, submissionStatus } from '@/app/utils/lessonSubmissionPolicy';
 import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
+import {
+  quizVariantOptions,
+  resolveQuizVariant,
+  validateQuizVariants,
+  renderQuestionVariant,
+} from '@/app/utils/questionVariants';
 import { gradeAnswer, lessonGrade, type AnswerInput, type QuestionSnapshot } from './grading';
 export class SubmissionError extends Error {
   constructor(
@@ -23,7 +29,10 @@ const include = {
         include: {
           node: {
             include: {
-              quizQuestions: { orderBy: { sortOrder: 'asc' as const } },
+              quizQuestions: {
+                orderBy: { sortOrder: 'asc' as const },
+                include: { variants: { orderBy: { sortOrder: 'asc' as const } } },
+              },
               checkpoints: {
                 orderBy: { sortOrder: 'asc' as const },
                 include: {
@@ -40,6 +49,21 @@ const include = {
 type Assignment = Prisma.CourseLessonGetPayload<{ include: typeof include }>;
 type Node = Assignment['lesson']['lessonNodes'][number];
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+// Reconstruct the old numeric JSON representation for hashing, so the storage-only
+// migration does not invalidate an in-progress attempt. PostgreSQL JSONB orders
+// object keys by UTF-8 byte length, then byte value.
+function jsonbOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(jsonbOrder);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(
+          ([a], [b]) => Buffer.byteLength(a) - Buffer.byteLength(b) || Buffer.compare(Buffer.from(a), Buffer.from(b))
+        )
+        .map(([key, item]) => [key, jsonbOrder(item)])
+    );
+  return value;
+}
 function nodeKey(node: Node) {
   return createHash('sha256')
     .update(
@@ -48,7 +72,66 @@ function nodeKey(node: Node) {
         passingPercent: node.passingPercent,
         quizQuestionCount: node.quizQuestionCount,
         title: node.node.title,
-        quiz: node.node.quizQuestions,
+        quiz: node.node.quizQuestions.map((q) => {
+          const { variants, ...question } = q;
+          if (variants?.length && quizVariantOptions(q)?.type === 'variantShortAnswer') {
+            return {
+              ...question,
+              options: jsonbOrder({
+                type: 'variantShortAnswer',
+                version: 1,
+                variants: variants.map((row) => ({
+                  id: row.id.startsWith(`${q.id}:`) ? row.id.slice(q.id.length + 1) : row.id,
+                  values: row.values,
+                  answer: row.answer,
+                })),
+              }),
+            };
+          }
+          const options = q.options as {
+            type?: string;
+            version?: number;
+            legacyChoices?: { id: string; content: string }[];
+          };
+          if (
+            options.type === 'variantMultipleChoice' &&
+            options.version === 2 &&
+            Array.isArray(options.legacyChoices)
+          ) {
+            const legacyChoices = options.legacyChoices;
+            const unchanged = variants.every((row) => {
+              const answer = row.answer as { choices?: { id: string; content: string }[] };
+              return (
+                JSON.stringify(answer.choices?.map((c) => [c.id, c.content])) ===
+                JSON.stringify(
+                  legacyChoices.map((c) => [
+                    c.id,
+                    renderQuestionVariant(c.content, row.values as Record<string, string>),
+                  ])
+                )
+              );
+            });
+            if (unchanged) {
+              const original = {
+                ...question,
+                options: jsonbOrder({ type: 'variantMultipleChoice', version: 1, choices: legacyChoices }),
+              };
+              return variants.length
+                ? {
+                    ...original,
+                    variants: variants.map((row) => ({
+                      ...row,
+                      answer: jsonbOrder({
+                        type: 'multipleChoice',
+                        correctChoiceIds: (row.answer as { correctChoiceIds: string[] }).correctChoiceIds,
+                      }),
+                    })),
+                  }
+                : original;
+            }
+          }
+          return variants?.length ? q : question;
+        }),
         checkpoints: node.node.checkpoints,
       })
     )
@@ -125,6 +208,7 @@ function publicAttempt(attempt: {
   return {
     id: attempt.id,
     kind: attempt.kind,
+    lessonNodeId: snapshot.lessonNodeId,
     nodeTitle: snapshot.nodeTitle,
     completedAt: attempt.completedAt,
     score: attempt.score,
@@ -140,7 +224,8 @@ export async function startAttempt(
   assignmentId: string,
   nodeId: string,
   kind: AttemptKind,
-  key: string
+  key: string,
+  attemptId?: string
 ) {
   return serial(async (tx) => {
     const assignment = await assignmentFor(tx, assignmentId, studentId, true);
@@ -149,13 +234,27 @@ export async function startAttempt(
       where: { progressId_idempotencyKey: { progressId: progress.id, idempotencyKey: key } },
     });
     if (existing) {
-      if (existing.lessonNodeId !== nodeId || existing.kind !== kind)
+      if (existing.lessonNodeId !== nodeId || existing.kind !== kind || (attemptId && existing.id !== attemptId))
         throw new SubmissionError('Request key already used for different work.', 409);
       return publicAttempt(existing);
     }
     acceptWindow(assignment);
     const node = assignment.lesson.lessonNodes.find((n) => n.id === nodeId);
     if (!node || !requiredKinds(node).includes(kind)) throw new SubmissionError('Task not found.', 404);
+    const contentKey = nodeKey(node);
+    const unfinished = await tx.nodeAttempt.findFirst({
+      where: {
+        ...(attemptId ? { id: attemptId } : {}),
+        progressId: progress.id,
+        lessonNodeId: node.id,
+        kind,
+        contentKey,
+        completedAt: null,
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    });
+    if (unfinished) return publicAttempt(unfinished);
+    if (attemptId) throw new SubmissionError('Attempt is no longer available to resume. Reload the assignment.', 409);
     let questions: QuestionSnapshot[] =
       kind === 'QUIZ'
         ? node.node.quizQuestions
@@ -177,12 +276,19 @@ export async function startAttempt(
       lessonNodeId: node.id,
       passingPercent: node.passingPercent,
       kind,
-      questions: questions.map((q) => ({
-        id: q.id,
-        prompt: q.prompt,
-        options: q.options,
-        correctIndices: q.correctIndices,
-      })),
+      questions: questions.map((q) => {
+        const variants = quizVariantOptions(q);
+        if (variants) {
+          if (kind !== 'QUIZ') throw new SubmissionError('Checkpoint variants are not supported.', 409);
+          const error = validateQuizVariants(q.prompt, variants);
+          if (error) throw new SubmissionError(`Invalid question variants. ${error}`, 409);
+          return {
+            id: q.id,
+            ...resolveQuizVariant(q.prompt, variants, randomInt(variants.variants.length)),
+          };
+        }
+        return { id: q.id, prompt: q.prompt, options: q.options, correctIndices: q.correctIndices };
+      }),
     };
     return publicAttempt(
       await tx.nodeAttempt.create({
@@ -192,7 +298,7 @@ export async function startAttempt(
           userId: studentId,
           lessonNodeId: node.id,
           kind,
-          contentKey: nodeKey(node),
+          contentKey,
           idempotencyKey: key,
           snapshot: json(snapshot),
         },
@@ -337,13 +443,24 @@ export async function submitLesson(studentId: string, assignmentId: string, key:
     return submission;
   });
 }
-export async function assignmentView(studentId: string, assignmentId: string) {
+export async function assignmentView(studentId: string, assignmentId: string, preferredAttemptId?: string) {
   return serial(async (tx) => {
     const assignment = await assignmentFor(tx, assignmentId, studentId);
     const progress = await tx.courseLessonProgress.findUnique({
       where: { studentId_courseLessonId: { studentId, courseLessonId: assignmentId } },
     });
     const work = progress ? await latestWork(tx, progress.id, assignment) : [];
+    const unfinished = progress
+      ? await tx.nodeAttempt.findMany({
+          where: { progressId: progress.id, completedAt: null },
+          orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        })
+      : [];
+    const resumable = unfinished.filter((attempt) => {
+      const node = assignment.lesson.lessonNodes.find((n) => n.id === attempt.lessonNodeId);
+      return node && requiredKinds(node).includes(attempt.kind) && nodeKey(node) === attempt.contentKey;
+    });
+    const active = resumable.find((attempt) => attempt.id === preferredAttemptId) ?? resumable[0];
     const best = progress
       ? await tx.lessonSubmission.findFirst({
           where: { progressId: progress.id },
@@ -365,13 +482,19 @@ export async function assignmentView(studentId: string, assignmentId: string) {
       },
       window: submissionStatus(assignment, new Date()),
       best,
+      activeAttempt: active ? publicAttempt(active) : null,
       nodes: assignment.lesson.lessonNodes.map((node) => ({
         id: node.id,
         title: node.node.title,
         videoUrl: node.node.videoUrl,
         tasks: requiredKinds(node).map((kind) => {
           const attempt = work.find((w) => w.node.id === node.id && w.kind === kind)?.attempt;
-          return { kind, completed: !!attempt, score: attempt?.score ?? null };
+          return {
+            kind,
+            completed: !!attempt,
+            score: attempt?.score ?? null,
+            inProgress: resumable.some((a) => a.lessonNodeId === node.id && a.kind === kind),
+          };
         }),
       })),
     };
