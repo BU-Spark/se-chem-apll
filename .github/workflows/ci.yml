@@ -13,6 +13,54 @@ on:
       - version-2
 
 jobs:
+  migrations:
+    name: Replay database migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spark_migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spark_migration_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/spark_migration_test
+      MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spark_migration_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run db:verify-migrations
+      - run: npm run db:seed
+      - name: Run database integration tests on migrated schemas
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for name in auth submission checkpoint; do
+            database="spark_${name}_test"
+            createdb -h localhost -U postgres "$database"
+            export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/$database"
+            export DIRECT_URL="$DATABASE_URL"
+            npx prisma migrate deploy
+            case "$name" in
+              auth) AUTH_TEST_DATABASE_URL="$DATABASE_URL" npx jest lib/auth/auth.integration.test.ts --runInBand ;;
+              submission) SUBMISSION_TEST_DATABASE_URL="$DATABASE_URL" npx jest lib/submissions/service.integration.test.ts --runInBand ;;
+              checkpoint) CHECKPOINT_TEST_DATABASE_URL="$DATABASE_URL" npx jest app/utils/saveCheckpoints.integration.test.ts --runInBand ;;
+            esac
+          done
+
   test-lint-build:
     name: Test, Lint, and Build
     runs-on: ubuntu-latest

@@ -1,11 +1,12 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import { render, screen } from '@testing-library/react';
 import GradebookPage from './page';
-const mockAuth = jest.fn();
-const mockUser = jest.fn();
 const mockCourse = jest.fn();
 const mockProgress = jest.fn();
 const mockGrid = jest.fn((props: unknown) => <div>{props ? 'Grid' : ''}</div>);
-jest.mock('@clerk/nextjs/server', () => ({ auth: () => mockAuth(), currentUser: () => mockUser() }));
 jest.mock('next/navigation', () => ({
   redirect: (url: string) => {
     throw new Error(url);
@@ -24,8 +25,7 @@ jest.mock('./Gradebook', () => ({ __esModule: true, default: (props: unknown) =>
 const params = Promise.resolve({ courseId: 'c1' });
 beforeEach(() => {
   jest.clearAllMocks();
-  mockAuth.mockResolvedValue({ userId: 'i1' });
-  mockUser.mockResolvedValue({ unsafeMetadata: { role: 'instructor' } });
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'i1' }));
   mockCourse.mockResolvedValue({
     id: 'c1',
     title: 'Chemistry',
@@ -60,10 +60,10 @@ it('scopes results to course enrollment and assignments and preserves shared pro
   expect(screen.getByText(/Best final grades/)).toBeInTheDocument();
 });
 it('rejects non-instructors and inaccessible courses', async () => {
-  mockUser.mockResolvedValue({ unsafeMetadata: { role: 'student' } });
-  await expect(GradebookPage({ params })).rejects.toThrow('Not found');
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 's1', appRole: 'STUDENT' }));
+  await expect(GradebookPage({ params })).rejects.toThrow('/student');
   expect(mockCourse).not.toHaveBeenCalled();
-  mockUser.mockResolvedValue({ unsafeMetadata: { role: 'instructor' } });
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'i1' }));
   mockCourse.mockResolvedValue(null);
   await expect(GradebookPage({ params })).rejects.toThrow('Not found');
   expect(mockProgress).not.toHaveBeenCalled();

@@ -1,17 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import styles from './page.module.css';
-import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import StudentsGrid from './StudentsGrid';
 import { readStudentFilters, uniqueStudentCount, type SearchParams } from './listFilters';
 
 export const dynamic = 'force-dynamic';
 export default async function StudentsPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
+  const user = await requireInstructor();
   const filters = readStudentFilters((await searchParams) ?? {});
   const courses = await prisma.course.findMany({
-    where: { OR: [{ createdByClerkId: userId }, { createdByClerkId: null }] },
+    where: { ...contentScope(user) },
     select: {
       id: true,
       title: true,

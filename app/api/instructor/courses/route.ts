@@ -1,16 +1,17 @@
+import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 // GET /api/instructor/courses
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const courses = await prisma.course.findMany({
     where: {
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: {
       enrollments: true,
@@ -27,8 +28,8 @@ export async function GET() {
 
 // POST /api/instructor/courses
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   let body: unknown;
   try {
@@ -82,6 +83,9 @@ export async function POST(req: NextRequest) {
 
   const lessonIds = [...new Set(lessonInputs.map((row) => row.lessonId))];
   if (lessonIds.length > 0) {
+    if (!(await referencedContentAllowed('lesson', lessonIds, user)))
+      return NextResponse.json({ error: 'Referenced lessons are unavailable.' }, { status: 403 });
+
     const draftLesson = await prisma.lesson.findFirst({
       where: { id: { in: lessonIds }, isDraft: true },
       select: { id: true },
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
       code: code.trim().toUpperCase(),
       section: section?.trim() || null,
       title: title.trim(),
-      createdByClerkId: userId,
+      createdByClerkId: user.clerkUserId,
       description: description?.trim() || null,
       courseLessons: {
         create: lessonInputs.map((row) => ({

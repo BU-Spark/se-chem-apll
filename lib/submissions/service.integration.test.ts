@@ -383,8 +383,12 @@ suite('course submissions in PostgreSQL', () => {
     expect((await prisma.nodeAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).lessonNodeId).toBeNull();
     if (attempt.kind === 'QUIZ')
       await prisma.quizQuestion.deleteMany({ where: { id: { in: snapshot.questions.map((q) => q.id) } } });
+    else await prisma.checkpointQuestion.deleteMany({ where: { id: { in: snapshot.questions.map((q) => q.id) } } });
     const responses = await prisma.nodeResponse.findMany({ where: { attemptId: attempt.id } });
     expect(responses).toHaveLength(snapshot.questions.length);
+    expect(
+      responses.every((response) => response.quizQuestionId === null && response.checkpointQuestionId === null)
+    ).toBe(true);
     expect(responses[0].snapshot).toHaveProperty('prompt');
     expect((await assignmentView(studentId, first)).best?.id).toBe(submission.id);
   });
@@ -404,7 +408,13 @@ suite('course submissions in PostgreSQL', () => {
     expect(sub.gradingStatus).toBe('COMPLETION_ONLY');
     await prisma.courseLesson.update({
       where: { id: first },
-      data: { dueDate: new Date(0), lateDeadline: null, hideAfterDue: true },
+      data: {
+        dueDate: new Date(0),
+        lateDeadline: null,
+        hideAfterDue: true,
+        latePenaltyType: 'NONE',
+        latePenaltyPercent: 0,
+      },
     });
     expect((await submitLesson(studentId, first, 'completion-only-key')).id).toBe(sub.id);
     await expect(submitLesson(studentId, first, 'new-after-close')).rejects.toThrow('not accepted');

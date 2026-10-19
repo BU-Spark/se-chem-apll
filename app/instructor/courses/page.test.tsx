@@ -1,13 +1,15 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import { render, screen } from '@testing-library/react';
 import CoursesPage from './page';
-const mockAuth = jest.fn();
 const mockCourses = jest.fn();
 const mockGrid = jest.fn((props: unknown) => <div>{props ? 'Course grid' : ''}</div>);
-jest.mock('@clerk/nextjs/server', () => ({ auth: () => mockAuth() }));
 jest.mock('@/lib/prisma', () => ({ prisma: { course: { findMany: (...args: unknown[]) => mockCourses(...args) } } }));
 jest.mock('./CoursesGrid', () => ({ __esModule: true, default: (props: unknown) => mockGrid(props) }));
 it('preserves course visibility, fetches counts and passes URL state', async () => {
-  mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
   mockCourses.mockResolvedValue([]);
   render(await CoursesPage({ searchParams: Promise.resolve({ sort: 'code:asc' }) }));
   expect(screen.getByRole('link', { name: '+ New course' })).toHaveAttribute('href', '/instructor/courses/new');
