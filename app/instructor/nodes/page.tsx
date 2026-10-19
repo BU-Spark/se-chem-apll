@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import styles from '../../components/InstructorGrid/grid.module.css';
-import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import { readNodeFilters, type SearchParams } from './listFilters';
 import NodesGrid from './NodesGrid';
 
@@ -10,13 +9,10 @@ export const dynamic = 'force-dynamic';
 
 export default async function NodesPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const filters = readNodeFilters((await searchParams) ?? {});
-  const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
+  const user = await requireInstructor();
   const [availableNodes, lessons] = await Promise.all([
     prisma.node.findMany({
-      where: { OR: [{ createdByClerkId: userId }, { createdByClerkId: null }] },
+      where: { ...contentScope(user) },
       select: {
         id: true,
         title: true,
@@ -26,14 +22,14 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
         createdAt: true,
         updatedAt: true,
         lessonNodes: {
-          where: { lesson: { createdByClerkId: userId } },
+          where: { lesson: contentScope(user, false) },
           select: { lesson: { select: { id: true, title: true } } },
         },
       },
       orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
     }),
     prisma.lesson.findMany({
-      where: { createdByClerkId: userId },
+      where: contentScope(user, false),
       select: { id: true, title: true, isDraft: true },
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
     }),

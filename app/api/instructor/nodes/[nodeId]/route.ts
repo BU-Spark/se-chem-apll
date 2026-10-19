@@ -1,6 +1,6 @@
 import { saveCheckpoints, CheckpointSaveConflict } from '@/app/utils/saveCheckpoints';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import {
@@ -18,14 +18,14 @@ interface RouteContext {
 
 // GET /api/instructor/nodes/[nodeId]
 export async function GET(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { nodeId } = await params;
   const node = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: nodeInclude,
   });
@@ -43,8 +43,8 @@ function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
 
 // PATCH /api/instructor/nodes/[nodeId] — replace provided collections only
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { nodeId } = await params;
   let body: unknown;
@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const owned = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: nodeInclude,
   });
@@ -179,14 +179,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
 // DELETE /api/instructor/nodes/[nodeId]
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { nodeId } = await params;
   const existing = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     select: { id: true },
   });

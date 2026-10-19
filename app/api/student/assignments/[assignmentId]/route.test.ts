@@ -1,10 +1,17 @@
+/** @jest-environment node */
+import { NextResponse } from 'next/server';
 import { GET, POST } from './route';
 const mockStudent = jest.fn(),
   mockView = jest.fn(),
   mockSubmit = jest.fn(),
   mockStart = jest.fn(),
   mockFinish = jest.fn();
-jest.mock('@/lib/submissions/student', () => ({ signedInStudent: () => mockStudent() }));
+jest.mock('@/lib/auth/api', () => ({
+  apiAccess: async () => {
+    const user = await mockStudent();
+    return user ? { user, error: null } : { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  },
+}));
 jest.mock('@/lib/submissions/service', () => ({
   assignmentView: (...a: unknown[]) => mockView(...a),
   submitLesson: (...a: unknown[]) => mockSubmit(...a),
@@ -19,11 +26,6 @@ jest.mock('@/lib/submissions/service', () => ({
     }
   },
 }));
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ status: init?.status ?? 200, json: async () => body }),
-  },
-}));
 const context = { params: Promise.resolve({ assignmentId: 'cl1' }) };
 const request = (body: unknown) => ({ json: async () => body }) as Request;
 beforeEach(() => {
@@ -35,10 +37,16 @@ beforeEach(() => {
 });
 it('requires a signed-in student', async () => {
   mockStudent.mockResolvedValue(null);
-  expect((await GET(request({}), context)).status).toBe(403);
-  expect((await POST(request({}), context)).status).toBe(403);
+  for (const handler of [GET, POST]) {
+    const response = await handler(request({}), context);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: 'Forbidden' });
+  }
   expect(mockView).not.toHaveBeenCalled();
   expect(mockSubmit).not.toHaveBeenCalled();
+  expect(mockStart).not.toHaveBeenCalled();
+  expect(mockFinish).not.toHaveBeenCalled();
 });
 it('uses the authenticated identity and ignores supplied grades and timestamps', async () => {
   await POST(

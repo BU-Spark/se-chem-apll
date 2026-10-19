@@ -1,13 +1,14 @@
+jest.mock('@/lib/auth/content', () => ({ referencedContentAllowed: async () => true }));
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import { PATCH } from './route';
 
-const mockAuth = jest.fn();
 const mockCourseFindFirst = jest.fn();
 const mockCourseUpdate = jest.fn();
 const mockLessonFindFirst = jest.fn();
 
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-}));
 
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -38,7 +39,7 @@ function patchRequest(body: unknown) {
 describe('PATCH /api/instructor/courses/[courseId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockCourseFindFirst.mockResolvedValue({ id: 'course-1' });
     mockLessonFindFirst.mockResolvedValue(null);
     mockCourseUpdate.mockResolvedValue({ id: 'course-1' });

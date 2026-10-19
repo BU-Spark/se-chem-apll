@@ -1,11 +1,15 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import { render, screen } from '@testing-library/react';
 import StudentsPage from './page';
 const mockFindMany = jest.fn();
 const mockGrid = jest.fn((props: unknown) => <div>{props ? 'Grid' : ''}</div>);
-jest.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ userId: 'i1' }) }));
 jest.mock('@/lib/prisma', () => ({ prisma: { course: { findMany: (...args: unknown[]) => mockFindMany(...args) } } }));
 jest.mock('./StudentsGrid', () => ({ __esModule: true, default: (props: unknown) => mockGrid(props) }));
 it('preserves visibility, selects only student enrollments and deduplicates the summary', async () => {
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'i1' }));
   const student = { id: 's1', name: 'Student', email: 's@example.com' };
   mockFindMany.mockResolvedValue(
     ['a', 'b'].map((id) => ({ id, title: id, code: id, section: null, enrollments: [{ student }] }))
