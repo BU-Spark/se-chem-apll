@@ -208,6 +208,7 @@ function publicAttempt(attempt: {
   return {
     id: attempt.id,
     kind: attempt.kind,
+    lessonNodeId: snapshot.lessonNodeId,
     nodeTitle: snapshot.nodeTitle,
     completedAt: attempt.completedAt,
     score: attempt.score,
@@ -223,7 +224,8 @@ export async function startAttempt(
   assignmentId: string,
   nodeId: string,
   kind: AttemptKind,
-  key: string
+  key: string,
+  attemptId?: string
 ) {
   return serial(async (tx) => {
     const assignment = await assignmentFor(tx, assignmentId, studentId, true);
@@ -232,7 +234,7 @@ export async function startAttempt(
       where: { progressId_idempotencyKey: { progressId: progress.id, idempotencyKey: key } },
     });
     if (existing) {
-      if (existing.lessonNodeId !== nodeId || existing.kind !== kind)
+      if (existing.lessonNodeId !== nodeId || existing.kind !== kind || (attemptId && existing.id !== attemptId))
         throw new SubmissionError('Request key already used for different work.', 409);
       return publicAttempt(existing);
     }
@@ -241,10 +243,18 @@ export async function startAttempt(
     if (!node || !requiredKinds(node).includes(kind)) throw new SubmissionError('Task not found.', 404);
     const contentKey = nodeKey(node);
     const unfinished = await tx.nodeAttempt.findFirst({
-      where: { progressId: progress.id, lessonNodeId: node.id, kind, contentKey, completedAt: null },
+      where: {
+        ...(attemptId ? { id: attemptId } : {}),
+        progressId: progress.id,
+        lessonNodeId: node.id,
+        kind,
+        contentKey,
+        completedAt: null,
+      },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     });
     if (unfinished) return publicAttempt(unfinished);
+    if (attemptId) throw new SubmissionError('Attempt is no longer available to resume. Reload the assignment.', 409);
     let questions: QuestionSnapshot[] =
       kind === 'QUIZ'
         ? node.node.quizQuestions

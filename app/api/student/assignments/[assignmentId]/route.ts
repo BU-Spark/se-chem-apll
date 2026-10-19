@@ -52,9 +52,12 @@ export async function POST(request: Request, { params }: Context) {
     if (
       body.action === 'start' &&
       typeof body.nodeId === 'string' &&
+      (body.attemptId === undefined || (typeof body.attemptId === 'string' && body.attemptId.length > 0)) &&
       ['QUIZ', 'CHECKPOINT', 'REVIEW'].includes(body.kind)
     )
-      return NextResponse.json(await startAttempt(student.id, assignmentId, body.nodeId, body.kind, body.key));
+      return NextResponse.json(
+        await startAttempt(student.id, assignmentId, body.nodeId, body.kind, body.key, body.attemptId)
+      );
     if (body.action === 'submit') return NextResponse.json(await submitLesson(student.id, assignmentId, body.key));
     throw new SubmissionError('Invalid action.', 400);
   } catch (e) {

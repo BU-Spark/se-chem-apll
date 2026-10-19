@@ -63,7 +63,7 @@ it('validates request keys and answer structure before processing', async () => 
 });
 it('starts and finishes assignment-scoped attempts', async () => {
   await POST(request({ action: 'start', nodeId: 'n1', kind: 'QUIZ', key: 'valid-key' }), context);
-  expect(mockStart).toHaveBeenCalledWith('authenticated-student', 'cl1', 'n1', 'QUIZ', 'valid-key');
+  expect(mockStart).toHaveBeenCalledWith('authenticated-student', 'cl1', 'n1', 'QUIZ', 'valid-key', undefined);
   await POST(
     request({ action: 'finish', attemptId: 'a1', answers: [{ questionId: 'q1', selectedIndices: [1] }] }),
     context
@@ -71,4 +71,14 @@ it('starts and finishes assignment-scoped attempts', async () => {
   expect(mockFinish).toHaveBeenCalledWith('authenticated-student', 'cl1', 'a1', [
     { questionId: 'q1', selectedIndices: [1] },
   ]);
+});
+it('passes the selected attempt ID through when resuming', async () => {
+  await POST(request({ action: 'start', nodeId: 'n1', kind: 'QUIZ', key: 'valid-key', attemptId: 'older' }), context);
+  expect(mockStart).toHaveBeenCalledWith('authenticated-student', 'cl1', 'n1', 'QUIZ', 'valid-key', 'older');
+});
+it.each([null, '', 123, {}])('rejects an invalid selected attempt ID: %p', async (attemptId) => {
+  expect(
+    (await POST(request({ action: 'start', nodeId: 'n1', kind: 'QUIZ', key: 'valid-key', attemptId }), context)).status
+  ).toBe(400);
+  expect(mockStart).not.toHaveBeenCalled();
 });

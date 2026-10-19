@@ -35,6 +35,7 @@ type View = {
 };
 type Task = {
   id: string;
+  lessonNodeId: string;
   nodeTitle: string;
   kind: string;
   questions: { id: string; prompt: string; choices: string[] | null }[];
@@ -124,7 +125,14 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                 onClick={() =>
                   run(async () => {
                     setAnswers({});
-                    const next = await post({ action: 'start', nodeId: node.id, kind: t.kind });
+                    const next = await post({
+                      action: 'start',
+                      nodeId: node.id,
+                      kind: t.kind,
+                      ...(task && !task.completedAt && task.lessonNodeId === node.id && task.kind === t.kind
+                        ? { attemptId: task.id }
+                        : {}),
+                    });
                     setTask(next);
                     setView((current) => ({
                       ...current,

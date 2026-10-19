@@ -187,6 +187,41 @@ it('restores the requested unfinished task when a student has opened more than o
   expect((await assignmentView('student', 'assignment', first.id)).activeAttempt?.id).toBe(first.id);
 });
 
+it('resumes the selected older attempt when duplicate unfinished attempts exist', async () => {
+  const first = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'first-key');
+  // Simulate duplicate attempts created before starts reused unfinished work.
+  mockAttempts[0].completedAt = new Date();
+  mockRandomInt.mockReturnValue(0);
+  const newer = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'newer-key');
+  mockAttempts[0].completedAt = null;
+  expect(newer.questions).not.toEqual(first.questions);
+  const selected = (await assignmentView('student', 'assignment', first.id)).activeAttempt!;
+  expect(selected.id).toBe(first.id);
+  expect(await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'resume-key', selected.id)).toEqual(first);
+  expect(await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'default-key')).toEqual(newer);
+  await expect(startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'newer-key', first.id)).rejects.toThrow(
+    'Request key already used'
+  );
+  expect(mockTx.nodeAttempt.create).toHaveBeenCalledTimes(2);
+  expect(mockRandomInt).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  { progressId: 'another-progress' },
+  { lessonNodeId: 'another-node' },
+  { kind: 'CHECKPOINT' as const },
+  { contentKey: 'stale' },
+  { completedAt: new Date() },
+  { id: 'missing' },
+])('rejects a selected attempt that is no longer resumable: %o', async (changes) => {
+  const first = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'first-key');
+  Object.assign(mockAttempts[0], changes);
+  await expect(startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'resume-key', first.id)).rejects.toThrow(
+    'Attempt is no longer available to resume'
+  );
+  expect(mockTx.nodeAttempt.create).toHaveBeenCalledTimes(1);
+});
+
 it('excludes stale attempts after an instructor edits variants, retaining their original snapshots', async () => {
   const first = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'first-key');
   mockAssignment.lesson.lessonNodes[0].node.quizQuestions[0].options.variants[1].values.mass = '72.06';
