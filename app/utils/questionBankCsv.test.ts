@@ -51,6 +51,31 @@ describe('sampleQuestionBankCsv', () => {
 });
 
 describe('questionsToCsv / csvToQuestions round trip', () => {
+  it.each([false, true])('preserves ordinary double-brace LaTeX with variants in the bank: %s', (includeVariants) => {
+    const ordinary = [
+      saExact({ prompt: '$\\frac{{a}}{2}$' }),
+      mcQuestion({
+        prompt: '$x^{{n}}$',
+        choices: [
+          { id: 'c1', content: '$x^{{k}}$', correct: true },
+          { id: 'c2', content: '2', correct: false },
+        ],
+      }),
+    ];
+    const questions = includeVariants
+      ? [...ordinary, ...csvToQuestions(sampleQuestionBankCsv()).questions.filter((q) => q.variants)]
+      : ordinary;
+    const csv = questionsToCsv(questions);
+    const headers = Papa.parse<string[]>(csv).data[0];
+    expect(headers).not.toEqual(expect.arrayContaining(['var:a']));
+    expect(headers).not.toEqual(expect.arrayContaining(['var:n']));
+    expect(headers).not.toEqual(expect.arrayContaining(['var:k']));
+    const imported = csvToQuestions(csv);
+    expect(imported.errors).toEqual([]);
+    expect(imported.questions).toHaveLength(questions.length);
+    expect(questionsToCsv(imported.questions)).toBe(csv);
+  });
+
   it('round-trips multiple choice (single and multi correct) and short answer', () => {
     const questions: AuthoringQuestion[] = [
       mcQuestion({ prompt: 'Hello, world?' }),
@@ -379,7 +404,7 @@ describe('variant CSV contract', () => {
     expect(csvToQuestions(structuredCsv([numericRow], ['mass', 'mass'])).errors[0].message).toMatch(/Duplicate column/);
   });
 
-  it('requires question keys, unique ordinary groups, and variant keys for placeholders', () => {
+  it('requires question keys, unique ordinary groups, and variant keys for supplied variable values', () => {
     const ordinary = {
       question_key: 'one',
       type: 'shortAnswer',
@@ -391,9 +416,10 @@ describe('variant CSV contract', () => {
       /question_key is required/
     );
     expect(csvToQuestions(structuredCsv([ordinary, ordinary])).questions).toEqual([]);
-    expect(
-      csvToQuestions(structuredCsv([{ ...numericRow, variant_key: '' }], ['Compound', 'mass'])).errors[0].message
-    ).toMatch(/require a variant_key/);
+    expect(csvToQuestions(structuredCsv([{ ...numericRow, variant_key: '' }])).errors).toEqual([]);
+    expect(csvToQuestions(structuredCsv([{ ...ordinary, 'var:mass': '90 g' }], ['mass'])).errors[0].message).toMatch(
+      /require a variant_key/
+    );
   });
 
   it('counts variant records toward the import limit and rejects incorrect row widths', () => {

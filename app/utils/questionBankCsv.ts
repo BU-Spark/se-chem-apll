@@ -184,7 +184,7 @@ export function questionsToCsv(questions: AuthoringQuestion[]): string {
   const variables = [
     ...new Set(
       questions.flatMap((q) => [
-        ...questionVariables(q.prompt),
+        ...(q.variants ? questionVariables(q.prompt) : []),
         ...(q.variants ?? []).flatMap((v) => [
           ...Object.keys(v.values),
           ...('type' in v.answer && v.answer.type === 'multipleChoice'
@@ -463,8 +463,7 @@ export function csvToQuestions(text: string, maxRows = 5000): CsvImportResult {
           return value !== '' ? [[column.slice(4), value]] : [];
         })
       );
-      if (!isVariant && (required.length || Object.keys(values).length))
-        fail('Template variables require a variant_key.');
+      if (!isVariant && Object.keys(values).length) fail('Template variables require a variant_key.');
       if (isVariant) {
         if (question.type === 'shortAnswer' && !questionVariables(question.prompt).length) {
           fail('Numeric variants require a variable in the prompt.');
