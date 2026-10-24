@@ -1,3 +1,4 @@
+import type { MultipleChoiceVariant } from '@/app/utils/questionVariants';
 import { generateClientId } from '@/lib/generateClientId';
 
 /**
@@ -21,10 +22,12 @@ export type MultipleChoiceQuestion = {
   type: 'multipleChoice';
   prompt: string;
   choices: AuthoringChoice[];
+  variants?: MultipleChoiceVariant[];
 };
 
 export type ExactAnswer = { mode: 'exact'; expected: string };
 export type RangeAnswer = { mode: 'range'; minimum: string; maximum: string };
+export type AuthoringVariant = { id: string; values: Record<string, string>; answer: ExactAnswer | RangeAnswer };
 
 export type ShortAnswerQuestion = {
   id: string;
@@ -32,6 +35,7 @@ export type ShortAnswerQuestion = {
   prompt: string;
   /** Raw input strings are kept so partial values like "1e-" survive editing. */
   answer: ExactAnswer | RangeAnswer;
+  variants?: AuthoringVariant[];
 };
 
 export type AuthoringQuestion = MultipleChoiceQuestion | ShortAnswerQuestion;
@@ -63,11 +67,43 @@ export function makeShortAnswerQuestion(id = generateClientId('question')): Shor
 
 export function duplicateQuestion(q: AuthoringQuestion, id = generateClientId('question')): AuthoringQuestion {
   if (q.type === 'multipleChoice') {
+    const ids = new Map(q.choices.map((c) => [c.id, generateClientId('choice')]));
     return {
       ...q,
       id,
-      choices: q.choices.map((choice) => ({ ...choice, id: generateClientId('choice') })),
+      choices: q.choices.map((choice) => ({ ...choice, id: ids.get(choice.id)! })),
+      ...(q.variants
+        ? {
+            variants: q.variants.map(duplicateMultipleChoiceVariant),
+          }
+        : {}),
     };
   }
-  return { ...q, id, answer: { ...q.answer } };
+  return {
+    ...q,
+    id,
+    answer: { ...q.answer },
+    ...(q.variants
+      ? {
+          variants: q.variants.map((row) => ({
+            id: generateClientId('variant'),
+            values: { ...row.values },
+            answer: { ...row.answer },
+          })),
+        }
+      : {}),
+  };
+}
+
+export function duplicateMultipleChoiceVariant(row: MultipleChoiceVariant): MultipleChoiceVariant {
+  const ids = new Map((row.answer.choices ?? []).map((c) => [c.id, generateClientId('choice')]));
+  return {
+    id: generateClientId('variant'),
+    values: { ...row.values },
+    answer: {
+      type: 'multipleChoice',
+      choices: (row.answer.choices ?? []).map((c) => ({ ...c, id: ids.get(c.id)! })),
+      correctChoiceIds: row.answer.correctChoiceIds.map((id) => ids.get(id)!).filter(Boolean),
+    },
+  };
 }

@@ -12,7 +12,35 @@ datasource db {
 // Users & Auth
 // ---------------------------------------------------------------------------
 
+enum AppRole {
+  STUDENT
+  INSTRUCTOR
+}
+
+enum PlatformRole {
+  MEMBER
+  ADMIN
+}
+
+// Snapshot IDs deliberately retain the audit trail independently of account lifecycle.
+model RoleAudit {
+  id                   String       @id @default(cuid())
+  actorId              String?
+  targetId             String
+  source               String
+  previousAppRole      AppRole?
+  newAppRole           AppRole?
+  previousPlatformRole PlatformRole
+  newPlatformRole      PlatformRole
+  createdAt            DateTime     @default(now())
+
+  @@index([targetId, createdAt])
+}
+
 model User {
+  clerkUserId          String?                @unique
+  appRole              AppRole?
+  platformRole         PlatformRole           @default(MEMBER)
   id                   String                 @id @default(cuid())
   email                String                 @unique
   name                 String?
@@ -253,10 +281,22 @@ model QuizQuestion {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  node      Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  node      Node                  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   responses NodeResponse[]
+  variants  QuizQuestionVariant[]
 
   @@unique([nodeId, sortOrder])
+}
+
+model QuizQuestionVariant {
+  id             String       @id @default(cuid())
+  quizQuestionId String
+  sortOrder      Int
+  values         Json
+  answer         Json
+  quizQuestion   QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+
+  @@index([quizQuestionId, sortOrder])
 }
 
 // ---------------------------------------------------------------------------

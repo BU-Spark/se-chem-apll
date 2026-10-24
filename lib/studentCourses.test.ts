@@ -125,7 +125,7 @@ describe('getStudentCourse', () => {
         courseLessons: [
           courseLesson('a', { progress: [{ status: 'COMPLETED' }] }),
           courseLesson('hidden', { hideAfterDue: true, dueDate: new Date('2026-10-01T00:00:00Z') }),
-          courseLesson('b'),
+          courseLesson('b', { dueDate: new Date('2026-10-01T00:00:00Z'), hideAfterDue: false }),
         ],
       },
     });

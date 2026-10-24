@@ -1,6 +1,13 @@
 import { getMultipleChoiceChoices, validateMultipleChoiceAnswers } from '@/app/utils/multipleChoice';
 import { parseShortAnswerOptions, validateShortAnswerOptions } from '@/app/utils/shortAnswer';
 import { validateCheckpointTimestamps } from '@/app/utils/questionTimestamps';
+import {
+  independentQuizVariants,
+  isQuizVariantOptions,
+  quizVariantOptions,
+  validateQuizVariants,
+  type StoredVariant,
+} from './questionVariants';
 
 export type QuestionPayload = {
   id?: string;
@@ -8,6 +15,7 @@ export type QuestionPayload = {
   prompt: string;
   options: unknown;
   correctIndices?: unknown;
+  variants?: StoredVariant[];
 };
 
 export type CheckpointQuestionPayload = QuestionPayload & {
@@ -35,7 +43,10 @@ export const nodeInclude = {
       questions: { orderBy: { sortOrder: 'asc' as const } },
     },
   },
-  quizQuestions: { orderBy: { sortOrder: 'asc' as const } },
+  quizQuestions: {
+    orderBy: { sortOrder: 'asc' as const },
+    include: { variants: { orderBy: { sortOrder: 'asc' as const } } },
+  },
 };
 
 export function flattenQuestionPayloads(payload: NodeContentPayload): QuestionPayload[] {
@@ -63,6 +74,9 @@ function validateQuestionShape(question: QuestionPayload): string | null {
   if (typeof question.prompt !== 'string' || question.prompt.trim() === '') {
     return 'Each question must have a non-empty prompt.';
   }
+
+  const variants = quizVariantOptions(question);
+  if (variants) return validateQuizVariants(question.prompt, variants);
 
   const isMultipleChoice = getMultipleChoiceChoices(question.options) !== null;
   const isShortAnswer = parseShortAnswerOptions(question.options) !== null;
@@ -164,10 +178,29 @@ export function validateNodeContent(payload: NodeContentPayload, mode: 'draft' |
 }
 
 export function serializeQuestionCreate(q: QuestionPayload) {
+  const hydrated = quizVariantOptions(q);
+  const variantOptions = hydrated ? independentQuizVariants(hydrated) : null;
+  const options = variantOptions
+    ? Object.fromEntries(
+        Object.entries(variantOptions).filter(([key]) => key !== 'variants' && key !== 'legacyChoices')
+      )
+    : q.options;
   return {
+    ...(variantOptions
+      ? {
+          variants: {
+            create: variantOptions.variants.map((row, sortOrder) => ({
+              id: row.id,
+              sortOrder,
+              values: row.values,
+              answer: row.answer,
+            })),
+          },
+        }
+      : {}),
     sortOrder: q.sortOrder,
     prompt: q.prompt,
-    options: q.options as object,
+    options: options as object,
     correctIndices: getMultipleChoiceChoices(q.options) ? ((q.correctIndices ?? []) as number[]) : [],
   };
 }
@@ -215,6 +248,15 @@ function validateNodeStructure(payload: NodeContentPayload): string | null {
     if (!Array.isArray(indices) || indices.some((n) => !Number.isInteger(n) || n < 0))
       return 'Correct answer selections must be an array of non-negative integers.';
     const options = value.options;
+    if (notes && (isQuizVariantOptions(options) || value.variants !== undefined))
+      return 'Question variants are only supported in the quiz bank.';
+    if (isQuizVariantOptions(options)) {
+      if (value.variants !== undefined && !Array.isArray(value.variants)) return 'Variants must be an array.';
+      if (indices.length) return 'Variant answers must be specified per row.';
+      return validateQuizVariants(value.prompt, quizVariantOptions(value as QuestionPayload)!, true);
+    }
+    if (value.variants !== undefined && (!Array.isArray(value.variants) || value.variants.length))
+      return 'Variants require a variant question type.';
     if (kind === 'note') return indices.length ? 'Notes cannot include correct answers.' : null;
     const choices = Array.isArray(options)
       ? options
@@ -246,6 +288,7 @@ function validateNodeStructure(payload: NodeContentPayload): string | null {
     return null;
   }
   const ids = new Set<string>();
+  const variantIds = new Set<string>();
   for (const checkpoint of payload.checkpoints ?? []) {
     if (!object(checkpoint)) return 'Each checkpoint must be an object.';
     if (checkpoint.id !== undefined) {
@@ -270,12 +313,38 @@ function validateNodeStructure(payload: NodeContentPayload): string | null {
   for (const item of payload.quizQuestions ?? []) {
     const error = itemError(item, false);
     if (error) return error;
+    for (const row of quizVariantOptions(item)?.variants ?? []) {
+      if (variantIds.has(row.id)) return 'Variant IDs must be unique across quiz questions.';
+      variantIds.add(row.id);
+    }
   }
   return null;
 }
 
 /** Semantic comparison ignores JSON object key order and legacy answer encodings. */
 export function questionContentKey(question: CheckpointQuestionPayload): string {
+  const hydrated = quizVariantOptions(question);
+  const variantOptions = hydrated ? independentQuizVariants(hydrated) : null;
+  if (variantOptions)
+    return JSON.stringify([
+      variantOptions.type,
+      question.prompt,
+      variantOptions.type === 'variantMultipleChoice'
+        ? (variantOptions.choices?.map((c) => [c.id, c.content]) ?? null)
+        : null,
+      variantOptions.variants.map((row) => [
+        row.id,
+        Object.entries(row.values).sort(([a], [b]) => a.localeCompare(b)),
+        row.answer.type === 'multipleChoice'
+          ? [(row.answer.choices ?? []).map((c) => [c.id, c.content]), [...row.answer.correctChoiceIds].sort()]
+          : [
+              row.answer.answerMode,
+              row.answer.answerMode === 'exact'
+                ? row.answer.expectedAnswer
+                : [row.answer.minimumAnswer, row.answer.maximumAnswer],
+            ],
+      ]),
+    ]);
   const kind = checkpointItemKind(question);
   if (kind === 'note') return JSON.stringify(['note', question.prompt]);
   const choices = getMultipleChoiceChoices(question.options);

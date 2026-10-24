@@ -25,10 +25,17 @@ const previewSchema: SanitizeSchema = {
  * small allowlist that includes semantic underline, superscript, and subscript
  * tags. KaTeX runs in non-throwing mode so invalid math cannot crash the editor.
  */
-export default function MarkdownPreview({ content }: { content: string }) {
+export default function MarkdownPreview({
+  content,
+  disableLinks = false,
+}: {
+  content: string;
+  disableLinks?: boolean;
+}) {
   return (
     <div className={styles.markdownPreview} data-testid="markdown-preview">
       <Markdown
+        components={disableLinks ? { a: ({ children }) => <span>{children}</span> } : undefined}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[
           rehypeRaw,

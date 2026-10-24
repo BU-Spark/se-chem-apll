@@ -1,5 +1,6 @@
+import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { isAcyclic } from '@/app/utils/dagValidation';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
@@ -12,14 +13,14 @@ interface RouteContext {
 
 // GET /api/instructor/lessons/[lessonId]
 export async function GET(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { lessonId } = await params;
   const lesson = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: {
       lessonNodes: {
@@ -38,8 +39,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 // PATCH /api/instructor/lessons/[lessonId] — update metadata and/or replace lessonNodes
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { lessonId } = await params;
   let body: unknown;
@@ -69,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const owned = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: { lessonNodes: true },
   });
@@ -128,6 +129,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   if (lessonNodes && lessonNodes.length > 0) {
     const nodeIds = [...new Set(lessonNodes.map((ln) => ln.nodeId))];
+    if (!(await referencedContentAllowed('node', nodeIds, user)))
+      return NextResponse.json({ error: 'Referenced nodes are unavailable.' }, { status: 403 });
     const draftNode = await prisma.node.findFirst({
       where: { id: { in: nodeIds }, isDraft: true },
       select: { id: true },
@@ -199,15 +202,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
 // DELETE /api/instructor/lessons/[lessonId]
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { lessonId } = await params;
 
   const owned = await prisma.lesson.findFirst({
     where: {
       id: lessonId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     select: { id: true },
   });

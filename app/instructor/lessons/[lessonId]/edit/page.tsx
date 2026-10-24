@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { notFound, redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
+import { notFound } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import LessonEditForm from './LessonEditForm';
 
 export const dynamic = 'force-dynamic';
@@ -11,16 +11,13 @@ interface Props {
 
 export default async function EditLessonPage({ params }: Props) {
   const { lessonId } = await params;
-  const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
+  const user = await requireInstructor();
 
   const [lesson, nodes] = await Promise.all([
     prisma.lesson.findFirst({
       where: {
         id: lessonId,
-        OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+        ...contentScope(user),
       },
       include: {
         lessonNodes: {
@@ -36,7 +33,7 @@ export default async function EditLessonPage({ params }: Props) {
     prisma.node.findMany({
       where: {
         isDraft: false,
-        OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+        ...contentScope(user),
       },
       include: {
         _count: { select: { quizQuestions: true, checkpoints: true } },

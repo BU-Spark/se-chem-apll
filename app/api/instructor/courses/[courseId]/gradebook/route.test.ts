@@ -1,12 +1,13 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import { GET } from './route';
-const mockAuth = jest.fn(),
-  mockUser = jest.fn(),
-  mockAssignment = jest.fn(),
+const mockAssignment = jest.fn(),
   mockProgress = jest.fn(),
   mockAttempt = jest.fn(),
   mockSubmissions = jest.fn(),
   mockBest = jest.fn();
-jest.mock('@clerk/nextjs/server', () => ({ auth: () => mockAuth(), currentUser: () => mockUser() }));
 jest.mock('next/server', () => ({
   NextResponse: {
     json: (body: unknown, init?: { status?: number }) => ({ status: init?.status ?? 200, json: async () => body }),
@@ -27,8 +28,7 @@ const context = { params: Promise.resolve({ courseId: 'c1' }) };
 const req = (q = 'studentId=s1&assignmentId=cl1') => ({ url: `http://localhost/?${q}` }) as Request;
 beforeEach(() => {
   jest.clearAllMocks();
-  mockAuth.mockResolvedValue({ userId: 'i1' });
-  mockUser.mockResolvedValue({ unsafeMetadata: { role: 'instructor' } });
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'i1' }));
   mockAssignment.mockResolvedValue({ id: 'cl1' });
   mockProgress.mockResolvedValue({ id: 'p1', status: 'COMPLETED', percentComplete: 100 });
   mockBest.mockResolvedValue({ id: 'best' });
@@ -36,10 +36,9 @@ beforeEach(() => {
   mockAttempt.mockResolvedValue(null);
 });
 it('requires instructor authentication before reading results', async () => {
-  mockAuth.mockResolvedValue({ userId: null });
+  mockGetAppUser.mockResolvedValue(null);
   expect((await GET(req(), context)).status).toBe(401);
-  mockAuth.mockResolvedValue({ userId: 's1' });
-  mockUser.mockResolvedValue({ unsafeMetadata: { role: 'student' } });
+  mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 's1', appRole: 'STUDENT' }));
   expect((await GET(req(), context)).status).toBe(403);
   expect(mockAssignment).not.toHaveBeenCalled();
 });

@@ -147,6 +147,7 @@ export type NodeFormInitial = {
     }>;
   }>;
   quizQuestions: Array<{
+    variants?: import('@/app/utils/questionVariants').StoredVariant[];
     id: string;
     prompt: string;
     options: unknown;

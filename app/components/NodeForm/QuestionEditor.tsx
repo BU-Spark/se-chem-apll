@@ -1,5 +1,6 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
 import { useState } from 'react';
 import MarkdownField from '@/app/components/QuestionBank/MarkdownField';
 import QevItemPreview from './QevItemPreview';
@@ -84,6 +85,7 @@ export default function QuestionEditor({
               <label className={styles.typeSelect}>
                 Type:
                 <select
+                  className={`${selectStyles.control} ${selectStyles.compact}`}
                   value={q.questionType}
                   onChange={(e) => onUpdate({ questionType: e.target.value as CheckpointItemType, correctIndices: [] })}
                 >
@@ -168,6 +170,7 @@ export default function QuestionEditor({
                   <label className={styles.field}>
                     Answer mode
                     <select
+                      className={selectStyles.control}
                       value={q.answerMode}
                       onChange={(e) =>
                         onUpdate({

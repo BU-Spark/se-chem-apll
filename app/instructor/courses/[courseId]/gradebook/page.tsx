@@ -1,5 +1,5 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { notFound, redirect } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import CourseTabs from '@/app/components/CourseTabs';
 import Gradebook from './Gradebook';
@@ -8,13 +8,10 @@ import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
 export default async function GradebookPage({ params }: { params: Promise<{ courseId: string }> }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
-  const user = await currentUser();
-  if (user?.unsafeMetadata?.role !== 'instructor') notFound();
+  const user = await requireInstructor();
   const { courseId } = await params;
   const course = await prisma.course.findFirst({
-    where: { id: courseId, OR: [{ createdByClerkId: userId }, { createdByClerkId: null }] },
+    where: { id: courseId, ...contentScope(user) },
     select: {
       id: true,
       title: true,

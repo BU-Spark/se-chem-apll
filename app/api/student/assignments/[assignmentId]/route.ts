@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
-import { signedInStudent } from '@/lib/submissions/student';
+import { apiAccess } from '@/lib/auth/api';
 import { assignmentView, startAttempt, finishAttempt, submitLesson, SubmissionError } from '@/lib/submissions/service';
 type Context = { params: Promise<{ assignmentId: string }> };
-export async function GET(_request: Request, { params }: Context) {
-  const student = await signedInStudent();
-  if (!student) return NextResponse.json({ error: 'Student access required.' }, { status: 403 });
+export async function GET(request: Request, { params }: Context) {
+  const { user: student, error } = await apiAccess('student');
+  if (error) return error;
   try {
-    return NextResponse.json(await assignmentView(student.id, (await params).assignmentId), {
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
+    return NextResponse.json(
+      await assignmentView(
+        student.id,
+        (await params).assignmentId,
+        new URL(request.url).searchParams.get('attempt') ?? undefined
+      ),
+      {
+        headers: { 'Cache-Control': 'private, no-store' },
+      }
+    );
   } catch (e) {
     return failure(e);
   }
@@ -19,8 +26,8 @@ function failure(e: unknown) {
   return NextResponse.json({ error: 'Unable to save this request. Please retry.' }, { status: 500 });
 }
 export async function POST(request: Request, { params }: Context) {
-  const student = await signedInStudent();
-  if (!student) return NextResponse.json({ error: 'Student access required.' }, { status: 403 });
+  const { user: student, error } = await apiAccess('student');
+  if (error) return error;
   let body;
   try {
     body = await request.json();
@@ -45,9 +52,12 @@ export async function POST(request: Request, { params }: Context) {
     if (
       body.action === 'start' &&
       typeof body.nodeId === 'string' &&
+      (body.attemptId === undefined || (typeof body.attemptId === 'string' && body.attemptId.length > 0)) &&
       ['QUIZ', 'CHECKPOINT', 'REVIEW'].includes(body.kind)
     )
-      return NextResponse.json(await startAttempt(student.id, assignmentId, body.nodeId, body.kind, body.key));
+      return NextResponse.json(
+        await startAttempt(student.id, assignmentId, body.nodeId, body.kind, body.key, body.attemptId)
+      );
     if (body.action === 'submit') return NextResponse.json(await submitLesson(student.id, assignmentId, body.key));
     throw new SubmissionError('Invalid action.', 400);
   } catch (e) {

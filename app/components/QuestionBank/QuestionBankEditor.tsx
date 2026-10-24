@@ -1,5 +1,6 @@
 'use client';
 
+import selectStyles from '@/app/components/Select/Select.module.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import {
@@ -15,7 +16,7 @@ import {
   type SelectionChangedEvent,
 } from 'ag-grid-community';
 import { downloadCsvFile } from '@/app/utils/csv';
-import { questionsToCsv } from '@/app/utils/questionBankCsv';
+import { questionsToCsv, sampleQuestionBankCsv } from '@/app/utils/questionBankCsv';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import CsvImportDialog from './CsvImportDialog';
 import MarkdownPreview from './MarkdownPreview';
@@ -68,8 +69,22 @@ function matchesSearch(q: AuthoringQuestion, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (needle === '') return true;
   if (q.prompt.toLowerCase().includes(needle)) return true;
+  if (q.type === 'shortAnswer' && q.variants) {
+    return q.variants.some(
+      (row) =>
+        Object.values(row.values).some((value) => value.toLowerCase().includes(needle)) ||
+        (row.answer.mode === 'exact'
+          ? row.answer.expected.includes(needle)
+          : row.answer.minimum.includes(needle) || row.answer.maximum.includes(needle))
+    );
+  }
+  if (q.variants?.some((row) => Object.values(row.values).some((value) => value.toLowerCase().includes(needle))))
+    return true;
   if (q.type === 'multipleChoice') {
-    return q.choices.some((choice) => choice.content.toLowerCase().includes(needle));
+    return (
+      q.choices.some((choice) => choice.content.toLowerCase().includes(needle)) ||
+      !!q.variants?.some((row) => row.answer.choices?.some((choice) => choice.content.toLowerCase().includes(needle)))
+    );
   }
   if (q.answer.mode === 'exact') return q.answer.expected.includes(needle);
   return q.answer.minimum.includes(needle) || q.answer.maximum.includes(needle);
@@ -312,6 +327,9 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
 
   const getCommandAvailability = useCallback(
     (availability: CommandAvailability, commandId?: QuestionBankCommandId): { enabled: boolean; reason?: string } => {
+      if (commandId === 'export-csv' && questions.some((q) => q.variants?.length === 0)) {
+        return { enabled: false, reason: 'Add at least one variant to each variant question before exporting.' };
+      }
       if (commandId === 'save-node' && saving) {
         return { enabled: false, reason: 'The node is already being saved.' };
       }
@@ -338,7 +356,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           return { enabled: true };
       }
     },
-    [commandTargetIds, activeQuestion, activeIndex, questions.length, saving]
+    [commandTargetIds, activeQuestion, activeIndex, questions, saving]
   );
 
   const runCommand = useCallback(
@@ -372,6 +390,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           setImportOpen(true);
           return;
         case 'export-csv':
+          if (questions.some((q) => q.variants?.length === 0)) return;
           downloadCsvFile('quiz-questions.csv', questionsToCsv(questions));
           return;
         case 'save-node':
@@ -495,63 +514,64 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
   return (
     <div className={styles.editor} onKeyDownCapture={handleKeyDown}>
       <div className={styles.toolbar}>
-        <input
-          type="search"
-          className={styles.searchInput}
-          placeholder="Search prompts, choices, answers…"
-          aria-label="Search questions"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          className={styles.filterSelect}
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-          aria-label="Filter by type"
-        >
-          <option value="all">All types</option>
-          <option value="multipleChoice">Multiple choice</option>
-          <option value="shortAnswer">Short answer</option>
-        </select>
-        <select
-          className={styles.filterSelect}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
-          <option value="errors">Errors</option>
-          <option value="warnings">Warnings</option>
-          <option value="valid">Valid</option>
-        </select>
-
-        <span className={styles.toolbarSpacer} />
-
-        <button
-          type="button"
-          className={styles.toolbarBtn}
-          onClick={() => runCommand('open-commands')}
-          aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
-        >
-          Commands
-        </button>
-        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-multiple-choice')}>
-          + Multiple choice
-        </button>
-        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-short-answer')}>
-          + Short answer
-        </button>
-        <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('import-csv')}>
-          Import CSV
-        </button>
-        <button
-          type="button"
-          className={styles.toolbarBtn}
-          disabled={questions.length === 0}
-          onClick={() => runCommand('export-csv')}
-        >
-          Export CSV
-        </button>
+        <div className={styles.toolbarFilters}>
+          <input
+            type="search"
+            className={styles.searchInput}
+            placeholder="Search prompts, choices, answers…"
+            aria-label="Search questions"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className={`${selectStyles.control} ${selectStyles.compact} ${styles.filterSelect}`}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            aria-label="Filter by type"
+          >
+            <option value="all">All types</option>
+            <option value="multipleChoice">Multiple choice</option>
+            <option value="shortAnswer">Short answer</option>
+          </select>
+          <select
+            className={`${selectStyles.control} ${selectStyles.compact} ${styles.filterSelect}`}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            aria-label="Filter by status"
+          >
+            <option value="all">All statuses</option>
+            <option value="errors">Errors</option>
+            <option value="warnings">Warnings</option>
+            <option value="valid">Valid</option>
+          </select>
+        </div>
+        <div className={styles.toolbarActions}>
+          <button
+            type="button"
+            className={styles.toolbarBtn}
+            onClick={() => downloadCsvFile('quiz-questions-sample.csv', sampleQuestionBankCsv())}
+          >
+            Download sample CSV
+          </button>
+          <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-multiple-choice')}>
+            + Multiple choice
+          </button>
+          <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('new-short-answer')}>
+            + Short answer
+          </button>
+          <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('import-csv')}>
+            Import CSV
+          </button>
+          <button
+            type="button"
+            className={styles.toolbarBtn}
+            disabled={!getCommandAvailability('has-questions', 'export-csv').enabled}
+            title={getCommandAvailability('has-questions', 'export-csv').reason}
+            onClick={() => runCommand('export-csv')}
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {selectedIds.size > 1 && (
@@ -644,14 +664,27 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
           {totalErrors > 0 ? ` · ${totalErrors} error${totalErrors === 1 ? '' : 's'}` : ''}
           {totalWarnings > 0 ? ` · ${totalWarnings} warning${totalWarnings === 1 ? '' : 's'}` : ''}
         </span>
-        <span className={styles.statusBarHint}>
-          {QUESTION_BANK_COMMANDS.filter((command) => command.showInStatusBar).map((command, index) => (
-            <span key={command.id}>
-              {index > 0 && ' · '}
-              <kbd>{commandShortcutLabel(command)}</kbd> {command.statusText}
-            </span>
-          ))}
-        </span>
+        <div className={styles.statusBarHelp}>
+          <span className={styles.statusBarHint}>
+            {QUESTION_BANK_COMMANDS.filter((command) => command.showInStatusBar).map((command, index) => (
+              <span key={command.id}>
+                {index > 0 && ' · '}
+                <kbd>{commandShortcutLabel(command)}</kbd> {command.statusText}
+              </span>
+            ))}
+          </span>
+          <button
+            type="button"
+            className={styles.commandsHelpButton}
+            onClick={() => runCommand('open-commands')}
+            aria-label="Commands and keyboard shortcuts"
+            title="Commands and keyboard shortcuts"
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+          >
+            <span aria-hidden="true">?</span>
+          </button>
+        </div>
       </div>
 
       <p className={styles.srOnly} role="status" aria-live="polite">

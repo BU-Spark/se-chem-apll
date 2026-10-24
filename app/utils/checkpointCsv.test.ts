@@ -1,4 +1,6 @@
 import Papa from 'papaparse';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   CHECKPOINT_CSV_HEADERS,
   csvToCheckpoints,
@@ -28,6 +30,12 @@ const semantic = (text: string) =>
   }));
 
 describe('checkpoint CSV', () => {
+  it('retains the existing checkpoint schema without quiz variants', () => {
+    const sample = readFileSync(join(process.cwd(), 'samples/checkpoints-motion.csv'), 'utf8');
+    expect(Papa.parse<string[]>(sample).data[0]).toEqual([...CHECKPOINT_CSV_HEADERS]);
+    expect(csvToCheckpoints(sample).errors).toEqual([]);
+    expect(CHECKPOINT_CSV_HEADERS).not.toContain('variant_key');
+  });
   it('groups nonadjacent rows and sorts groups/items by explicit order', () => {
     const result = csvToCheckpoints(
       csv(

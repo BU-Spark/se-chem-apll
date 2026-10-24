@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getOrCreateStudent } from '@/lib/getOrCreateStudent';
+import { requireStudent } from '@/lib/auth/server';
 import { getEnrolledCourses } from '@/lib/studentCourses';
 import { ROUTES } from '@/app/routes';
 import CourseCard from '@/app/components/CourseCard/CourseCard';
@@ -9,8 +8,7 @@ import styles from './page.module.css';
 export const dynamic = 'force-dynamic';
 
 export default async function StudentHomePage() {
-  const student = await getOrCreateStudent();
-  if (!student) redirect(ROUTES.signIn);
+  const student = await requireStudent();
 
   const courses = await getEnrolledCourses(student.id);
 
