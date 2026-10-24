@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { notFound, redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
+import { notFound } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import CourseStudentsManager from './CourseStudentsManager';
 
 export const dynamic = 'force-dynamic';
@@ -11,15 +11,12 @@ interface Props {
 
 export default async function CourseStudentsPage({ params }: Props) {
   const { courseId } = await params;
-  const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
+  const user = await requireInstructor();
 
   const course = await prisma.course.findFirst({
     where: {
       id: courseId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: {
       enrollments: {

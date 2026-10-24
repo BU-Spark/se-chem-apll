@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import StudentCoursePage from './page';
 
-const mockGetOrCreateStudent = jest.fn();
+const mockRequireStudent = jest.fn();
 const mockGetStudentCourse = jest.fn();
 
-jest.mock('@/lib/getOrCreateStudent', () => ({ getOrCreateStudent: () => mockGetOrCreateStudent() }));
+jest.mock('@/lib/auth/server', () => ({ requireStudent: () => mockRequireStudent() }));
 jest.mock('@/lib/studentCourses', () => ({
   ...jest.requireActual('@/lib/studentCourses'),
   getStudentCourse: (...args: unknown[]) => mockGetStudentCourse(...args),
@@ -21,7 +21,7 @@ const params = Promise.resolve({ courseId: 'course-1' });
 describe('StudentCoursePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetOrCreateStudent.mockResolvedValue({ id: 'student-1' });
+    mockRequireStudent.mockResolvedValue({ id: 'student-1' });
     mockGetStudentCourse.mockResolvedValue({
       id: 'course-1',
       title: 'Course #3',

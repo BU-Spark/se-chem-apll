@@ -53,7 +53,7 @@ afterAll(() => {
   Object.defineProperty(Range.prototype, 'getClientRects', { configurable: true, value: originalRangeRects });
 });
 
-function RichEditorHarness({ initial = '' }: { initial?: string }) {
+function RichEditorHarness({ initial = '', compact = false }: { initial?: string; compact?: boolean }) {
   const [markdown, setMarkdown] = useState(initial);
 
   return (
@@ -61,6 +61,7 @@ function RichEditorHarness({ initial = '' }: { initial?: string }) {
       <span id="integration-editor-label">Question prompt</span>
       <RichMarkdownEditor
         value={markdown}
+        compact={compact}
         onChange={setMarkdown}
         contentEditableId="integration-editor"
         labelledBy="integration-editor-label"
@@ -159,4 +160,102 @@ describe('RichMarkdownEditor integration', () => {
     await waitFor(() => expect(markdownSource()).toBe('Plain clipboard text'));
     expect(screen.getByTestId('markdown-preview')).toHaveTextContent('Plain clipboard text');
   });
+});
+
+const formula = String.raw`Use the relationship $a = \frac{v_f-v_i}{\Delta t}$.`;
+
+describe('math source round trips', () => {
+  it.each([false, true])('preserves pasted formulas and reopened content (compact=%s)', async (compact) => {
+    const mounted = render(<RichEditorHarness compact={compact} />);
+    paste(await screen.findByRole('textbox', { name: 'Question prompt' }), { text: formula });
+    await waitFor(() => expect(markdownSource()).toBe(formula));
+    expect(screen.getByTestId('markdown-preview').querySelector('.katex-error')).toBeNull();
+    expect(screen.getByTestId('markdown-preview').querySelector('.katex')).not.toBeNull();
+    const saved = markdownSource();
+    mounted.unmount();
+    render(<RichEditorHarness initial={saved} compact={compact} />);
+    paste(await screen.findByRole('textbox', { name: 'Question prompt' }), { text: ' Explain.' });
+    await waitFor(() => expect(markdownSource()).toBe(formula + ' Explain.'));
+  });
+
+  it.each([
+    String.raw`$x_1 + x_2 = \frac{1}{2}$ and $\text{a\_b} = \{1,2\}$`,
+    String.raw`$\ce{H2O + CO2 -> H2CO3}$`,
+    '$$\na = \\frac{v_f-v_i}{\\Delta t}\n$$',
+  ])('preserves loaded math source: %s', async (source) => {
+    render(<RichEditorHarness initial={source} />);
+    paste(await screen.findByRole('textbox', { name: 'Question prompt' }), { text: ' More.' });
+    await waitFor(() => expect(markdownSource()).toContain('More.'));
+    expect(markdownSource()).toContain(source);
+    expect(screen.getByTestId('markdown-preview').querySelector('.katex-error')).toBeNull();
+  });
+
+  it('preserves rich clipboard math alongside ordinary formatting', async () => {
+    render(<RichEditorHarness />);
+    paste(await screen.findByRole('textbox', { name: 'Question prompt' }), {
+      text: formula,
+      html: `<p><strong>Physics</strong> ${formula}</p>`,
+    });
+    await waitFor(() => expect(markdownSource()).toContain(formula));
+    expect(screen.getByTestId('markdown-preview').querySelector('strong')).toHaveTextContent('Physics');
+    expect(screen.getByTestId('markdown-preview').querySelector('.katex-error')).toBeNull();
+  });
+});
+
+it('keeps escaped currency as text alongside math', async () => {
+  const source = String.raw`Pay \$5 or \$10; compute $x = 2$.`;
+  render(<RichEditorHarness initial={source} />);
+  paste(await screen.findByRole('textbox', { name: 'Question prompt' }), { text: ' More.' });
+  await waitFor(() => expect(markdownSource()).toBe(source + ' More.'));
+  expect(screen.getByTestId('markdown-preview').querySelectorAll('.katex')).toHaveLength(1);
+  expect(screen.getByTestId('markdown-preview')).toHaveTextContent('Pay $5 or $10');
+});
+
+it('loads another question without overwriting it and preserves its math on editing', async () => {
+  const onChange = jest.fn();
+  const editor = (value: string) => (
+    <RichMarkdownEditor
+      value={value}
+      onChange={onChange}
+      contentEditableId="switch-editor"
+      labelledBy="switch-label"
+      onMarkdownError={(message) => {
+        throw new Error(message);
+      }}
+    />
+  );
+  const { rerender } = render(
+    <>
+      <span id="switch-label">Question</span>
+      {editor('$x = 1$')}
+    </>
+  );
+  rerender(
+    <>
+      <span id="switch-label">Question</span>
+      {editor(formula)}
+    </>
+  );
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Question' })).toHaveTextContent(formula));
+  expect(onChange).not.toHaveBeenCalled();
+  paste(screen.getByRole('textbox', { name: 'Question' }), { text: ' More.' });
+  await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(formula + ' More.'));
+});
+
+it('preserves a formula entered over successive editor updates', async () => {
+  render(<RichEditorHarness />);
+  const editor = await screen.findByRole('textbox', { name: 'Question prompt' });
+  for (const text of ['Use the relationship $a = ', String.raw`\frac{v_f-v_i}`, String.raw`{\Delta t}$.`]) {
+    paste(editor, { text });
+    await waitFor(() => expect(editor.textContent).toContain(text));
+  }
+  await waitFor(() => expect(markdownSource()).toBe(formula));
+});
+
+it('preserves pasted display math', async () => {
+  const source = '$$\na = \\frac{v_f-v_i}{\\Delta t}\n$$';
+  render(<RichEditorHarness />);
+  paste(await screen.findByRole('textbox', { name: 'Question prompt' }), { text: source });
+  await waitFor(() => expect(markdownSource()).toBe(source));
+  expect(screen.getByTestId('markdown-preview').querySelector('.katex-display')).not.toBeNull();
 });

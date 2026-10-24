@@ -134,7 +134,7 @@ Most projects will require the use of other technologies. Below are a few guides
 
 ## Checkpoint CSV authoring
 
-The node editor's **Checkpoints** step supports CSV import, export, and a downloadable sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Existing quiz-bank CSV files retain their original format.
+The node editor's **Checkpoints** step supports CSV import, export, and a downloadable sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Quiz questions use the separate variant-aware format documented below.
 
 Checkpoint CSV uses one row per question or informational note. Its header is:
 
@@ -162,3 +162,170 @@ CHECKPOINT_TEST_DATABASE_URL='postgresql://localhost:5432/spark_checkpoint_test'
 ```
 
 The suite uses only this explicit URL, creates and removes its own fixtures, and checks swaps, response protection, atomic rollback, and 5,000-record saves with simulated query latency under the default transaction timeout. Ordinary `npm test` runs skip the database suite when this variable is absent. Database write batches are limited to 500 rows and approximately 1 MiB of serialized data (a single larger row cannot be split).
+
+
+## Quiz CSV authoring
+
+The quiz bank's **Download sample CSV** toolbar button (also available inside **Import CSV**) includes ordinary MCQ and numeric questions, numeric template variants with exact/range answers, and MCQ variants with different choices and different numbers of correct answers. The same demo is checked in at [samples/quiz-questions.csv](samples/quiz-questions.csv).
+
+The required columns are:
+
+```csv
+question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer
+```
+
+- Use one row for an ordinary question and leave `variant_key` blank. For variants, repeat `question_key` and assign each row a unique, nonempty `variant_key`. Keys only group rows within the file; import generates fresh internal IDs.
+- All rows in a question group must share the same type and prompt template. First appearance determines question order; row order determines variant order.
+- Add case-sensitive columns such as `var:compound` and `var:mass` to supply `{{compound}}` and `{{mass}}` placeholders. Variables work in prompts and MCQ choices; substitution is literal, with no formulas or answer calculation. Variable names start with a letter and contain only letters, numbers, and underscores. Each row must supply every variable it references; columns used only by other questions may stay blank.
+- Each MCQ variant supplies its own 2–8 choices, with trailing unused choice cells blank. `correct` contains 1-based choice positions, such as `1` or the quoted CSV cell `"1,3"` for multiple correct answers. Choice counts and correct-answer counts can differ per variant.
+- Numeric rows use `answer_mode` = `exact` with `expected_answer`, or `range` with `minimum_answer` and `maximum_answer`. Numeric variants require a prompt variable.
+- Markdown, LaTeX and chemistry notation are preserved. Quote CSV cells containing commas, quotes or newlines; spreadsheet apps handle this automatically on export.
+- Import validates complete question groups. If any variant is invalid, the entire question is skipped and errors identify the source rows. Other valid questions can still be imported. The limit is 5,000 data rows, including variants, and 2 MB per file.
+
+This is the canonical quiz CSV format; older headers without grouping keys are not accepted. Checkpoint CSV is unchanged and does not support variants.
+
+
+## Instructor dropdown styles
+
+Native instructor dropdowns share `app/components/Select/Select.module.css`. Apply `control` to a native `<select>` and optionally add `compact` or `grid`. This also works for DOM-created AG Grid usage filters. Keep component-specific CSS limited to layout and width; do not override the shared padding, background image, border or focus styles.
+
+- Forms: minimum 40px height; compact toolbars/editors: 36px; grid filters: 34px.
+- All densities: 12px left padding, 40px reserved on the right, 16px outline chevron inset 12px, 8px corner radius.
+- Keyboard focus: blue 2px outline. Disabled and `aria-invalid="true"` states use the shared styles. Forced-color mode restores the native arrow.
+- Keep visible labels or accessible names, native keyboard behavior, and enough width for the longest label. Exact/Range uses a 96px minimum width.
+- AG Grid's built-in pickers use the corresponding spacing and state styles in `app/components/InstructorGrid/theme.ts`. Action menus and command search remain distinct controls.
+
+## Application authentication and administration
+
+Clerk verifies sessions; PostgreSQL stores application roles. `User.clerkUserId`
+uniquely links a verified Clerk identity to the existing `Student` table. The app
+never takes the caller's identity from request JSON, query parameters, or custom
+headers. Clerk metadata is not used for authorization.
+
+- `appRole`: `STUDENT`, `INSTRUCTOR`, or null (role selection is incomplete).
+- `platformRole`: `MEMBER` by default, or `ADMIN`. Admin access is independent of
+  the student/instructor debug mode.
+- `/select-role` and `/debug-role` remain available to signed-in users. They can
+  update only their own application role. This intentionally permits instructor
+  self-selection during the current development/demo phase.
+- `/admin` provides user search, role management, and links to platform-wide
+  content, enrollment, and gradebook management. Only admins can grant/revoke
+  admin access. Unlinked email-only records cannot become admins.
+- Role changes are audited in `RoleAudit`. A PostgreSQL transaction-level advisory
+  lock serializes role writes across app instances, rechecks the acting admin,
+  and prevents concurrent requests from removing the last admin. The bootstrap
+  command uses the same lock. Database connection pooling must support ordinary
+  transactions; the lock is released at transaction completion.
+
+On first use, the server fetches the Clerk profile once to obtain the verified
+primary email and display name. It creates an ordinary member or conditionally
+links an unclaimed, email-matched enrollment record. Subsequent requests query by
+Clerk ID without calling `currentUser()`. Name/email are snapshots; automatic
+profile synchronization is not configured. No Clerk dashboard changes, custom
+session claims, or webhooks are required.
+
+### Database setup and first admin
+
+Use Node 22.20.0. For a **new, empty PostgreSQL database**, configure `DATABASE_URL`
+and `DIRECT_URL`, then run:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
+
+Optionally run `npm run db:seed` for demo content. The `0_init` migration creates
+the historical schema; all later migrations bring it to the current version.
+It was generated with Prisma 6.17 from `prisma/schema.prisma` at commit
+`8d31b27032a26c3cd9c06b5c1c0fc62c31585ff8`, immediately before the first recorded
+migration. Existing migration files remain unchanged.
+
+**Existing databases: adopt the baseline before the next deploy.** Back up the
+database and rehearse on a copy. Inspect `npx prisma migrate status` and the
+`_prisma_migrations` records to confirm the historical migrations are applied
+successfully and match the repository. Compare the database with the schema
+appropriate to its applied migration version (the current `schema.prisma` only
+if every later migration is applied). Investigate drift before continuing.
+For an up-to-date database, the comparison command is:
+
+```bash
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --exit-code
+```
+
+Prisma's comparison does not check SQL-only CHECK constraints or triggers;
+compare those with a freshly migrated reference database as well. Once verified,
+record the missing baseline without executing its table-creation SQL:
+
+```bash
+npx prisma migrate resolve --applied 0_init
+npx prisma migrate deploy
+npx prisma migrate status
+npx prisma generate
+```
+
+This preserves existing data, including Clerk links and admin grants. Never run
+the baseline SQL directly on an existing schema. Do not edit already-applied
+migration files or reset a database to adopt this baseline.
+
+**Databases created using `db push`:** marking only `0_init` is insufficient;
+later migrations would run against tables already at their final shape. For a
+disposable database, create a new empty database and use the fresh setup above.
+If data must be kept, back up and reconcile its schema and SQL-only safeguards
+against a freshly migrated reference first. `db push` does not create the custom
+constraints and triggers in our SQL migrations. Repair missing safeguards on a
+copy and verify the data satisfies them, then mark each migration whose effects
+are already present as applied with `prisma migrate resolve --applied <name>`.
+Only deploy after the migration history accurately represents the database.
+
+### Verifying migration history
+
+Create an empty, disposable local PostgreSQL database named `spark_migration_test`:
+
+```bash
+MIGRATION_TEST_DATABASE_URL=postgresql://localhost:5432/spark_migration_test \
+npm run db:verify-migrations
+```
+
+The command overrides both Prisma connection URLs for its subprocesses, refuses
+non-local URLs and nonempty public schemas, and never resets or drops a database.
+It replays every migration, fails on Prisma schema drift, verifies the expected
+SQL-only CHECK constraints and enabled triggers, and checks a second deploy.
+Recreate the disposable database before rerunning. CI runs this check on a fresh
+PostgreSQL service, runs the seed, and runs the auth, submission, and checkpoint
+integration suites on separately migrated databases. Update the safeguard assertions when
+intentionally adding or removing SQL-only constraints or triggers.
+
+### Granting the first admin
+
+Sign in to the app to create/link your local user, then use the Clerk ID displayed
+by the signed-in account's role page to grant admin access from a trusted terminal:
+
+```bash
+npm run admin:grant -- --clerk-user-id user_...
+```
+
+The command reads the same `.env*` configuration as Next.js, requires an already
+linked account, and records a `BOOTSTRAP` audit entry. It does not change Clerk.
+Open `/admin` afterward. Further role changes can be made there. The command is
+idempotent and may also be used by a trusted database operator for recovery.
+
+If a reverse proxy changes the server-visible URL origin, set `APP_ORIGINS` to a
+comma-separated list of exact trusted frontend origins. Role-management endpoints
+require a matching browser `Origin` header and reject cross-site requests. When
+unset, the request URL's origin is used.
+
+### Auth tests
+
+`npm test` includes identity, authorization, role-mutation, admin UI, and debug
+switch tests. PostgreSQL concurrency tests require an explicitly selected local
+database named `spark_auth_test`; they delete fixtures in that dedicated database:
+
+```bash
+DATABASE_URL=postgresql://localhost:5432/spark_auth_test \
+DIRECT_URL=postgresql://localhost:5432/spark_auth_test \
+AUTH_TEST_DATABASE_URL=postgresql://localhost:5432/spark_auth_test \
+npx jest lib/auth/auth.integration.test.ts --runInBand
+```
+
+Create that test database and apply the current schema before running the tests.

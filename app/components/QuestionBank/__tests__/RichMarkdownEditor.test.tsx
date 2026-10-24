@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import RichMarkdownEditor from '../RichMarkdownEditor';
 import { normalizeVisualMarkdown } from '../normalizeVisualMarkdown';
 
+jest.mock('../mathSourcePlugin', () => ({ mathSourcePlugin: () => ({ kind: 'math' }) }));
+
 type ToolbarPlugin = { kind: 'toolbar'; toolbarContents: () => React.ReactNode };
 
 jest.mock('@mdxeditor/editor', () => {
@@ -175,9 +177,9 @@ describe('RichMarkdownEditor', () => {
     ).toBe('<u>Red</u> H<sub>2</sub>O x<sup>2</sup> **bold** $K_a$');
   });
 
-  it('undoes Markdown escaping inside LaTeX without changing command backslashes', () => {
+  it('preserves intentional LaTeX escaping and command backslashes', () => {
     expect(normalizeVisualMarkdown('$K\\_a$ and $\\ce{H2O}$ and $1.8 \\times 10^{-5}$')).toBe(
-      '$K_a$ and $\\ce{H2O}$ and $1.8 \\times 10^{-5}$'
+      '$K\\_a$ and $\\ce{H2O}$ and $1.8 \\times 10^{-5}$'
     );
   });
 });

@@ -15,7 +15,6 @@ type Props = {
 };
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB — a question bank is text
-const MAX_ROWS = 5000;
 
 /**
  * Staged CSV import: select → review diagnostics → choose append/replace.
@@ -60,10 +59,6 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
     try {
       const text = await file.text();
       const parsed = csvToQuestions(text);
-      if (parsed.questions.length > MAX_ROWS) {
-        setFileError(`That file has ${parsed.questions.length} questions. The import limit is ${MAX_ROWS}.`);
-        return;
-      }
       setResult(parsed);
     } catch {
       setFileError('Could not read that CSV file.');
@@ -99,6 +94,11 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
         </header>
 
         <div className={styles.dialogBody}>
+          <p>
+            Use one row per question or variant. Match question_key values to group variants, give each variant a unique
+            variant_key, and use var:name columns for {'{{name}}'} placeholders in prompts or choices. Leave variant_key
+            blank for ordinary questions.
+          </p>
           <div className={styles.dialogRow}>
             <input
               ref={fileInputRef}
@@ -134,11 +134,14 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
               </p>
 
               {errorCount > 0 && (
-                <ul className={styles.importErrorList} aria-label="Import errors">
-                  {result.errors.map((err, idx) => (
-                    <li key={`${err.row}-${idx}`}>{err.message}</li>
-                  ))}
-                </ul>
+                <>
+                  <p>Questions with any invalid variant are skipped in full.</p>
+                  <ul className={styles.importErrorList} aria-label="Import errors">
+                    {result.errors.map((err, idx) => (
+                      <li key={`${err.row}-${idx}`}>{err.message}</li>
+                    ))}
+                  </ul>
+                </>
               )}
 
               {validCount > 0 && (

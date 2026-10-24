@@ -6,4 +6,6 @@ export const ROUTES = {
   studentSettings: '/student/settings',
   studentCourse: (courseId: string) => `/student/courses/${courseId}`,
   comingSoon: '/student/coming-soon',
+  admin: '/admin',
+  switchRole: '/select-role',
 } as const;

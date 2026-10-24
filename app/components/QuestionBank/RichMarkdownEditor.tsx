@@ -15,6 +15,7 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
+import { mathSourcePlugin } from './mathSourcePlugin';
 import { normalizeVisualMarkdown } from './normalizeVisualMarkdown';
 import styles from './QuestionBank.module.css';
 
@@ -23,6 +24,7 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   compact?: boolean;
+  autoFocus?: boolean;
   contentEditableId: string;
   labelledBy: string;
   describedBy?: string;
@@ -43,6 +45,7 @@ export default function RichMarkdownEditor({
   onChange,
   placeholder,
   compact = false,
+  autoFocus = false,
   contentEditableId,
   labelledBy,
   describedBy,
@@ -87,6 +90,7 @@ export default function RichMarkdownEditor({
 
   const plugins = useMemo(
     () => [
+      mathSourcePlugin(),
       ...(!compact ? [listsPlugin(), linkPlugin(), linkDialogPlugin()] : []),
       toolbarPlugin({
         toolbarClassName: styles.richMarkdownToolbar,
@@ -119,6 +123,7 @@ export default function RichMarkdownEditor({
       }}
     >
       <MDXEditor
+        autoFocus={autoFocus}
         ref={editorRef}
         markdown={value}
         onChange={(nextValue) => {

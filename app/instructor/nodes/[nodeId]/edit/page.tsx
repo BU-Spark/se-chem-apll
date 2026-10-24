@@ -1,5 +1,5 @@
-import { notFound, redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
+import { notFound } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import { prisma } from '@/lib/prisma';
 import { nodeInclude } from '@/app/utils/nodeContent';
 import NodeEditForm from './NodeEditForm';
@@ -12,15 +12,12 @@ interface Props {
 
 export default async function EditNodePage({ params }: Props) {
   const { nodeId } = await params;
-  const { userId } = await auth();
-  if (!userId) {
-    redirect('/sign-in');
-  }
+  const user = await requireInstructor();
 
   const node = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: nodeInclude,
   });
@@ -51,6 +48,7 @@ export default async function EditNodePage({ params }: Props) {
           })),
         })),
         quizQuestions: node.quizQuestions.map((q) => ({
+          variants: q.variants,
           id: q.id,
           prompt: q.prompt,
           options: q.options,

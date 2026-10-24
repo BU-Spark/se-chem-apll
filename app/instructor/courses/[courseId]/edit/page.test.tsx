@@ -1,12 +1,11 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
 import EditCoursePage from './page';
 
-const mockAuth = jest.fn();
 const mockCourseFindFirst = jest.fn();
 const mockLessonFindMany = jest.fn();
-
-jest.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockAuth(),
-}));
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -17,7 +16,7 @@ jest.mock('@/lib/prisma', () => ({
 
 describe('EditCoursePage', () => {
   it('only queries published lessons for the import picker', async () => {
-    mockAuth.mockResolvedValue({ userId: 'instructor-1' });
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockCourseFindFirst.mockResolvedValue({
       id: 'course-1',
       code: 'CHEM-101',

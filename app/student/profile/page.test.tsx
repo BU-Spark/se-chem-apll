@@ -1,12 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import StudentProfilePage from './page';
 
-const mockGetOrCreateStudent = jest.fn();
+const mockRequireStudent = jest.fn();
 const mockGetStudentInstructors = jest.fn();
 
-jest.mock('@/lib/getOrCreateStudent', () => ({
-  getOrCreateStudent: () => mockGetOrCreateStudent(),
-}));
+jest.mock('@/lib/auth/server', () => ({ requireStudent: () => mockRequireStudent() }));
 
 jest.mock('@/lib/studentCourses', () => ({
   getStudentInstructors: (...args: unknown[]) => mockGetStudentInstructors(...args),
@@ -15,7 +13,7 @@ jest.mock('@/lib/studentCourses', () => ({
 describe('StudentProfilePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetOrCreateStudent.mockResolvedValue({ id: 'student-1', name: 'Hannah Yu', email: 'hannahyu@bu.edu' });
+    mockRequireStudent.mockResolvedValue({ id: 'student-1', name: 'Hannah Yu', email: 'hannahyu@bu.edu' });
     mockGetStudentInstructors.mockResolvedValue([
       { id: 'contact-1', name: 'Jane Smith', email: 'janesmith@bu.edu' },
       { id: 'contact-3', name: 'Ali Khan', email: 'alikhan@bu.edu' },
@@ -42,7 +40,7 @@ describe('StudentProfilePage', () => {
   });
 
   it('shows a dash when the student has no name yet', async () => {
-    mockGetOrCreateStudent.mockResolvedValue({ id: 'student-1', name: null, email: 'hannahyu@bu.edu' });
+    mockRequireStudent.mockResolvedValue({ id: 'student-1', name: null, email: 'hannahyu@bu.edu' });
     mockGetStudentInstructors.mockResolvedValue([]);
     render(await StudentProfilePage());
 

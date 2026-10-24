@@ -12,6 +12,7 @@ jest.mock('../RichMarkdownEditor', () => ({
     labelledBy,
     describedBy,
     invalid,
+    placeholder,
     onMarkdownError,
   }: {
     value: string;
@@ -20,6 +21,7 @@ jest.mock('../RichMarkdownEditor', () => ({
     labelledBy: string;
     describedBy?: string;
     invalid?: boolean;
+    placeholder?: string;
     onMarkdownError: (message: string) => void;
   }) => (
     <textarea
@@ -29,6 +31,7 @@ jest.mock('../RichMarkdownEditor', () => ({
       aria-describedby={describedBy}
       aria-invalid={invalid}
       value={value}
+      placeholder={placeholder}
       ref={() => {
         mockMarkdownError = onMarkdownError;
       }}
@@ -59,6 +62,29 @@ describe('MarkdownField', () => {
     const visualEditor = await screen.findByRole('textbox', { name: 'Question prompt' });
     expect(visualEditor).toHaveAccessibleDescription('Prompt is required.');
     expect(visualEditor).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('shows required choice validation inside the field and restores the normal placeholder after editing', async () => {
+    const { rerender } = render(
+      <MarkdownField
+        label="Choice 1"
+        compact
+        value=""
+        onChange={jest.fn()}
+        placeholder="Enter a choice"
+        error="Choice text is required."
+      />
+    );
+    const editor = await screen.findByRole('textbox', { name: 'Choice 1' });
+    expect(editor).toHaveAttribute('placeholder', 'Required');
+    expect(editor).toHaveAccessibleDescription('Choice text is required.');
+    expect(screen.getByRole('alert')).toHaveClass('srOnly');
+    rerender(
+      <MarkdownField label="Choice 1" compact value="Water" onChange={jest.fn()} placeholder="Enter a choice" />
+    );
+    expect(editor).toHaveAttribute('placeholder', 'Enter a choice');
+    expect(editor).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('offers a field-level source repair fallback when content cannot be opened visually', async () => {

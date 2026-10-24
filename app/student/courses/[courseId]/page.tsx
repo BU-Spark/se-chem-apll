@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { getOrCreateStudent } from '@/lib/getOrCreateStudent';
+import { notFound } from 'next/navigation';
+import { requireStudent } from '@/lib/auth/server';
 import { findCurrentLesson, getStudentCourse } from '@/lib/studentCourses';
 import { ROUTES } from '@/app/routes';
 import LessonCard from '@/app/components/LessonCard/LessonCard';
@@ -14,8 +14,7 @@ interface PageProps {
 }
 
 export default async function StudentCoursePage({ params }: PageProps) {
-  const student = await getOrCreateStudent();
-  if (!student) redirect(ROUTES.signIn);
+  const student = await requireStudent();
 
   const { courseId } = await params;
   const course = await getStudentCourse(student.id, courseId);

@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
-import { getOrCreateStudent } from '@/lib/getOrCreateStudent';
+import { requireStudent } from '@/lib/auth/server';
 import { getStudentInstructors } from '@/lib/studentCourses';
-import { ROUTES } from '@/app/routes';
 import CenteredPage from '@/app/components/CenteredPage/CenteredPage';
 import InfoCard from '@/app/components/InfoCard/InfoCard';
 import InfoField from '@/app/components/InfoCard/InfoField';
@@ -12,8 +10,7 @@ export const dynamic = 'force-dynamic';
 const MOCK_OFFICE_HOURS = ['Tuesdays & Fridays', 'SCI 201', '2-4PM'];
 
 export default async function StudentProfilePage() {
-  const student = await getOrCreateStudent();
-  if (!student) redirect(ROUTES.signIn);
+  const student = await requireStudent();
 
   const instructors = await getStudentInstructors(student.id);
 

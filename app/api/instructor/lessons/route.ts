@@ -1,5 +1,6 @@
+import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
 import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
@@ -7,12 +8,12 @@ import { isAcyclic } from '@/app/utils/dagValidation';
 
 // GET /api/instructor/lessons
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const lessons = await prisma.lesson.findMany({
     where: {
-      OR: [{ createdByClerkId: userId }, { createdByClerkId: null }],
+      ...contentScope(user),
     },
     include: {
       lessonNodes: {
@@ -27,8 +28,8 @@ export async function GET() {
 
 // POST /api/instructor/lessons
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   let body: unknown;
   try {
@@ -114,6 +115,9 @@ export async function POST(req: NextRequest) {
 
   const nodeIds = [...new Set((lessonNodes ?? []).map((ln) => ln.nodeId))];
   if (nodeIds.length > 0) {
+    if (!(await referencedContentAllowed('node', nodeIds, user)))
+      return NextResponse.json({ error: 'Referenced nodes are unavailable.' }, { status: 403 });
+
     const draftNode = await prisma.node.findFirst({
       where: { id: { in: nodeIds }, isDraft: true },
       select: { id: true },
@@ -128,7 +132,7 @@ export async function POST(req: NextRequest) {
       title: title?.trim() ?? '',
       slug: slug?.trim() || null,
       summary: summary?.trim() ?? '',
-      createdByClerkId: userId,
+      createdByClerkId: user.clerkUserId,
       isDraft,
       description: description ?? null,
       estimatedMinutes: estimatedMinutes ?? null,
