@@ -16,6 +16,20 @@ html {
   color-scheme: light;
 }
 
+/* APLL design tokens (student and sign-in pages). Text is pure black for accessibility. */
+:root {
+  --apll-cream: #fffcf6;
+  --apll-sand: #f1e8da;
+  --apll-sand-hover: #e8dcc8;
+  --apll-teal: #8ecada;
+  --apll-teal-hover: #74bdd1;
+  --apll-teal-soft: #afd3d3;
+  --apll-teal-ring: #5ab0c8;
+  --apll-teal-strong: #3f93ab;
+  --apll-icon: #6b625a;
+  --apll-text: #000000;
+}
+
 html.dark {
   color-scheme: dark;
   /* Dark Mode Theme Overrides */

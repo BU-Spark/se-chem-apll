@@ -1,0 +1,18 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fullWidth {
+  flex-basis: 100%;
+}
+
+.label {
+  font-size: 0.65rem;
+}
+
+.value {
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
