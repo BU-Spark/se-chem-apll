@@ -7,7 +7,7 @@ import useAttemptApi from '@/app/hooks/useAttemptApi';
 import useRunOnce from '@/app/hooks/useRunOnce';
 import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
 import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
-import QevVideo, { type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import QevVideo, { END_TOLERANCE_SECONDS, type VideoControls } from '@/app/components/QevVideo/QevVideo';
 import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
@@ -17,8 +17,6 @@ import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import styles from './QevLesson.module.css';
 
 const POLL_MS = 300;
-// Players can stop slightly before their reported duration, so count the last second as the end.
-const END_TOLERANCE_SECONDS = 1;
 
 interface QevLessonProps {
   courseLessonId: string;

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
-import QevVideo, { type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import QevVideo, { END_TOLERANCE_SECONDS, type VideoControls } from '@/app/components/QevVideo/QevVideo';
 import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import buttons from '@/app/styles/buttons.module.css';
 import styles from './WatchVideo.module.css';
@@ -32,7 +32,10 @@ export default function WatchVideo({ nodeTitle, video, lessonHref, quizHref }: W
           onEnded={() => setEnded(true)}
         />
         {!ended && (
-          <DevSkipButton onClick={() => controls.current?.seekTo(controls.current.duration() - 0.5)}>
+          // Land inside the end tolerance, so the video counts as ended even if it stays paused.
+          <DevSkipButton
+            onClick={() => controls.current?.seekTo(controls.current.duration() - END_TOLERANCE_SECONDS / 2)}
+          >
             Skip to end (dev only)
           </DevSkipButton>
         )}

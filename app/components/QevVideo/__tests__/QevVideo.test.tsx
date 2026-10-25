@@ -82,7 +82,8 @@ describe('QevVideo', () => {
     await act(async () => jest.advanceTimersByTime(400));
     expect(onEnded).not.toHaveBeenCalled();
 
-    time = 120;
+    // Half a second before the end (where the dev skip lands) already counts, even while paused.
+    time = 119.5;
     await act(async () => jest.advanceTimersByTime(400));
     expect(onEnded).toHaveBeenCalled();
     jest.useRealTimers();

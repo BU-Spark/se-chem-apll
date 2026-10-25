@@ -30,8 +30,9 @@ interface QevVideoProps {
 // YouTube without its own controls or keyboard shortcuts, so students can't skip ahead.
 const NO_SKIP_YOUTUBE = { controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 };
 const PROGRESS_MS = 300;
-// Players can stop slightly before their reported duration; this close counts as the end.
-const END_TOLERANCE_SECONDS = 0.25;
+// Players can stop slightly before their reported duration, so the last second counts as the end.
+// Shared by every video screen so they agree on when a video has ended.
+export const END_TOLERANCE_SECONDS = 1;
 
 function MuxVideo({ playbackId, onReady }: { playbackId: string; onReady: (controls: VideoControls) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
