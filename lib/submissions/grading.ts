@@ -9,8 +9,10 @@ export type QuestionSnapshot = {
   variantId?: string;
   variantValues?: Record<string, string>;
 };
-export type AnswerInput = { questionId: string; selectedIndices?: number[]; rawAnswer?: string };
+// notSure: the student chose "I'm Not Sure", which counts as a wrong answer.
+export type AnswerInput = { questionId: string; selectedIndices?: number[]; rawAnswer?: string; notSure?: boolean };
 export function gradeAnswer(question: QuestionSnapshot, answer: AnswerInput) {
+  if (answer.notSure === true) return false;
   if (parseShortAnswerOptions(question.options)) {
     if (typeof answer.rawAnswer !== 'string' || !answer.rawAnswer.trim() || !Number.isFinite(Number(answer.rawAnswer)))
       throw new Error('Enter a valid numeric answer for every question.');

@@ -53,3 +53,20 @@ it('grades MC sets and numeric answers server-side', () => {
     )
   ).toThrow();
 });
+
+it('grades an "I\'m Not Sure" answer as wrong instead of rejecting it as blank', () => {
+  expect(
+    gradeAnswer({ id: 'q', prompt: '', options: ['A', 'B'], correctIndices: [1] }, { questionId: 'q', notSure: true })
+  ).toBe(false);
+  expect(
+    gradeAnswer(
+      {
+        id: 'q',
+        prompt: '',
+        options: { type: 'shortAnswer', answerMode: 'exact', expectedAnswer: 3 },
+        correctIndices: [],
+      },
+      { questionId: 'q', notSure: true }
+    )
+  ).toBe(false);
+});

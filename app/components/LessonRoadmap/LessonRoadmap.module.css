@@ -1,0 +1,25 @@
+.map {
+  position: relative;
+  max-width: 100%;
+}
+
+.lines {
+  position: absolute;
+  inset: 0;
+}
+
+.lines line {
+  stroke: var(--apll-sand);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.nodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slot {
+  position: absolute;
+}

@@ -34,16 +34,22 @@ describe('getEnrolledCourses', () => {
               id: 'a',
               dueDate: null,
               hideAfterDue: false,
-              lesson: { title: 'A' },
-              progress: [{ status: 'COMPLETED' }],
+              lesson: { title: 'A', lessonNodes: [{ id: 'n1', isRequired: true }] },
+              progress: [{ status: 'COMPLETED', attempts: [] }],
             },
-            { id: 'b', dueDate: null, hideAfterDue: false, lesson: { title: 'B' }, progress: [] },
+            {
+              id: 'b',
+              dueDate: null,
+              hideAfterDue: false,
+              lesson: { title: 'B', lessonNodes: [{ id: 'n2', isRequired: true }] },
+              progress: [],
+            },
             {
               id: 'hidden',
               dueDate: new Date('2026-01-01T00:00:00Z'),
               hideAfterDue: true,
-              lesson: { title: 'Hidden' },
-              progress: [{ status: 'COMPLETED' }],
+              lesson: { title: 'Hidden', lessonNodes: [] },
+              progress: [{ status: 'COMPLETED', attempts: [] }],
             },
           ],
         },
@@ -60,20 +66,24 @@ describe('getEnrolledCourses', () => {
 });
 
 describe('courseProgressPercent', () => {
-  const lesson = (status: 'COMPLETED' | 'NOT_STARTED' | 'IN_PROGRESS') => ({
-    id: status,
+  const lesson = (nodeCount: number, finishedNodeCount: number): StudentLesson => ({
+    id: 'l',
     number: 1,
     title: '',
-    status,
+    status: 'IN_PROGRESS',
+    nodeCount,
+    finishedNodeCount,
   });
 
-  it('is completed lessons out of all lessons, rounded', () => {
-    expect(courseProgressPercent([lesson('COMPLETED'), lesson('IN_PROGRESS'), lesson('NOT_STARTED')])).toBe(33);
-    expect(courseProgressPercent([lesson('COMPLETED'), lesson('COMPLETED')])).toBe(100);
+  it('is finished nodes out of all nodes in the course, rounded', () => {
+    expect(courseProgressPercent([lesson(5, 3), lesson(1, 0)])).toBe(50);
+    expect(courseProgressPercent([lesson(2, 1), lesson(1, 0)])).toBe(33);
+    expect(courseProgressPercent([lesson(2, 2), lesson(1, 1)])).toBe(100);
   });
 
-  it('is 0 for a course with no lessons', () => {
+  it('is 0 for a course without nodes', () => {
     expect(courseProgressPercent([])).toBe(0);
+    expect(courseProgressPercent([lesson(0, 0)])).toBe(0);
   });
 });
 
@@ -103,7 +113,7 @@ describe('getStudentCourse', () => {
     id,
     dueDate: null,
     hideAfterDue: false,
-    lesson: { title: `Title ${id}` },
+    lesson: { title: `Title ${id}`, lessonNodes: [] },
     progress: [],
     ...overrides,
   });
@@ -123,7 +133,7 @@ describe('getStudentCourse', () => {
         title: 'Chem',
         description: 'Intro',
         courseLessons: [
-          courseLesson('a', { progress: [{ status: 'COMPLETED' }] }),
+          courseLesson('a', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
           courseLesson('hidden', { hideAfterDue: true, dueDate: new Date('2026-10-01T00:00:00Z') }),
           courseLesson('b'),
         ],
@@ -135,15 +145,68 @@ describe('getStudentCourse', () => {
       title: 'Chem',
       description: 'Intro',
       lessons: [
-        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED' },
-        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED' },
+        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED', nodeCount: 0, finishedNodeCount: 0 },
+        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED', nodeCount: 0, finishedNodeCount: 0 },
       ],
     });
   });
 });
 
+describe('getStudentCourse lesson status from nodes', () => {
+  const pass = (lessonNodeId: string) => ({ lessonNodeId, isPassing: true });
+  const fail = (lessonNodeId: string) => ({ lessonNodeId, isPassing: false });
+  const courseWith = (attempts: { lessonNodeId: string; isPassing: boolean }[]) => ({
+    course: {
+      id: 'course-1',
+      title: 'Chem',
+      description: null,
+      courseLessons: [
+        {
+          id: 'a',
+          dueDate: null,
+          hideAfterDue: false,
+          lesson: {
+            title: 'Atoms',
+            lessonNodes: [
+              { id: 'n1', isRequired: true },
+              { id: 'n2', isRequired: true },
+            ],
+          },
+          progress: [{ status: 'IN_PROGRESS', attempts }],
+        },
+      ],
+    },
+  });
+  const statusFor = async (attempts: { lessonNodeId: string; isPassing: boolean }[]) => {
+    mockEnrollmentFindFirst.mockResolvedValue(courseWith(attempts));
+    return (await getStudentCourse('student-1', 'course-1'))!.lessons[0].status;
+  };
+
+  it('counts the lesson as completed once every node is complete or incomplete', async () => {
+    expect(await statusFor([pass('n1'), fail('n2'), fail('n2'), fail('n2')])).toBe('COMPLETED');
+  });
+
+  it('keeps the stored status while a node is still open', async () => {
+    expect(await statusFor([pass('n1'), fail('n2')])).toBe('IN_PROGRESS');
+  });
+
+  it('counts each finished node toward the course progress', async () => {
+    mockEnrollmentFindFirst.mockResolvedValue(courseWith([pass('n1'), fail('n2')]));
+    const course = await getStudentCourse('student-1', 'course-1');
+    expect(course!.lessons[0]).toMatchObject({ nodeCount: 2, finishedNodeCount: 1 });
+    expect(courseProgressPercent(course!.lessons)).toBe(50);
+  });
+});
+
 describe('findCurrentLesson', () => {
-  const lesson = (id: string, status: StudentLesson['status']): StudentLesson => ({ id, number: 1, title: id, status });
+  const lesson = (id: string, status: StudentLesson['status']): StudentLesson => ({
+    id,
+    number: 1,
+    title: id,
+    status,
+    nodeCount: 1,
+    finishedNodeCount: status === 'COMPLETED' ? 1 : 0,
+  });
 
   it('picks the first lesson that is not completed', () => {
     expect(

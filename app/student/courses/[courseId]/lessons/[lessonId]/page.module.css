@@ -1,0 +1,43 @@
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3.5rem;
+  color: var(--apll-text);
+}
+
+.back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--apll-text);
+  text-decoration: none;
+}
+
+.header {
+  text-align: center;
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.course {
+  margin-top: 0.5rem;
+}
+
+/* Wide maps scroll sideways instead of overflowing the page. A scrolling area clips what
+   sticks out of it, so the padding leaves room for tooltips on the first/last nodes and below. */
+.scroller {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.5rem 6rem 6rem;
+}
+
+.empty {
+  color: var(--apll-text);
+}

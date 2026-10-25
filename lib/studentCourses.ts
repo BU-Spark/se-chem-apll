@@ -1,17 +1,22 @@
 import type { LessonStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
+import { countFinishedNodes, toOutcomeNode, type FinishedQuiz } from '@/lib/nodeOutcomes';
 
-const asStudent = (studentId: string) => ({ studentId, role: 'STUDENT' as const });
+export const asStudent = (studentId: string) => ({ studentId, role: 'STUDENT' as const });
 
 export interface StudentLesson {
   id: string;
   number: number;
   title: string;
   status: LessonStatus;
+  // Nodes in the lesson, and how many of them the student finished (completed or incomplete).
+  nodeCount: number;
+  finishedNodeCount: number;
 }
 
-// The course lessons a student can see (no drafts), in order, with the student's progress.
+// The course lessons a student can see (no drafts), in order, with the student's progress:
+// their stored status, the lesson's visible nodes, and their finished quizzes.
 const visibleLessonsQuery = (studentId: string) => ({
   where: { lesson: { isDraft: false } },
   orderBy: { sortOrder: 'asc' as const },
@@ -19,8 +24,22 @@ const visibleLessonsQuery = (studentId: string) => ({
     id: true,
     dueDate: true,
     hideAfterDue: true,
-    lesson: { select: { title: true } },
-    progress: { where: { studentId }, select: { status: true } },
+    lesson: {
+      select: {
+        title: true,
+        lessonNodes: { where: { node: { isDraft: false } }, select: { id: true, isRequired: true } },
+      },
+    },
+    progress: {
+      where: { studentId },
+      select: {
+        status: true,
+        attempts: {
+          where: { kind: 'QUIZ' as const, completedAt: { not: null } },
+          select: { lessonNodeId: true, isPassing: true },
+        },
+      },
+    },
   },
 });
 
@@ -33,11 +52,24 @@ type CourseLessonRow = {
   id: string;
   dueDate: Date | null;
   hideAfterDue: boolean;
-  lesson: { title: string };
-  progress: { status: LessonStatus }[];
+  lesson: { title: string; lessonNodes: { id: string; isRequired: boolean }[] };
+  progress: { status: LessonStatus; attempts: FinishedQuiz[] }[];
 };
 
-// Drops lessons hidden after their due date and numbers the rest with the student's status.
+/**
+ * The student's status and finished nodes for one lesson. Lessons aren't handed in from the node
+ * pages, so finishing every node also counts as completed; a handed-in lesson counts every node.
+ */
+function lessonProgress({ lesson, progress }: CourseLessonRow) {
+  const nodeCount = lesson.lessonNodes.length;
+  const stored = progress[0];
+  const finished = stored ? countFinishedNodes(lesson.lessonNodes.map(toOutcomeNode), stored.attempts) : 0;
+  const status: LessonStatus =
+    nodeCount > 0 && finished === nodeCount ? 'COMPLETED' : (stored?.status ?? 'NOT_STARTED');
+  return { status, nodeCount, finishedNodeCount: status === 'COMPLETED' ? nodeCount : finished };
+}
+
+// Drops lessons hidden after their due date and numbers the rest with the student's progress.
 function toStudentLessons(courseLessons: CourseLessonRow[], now: Date): StudentLesson[] {
   return courseLessons
     .filter((courseLesson) => !isLessonHidden(courseLesson, now))
@@ -45,15 +77,15 @@ function toStudentLessons(courseLessons: CourseLessonRow[], now: Date): StudentL
       id: courseLesson.id,
       number: index + 1,
       title: courseLesson.lesson.title,
-      status: courseLesson.progress[0]?.status ?? 'NOT_STARTED',
+      ...lessonProgress(courseLesson),
     }));
 }
 
-// Completed lessons out of all lessons, as a whole percentage (0 when there are no lessons).
+// Finished nodes out of all nodes in the course's lessons, as a whole percentage (0 without nodes).
 export function courseProgressPercent(lessons: StudentLesson[]) {
-  if (lessons.length === 0) return 0;
-  const completed = lessons.filter((lesson) => lesson.status === 'COMPLETED').length;
-  return Math.round((completed / lessons.length) * 100);
+  const total = lessons.reduce((sum, lesson) => sum + lesson.nodeCount, 0);
+  const finished = lessons.reduce((sum, lesson) => sum + lesson.finishedNodeCount, 0);
+  return total === 0 ? 0 : Math.round((finished / total) * 100);
 }
 
 // Courses the student is enrolled in as a student, oldest enrollment first, with their progress.

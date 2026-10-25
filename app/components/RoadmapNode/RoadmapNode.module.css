@@ -1,0 +1,81 @@
+.node {
+  position: relative;
+  width: 4rem;
+  height: 4rem;
+  border: none;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  /* Darker bottom edge gives the design's raised-coin look. */
+  box-shadow: inset 0 -0.3rem 0 rgba(0, 0, 0, 0.18);
+}
+
+/* Colors chosen so icons keep at least 3:1 contrast (WCAG non-text). */
+.NOT_STARTED,
+.IN_PROGRESS {
+  background: var(--apll-teal-strong);
+  color: #ffffff;
+}
+
+.COMPLETED {
+  background: #3e8e41;
+  color: #ffffff;
+}
+
+.INCOMPLETE {
+  background: #c4486b;
+  color: #ffffff;
+}
+
+.LOCKED {
+  background: #d9d9d9;
+  color: #4b4b4b;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 0.8rem);
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  /* Size to the text so short labels stay on one line; long titles wrap at max-width. */
+  width: max-content;
+  max-width: 14rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.75rem;
+  background: var(--apll-sand);
+  color: var(--apll-text);
+  display: none;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  cursor: default;
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  top: -0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0.5rem solid transparent;
+  border-top: none;
+  border-bottom-color: var(--apll-sand);
+}
+
+/* Clicking a button focuses it, so focus shows the tooltip on click and for keyboard users. */
+.node:hover .tooltip,
+.node:focus .tooltip {
+  display: flex;
+}
+
+.tooltipTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.tooltipDetail {
+  font-size: 0.75rem;
+}

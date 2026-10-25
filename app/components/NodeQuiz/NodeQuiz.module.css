@@ -1,0 +1,42 @@
+.introTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.introLead {
+  max-width: 22rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.introText {
+  max-width: 28rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.quizBody {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+}
+
+.quizFooter {
+  align-self: flex-end;
+  display: flex;
+  gap: 1.25rem;
+  margin-top: auto;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}

@@ -1,0 +1,34 @@
+.header {
+  align-self: flex-start;
+  text-align: left;
+}
+
+.title {
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.bars {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.done,
+.todo {
+  width: 1.6rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+}
+
+.done {
+  background: var(--apll-teal-strong);
+}
+
+.todo {
+  background: var(--apll-sand);
+}
+
+.label {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+}
