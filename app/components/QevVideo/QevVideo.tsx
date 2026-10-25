@@ -23,6 +23,8 @@ interface QevVideoProps {
   onReady?: (controls: VideoControls) => void;
   // While a question is open the video stays paused: Play is disabled.
   playLocked?: boolean;
+  // Called once the video reaches its end.
+  onEnded?: () => void;
 }
 
 // YouTube without its own controls or keyboard shortcuts, so students can't skip ahead.
@@ -84,7 +86,7 @@ const formatTime = (seconds: number) =>
  * The node's video (YouTube or Mux) with the lesson's own controls: Play/Pause, a view-only
  * progress bar, and captions. There is no seek bar, so the whole video has to be watched.
  */
-export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false }: QevVideoProps) {
+export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false, onEnded }: QevVideoProps) {
   const youTubeId = videoUrl ? parseYouTubeId(videoUrl) : null;
   const controlsRef = useRef<VideoControls | null>(null);
   const [ready, setReady] = useState(false);
@@ -125,6 +127,11 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
     }, PROGRESS_MS);
     return () => clearInterval(timer);
   }, [ready]);
+
+  const ended = progress.duration > 0 && progress.time >= progress.duration - END_TOLERANCE_SECONDS;
+  useEffect(() => {
+    if (ended) onEnded?.();
+  }, [ended, onEnded]);
 
   const hasVideo = Boolean(youTubeId || muxPlaybackId);
   const percent = progress.duration > 0 ? Math.min(100, (100 * progress.time) / progress.duration) : 0;

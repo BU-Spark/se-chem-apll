@@ -7,13 +7,16 @@ const LETTERS = 'ABCDEFGH';
 interface QuizQuestionViewProps {
   question: QuizQuestion;
   answer: QuizAnswer | undefined;
-  onChoose: (choiceIndex: number) => void;
+  onSelect: (selectedIndices: number[]) => void;
   onType: (rawAnswer: string) => void;
 }
 
-// One question: lettered choices for multiple choice, a number box otherwise.
-export default function QuizQuestionView({ question, answer, onChoose, onType }: QuizQuestionViewProps) {
+// One question: lettered choices for multiple choice (pick one, or several when more than one
+// is correct), a number box otherwise.
+export default function QuizQuestionView({ question, answer, onSelect, onType }: QuizQuestionViewProps) {
   const selected = answer && 'selectedIndices' in answer ? answer.selectedIndices : [];
+  const toggle = (index: number) =>
+    onSelect(selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index]);
   const rawAnswer = answer && 'rawAnswer' in answer ? answer.rawAnswer : '';
   const showNumberError = rawAnswer.trim() !== '' && !Number.isFinite(Number(rawAnswer));
 
@@ -21,15 +24,20 @@ export default function QuizQuestionView({ question, answer, onChoose, onType }:
     <section className={styles.question} aria-label="Question">
       <MarkdownPreview content={question.prompt} />
       {question.choices ? (
-        <div className={styles.choices} role="radiogroup">
+        <div
+          className={styles.choices}
+          role={question.allowsMultiple ? 'group' : 'radiogroup'}
+          aria-label={question.allowsMultiple ? 'Select all that apply' : 'Choose one answer'}
+        >
+          {question.allowsMultiple && <p className={styles.hint}>Select all that apply</p>}
           {question.choices.map((choice, index) => (
             <button
               key={index}
               type="button"
-              role="radio"
+              role={question.allowsMultiple ? 'checkbox' : 'radio'}
               aria-checked={selected.includes(index)}
               className={selected.includes(index) ? `${styles.choice} ${styles.selected}` : styles.choice}
-              onClick={() => onChoose(index)}
+              onClick={() => (question.allowsMultiple ? toggle(index) : onSelect([index]))}
             >
               <span className={styles.letter}>{LETTERS[index]}</span>
               <MarkdownPreview content={choice} />

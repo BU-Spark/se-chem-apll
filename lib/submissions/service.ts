@@ -216,6 +216,8 @@ function publicAttempt(attempt: {
       id: q.id,
       prompt: q.prompt,
       choices: getMultipleChoiceChoices(q.options),
+      // Lets the student see "Select all that apply" without revealing which answers are correct.
+      allowsMultiple: q.correctIndices.length > 1,
     })),
   };
 }

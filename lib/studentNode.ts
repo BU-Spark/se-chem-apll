@@ -41,8 +41,9 @@ export const canWatchVideo = (screen: NodeScreen) =>
   screen === 'INTRO' || screen === 'REFRESH' || screen === 'RETRY' || screen === 'VIDEO_RESULT';
 
 /**
- * The quiz page opens after the video lesson (without video questions, watching is enough).
- * A regular node's retry goes straight back to the quiz.
+ * The quiz page opens after the video lesson. A regular node's retry goes straight back to it.
+ * A video without questions leaves no record, so the server can't check it was watched: the
+ * video page only shows Continue once the video ends (WatchVideo).
  */
 export const canOpenQuiz = (screen: NodeScreen, hasVideoQuestions: boolean, isFoundational: boolean) =>
   screen === 'VIDEO_RESULT' || (screen === 'RETRY' && !isFoundational) || (canWatchVideo(screen) && !hasVideoQuestions);

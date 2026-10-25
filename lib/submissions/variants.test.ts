@@ -133,7 +133,9 @@ beforeEach(() => {
 
 it('selects one complete variant, resumes it across new requests, and restores it in the assignment view without exposing answers', async () => {
   const first = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'first-key');
-  expect(first.questions).toEqual([{ id: 'question', prompt: 'Moles of H2O in 36.03 g?', choices: null }]);
+  expect(first.questions).toEqual([
+    { id: 'question', prompt: 'Moles of H2O in 36.03 g?', choices: null, allowsMultiple: false },
+  ]);
   expect(mockRandomInt).toHaveBeenCalledWith(2);
   expect((mockAttempts[0].snapshot as unknown as AttemptSnapshot).questions[0]).toMatchObject({
     variantId: 'water',

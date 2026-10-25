@@ -191,4 +191,87 @@ describe('getStudentNode', () => {
       lastQuiz: undefined,
     });
   });
+
+  it('handles a video with zero questions (or only notes)', async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        // A checkpoint with only notes: the query keeps QUESTION rows, so it has none.
+        checkpoints: [{ timeOffsetSeconds: 30, questions: [] }],
+      },
+    });
+    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'REFRESH',
+      questionTimes: {},
+      hasVideoQuestions: false,
+      lastVideo: undefined,
+    });
+  });
+
+  it('shows Incomplete with the last score after three failed quizzes', async () => {
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'Course #3',
+      lessonTitle: 'Lesson 2',
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE' }],
+      edges: [],
+    });
+    // Newest first, as the query orders them.
+    mockAttemptFindMany.mockResolvedValue([
+      quiz(50, false, 2, 3),
+      video(40, 3, 5),
+      quiz(30, false, 1, 3),
+      video(20, 2, 5),
+      quiz(10, false, 0, 3),
+    ]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'INCOMPLETE',
+      lastQuiz: { correct: 2, total: 3 },
+    });
+  });
+
+  it('uses only the newest video after the newest failed quiz when attempts are mixed', async () => {
+    // Fail → video → fail → video: the second round's video result shows.
+    mockAttemptFindMany.mockResolvedValue([
+      video(40, 4, 5),
+      quiz(30, false, 1, 3),
+      video(20, 1, 5),
+      quiz(10, false, 0, 3),
+    ]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'VIDEO_RESULT',
+      lastQuiz: { correct: 1, total: 3 },
+      lastVideo: { correct: 4, total: 5, passed: true },
+    });
+    // The mocks above are newest first, so the query must ask the database for that order.
+    expect(mockAttemptFindMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { completedAt: 'desc' } }));
+
+    // Fail → video → fail: the old video doesn't count, so the student retries.
+    mockAttemptFindMany.mockResolvedValue([quiz(30, false, 1, 3), video(20, 5, 5), quiz(10, false, 0, 3)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'RETRY',
+      lastVideo: undefined,
+    });
+  });
+
+  it('scores attempts with zero responses as 0/0 instead of failing', async () => {
+    mockAttemptFindMany.mockResolvedValue([video(20, 0, 0), quiz(10, false, 0, 0)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      lastQuiz: { correct: 0, total: 0 },
+      // No questions to get wrong, so the video counts as passed (no division by zero).
+      lastVideo: { correct: 0, total: 0, passed: true },
+    });
+  });
+
+  it('passes a database error on to the page instead of hiding it', async () => {
+    mockAttemptFindMany.mockResolvedValue([]);
+    mockLessonNodeFindUnique.mockRejectedValue(new Error('database unavailable'));
+    await expect(getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).rejects.toThrow('database unavailable');
+
+    mockGetStudentLessonRoadmap.mockRejectedValue(new Error('connection lost'));
+    await expect(getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).rejects.toThrow('connection lost');
+  });
 });

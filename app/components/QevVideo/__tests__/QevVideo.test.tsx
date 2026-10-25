@@ -74,4 +74,17 @@ describe('QevVideo', () => {
     await userEvent.click(cc);
     expect(ytPlayer.unloadModule).toHaveBeenCalledWith('captions');
   });
+
+  it('tells the page once the video reaches its end', async () => {
+    jest.useFakeTimers();
+    const onEnded = jest.fn();
+    render(<QevVideo {...youTube} onEnded={onEnded} />);
+    await act(async () => jest.advanceTimersByTime(400));
+    expect(onEnded).not.toHaveBeenCalled();
+
+    time = 120;
+    await act(async () => jest.advanceTimersByTime(400));
+    expect(onEnded).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 });

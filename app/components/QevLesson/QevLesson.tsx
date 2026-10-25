@@ -8,17 +8,17 @@ import useRunOnce from '@/app/hooks/useRunOnce';
 import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
 import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
 import QevVideo, { type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
 import buttons from '@/app/styles/buttons.module.css';
+import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import styles from './QevLesson.module.css';
 
 const POLL_MS = 300;
 // Players can stop slightly before their reported duration, so count the last second as the end.
 const END_TOLERANCE_SECONDS = 1;
-// Developer-only shortcut for testing; never set this in production.
-const DEV_SKIP = process.env.NEXT_PUBLIC_DEV_QEV_SKIP === 'true';
 
 interface QevLessonProps {
   courseLessonId: string;
@@ -156,9 +156,7 @@ export default function QevLesson({
               key={question.id}
               question={question}
               answer={answers[question.id]}
-              onChoose={(choiceIndex) =>
-                setAnswers((prev) => ({ ...prev, [question.id]: { selectedIndices: [choiceIndex] } }))
-              }
+              onSelect={(selectedIndices) => setAnswers((prev) => ({ ...prev, [question.id]: { selectedIndices } }))}
               onType={(rawAnswer) => setAnswers((prev) => ({ ...prev, [question.id]: { rawAnswer } }))}
             />
           ) : (
@@ -179,16 +177,14 @@ export default function QevLesson({
             onReady={(c) => (controls.current = c)}
             playLocked={questionOpen}
           />
-          {DEV_SKIP && !questionOpen && !videoEnded && (
-            <button type="button" className={styles.devSkip} onClick={devSkip}>
-              Skip to next question (dev only)
-            </button>
+          {!questionOpen && !videoEnded && (
+            <DevSkipButton onClick={devSkip}>Skip to next question (dev only)</DevSkipButton>
           )}
         </div>
       </div>
 
       {error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className={screen.error}>
           {error}
         </p>
       )}
