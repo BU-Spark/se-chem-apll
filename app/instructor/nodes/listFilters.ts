@@ -1,6 +1,7 @@
 import type { FilterModel } from 'ag-grid-community';
 import { parseGridFilters } from './gridFilterState';
 export interface NodeListItem {
+  canEdit?: boolean;
   id: string;
   title: string;
   summary: string | null;

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Lesson, LessonNode, Node } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
@@ -212,6 +213,9 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
         </p>
       </header>
 
+      <p>
+        <Link href={`/instructor/copy?mode=nodes&destinationId=${lesson.id}`}>Copy nodes from another course</Link>
+      </p>
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>

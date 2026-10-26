@@ -156,7 +156,17 @@ export default function NodesGrid({
         tooltipField: 'summary',
         filter: 'agTextColumnFilter',
         cellRenderer: ({ data }: ICellRendererParams<NodeGridRow>) =>
-          data ? <EditorTitle href={`/instructor/nodes/${data.id}/edit`} title={data.title} /> : null,
+          data ? (
+            <EditorTitle
+              href={
+                data.canEdit === false
+                  ? `/instructor/copy?mode=nodes&nodeId=${data.id}`
+                  : `/instructor/nodes/${data.id}/edit`
+              }
+              title={data.title}
+              destination={data.canEdit === false ? 'copy workflow' : 'editor'}
+            />
+          ) : null,
       },
       {
         field: 'isDraft',

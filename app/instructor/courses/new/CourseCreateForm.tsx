@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import LessonScheduleFields from '@/app/components/LessonScheduleFields';
@@ -108,6 +109,9 @@ export default function CourseCreateForm({ availableLessons }: Props) {
         <p className={styles.pageSubtitle}>Create a new course to organize your lessons.</p>
       </header>
 
+      <p>
+        <Link href="/instructor/copy">Duplicate an existing course</Link>
+      </p>
       <form onSubmit={handleSubmit} className={styles.form}>
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Course details</h2>

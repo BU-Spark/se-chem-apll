@@ -2,6 +2,7 @@ import type { FilterModel } from 'ag-grid-community';
 import { parseGridFilters } from '../../components/InstructorGrid/filterModel';
 export type SearchParams = Record<string, string | string[] | undefined>;
 export type CourseListItem = {
+  canEdit?: boolean;
   id: string;
   title: string;
   code: string;

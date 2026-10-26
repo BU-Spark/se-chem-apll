@@ -22,7 +22,7 @@ it('loads counts and only instructor-owned course associations, and passes URL s
   expect(screen.getByRole('link', { name: '+ New lesson' })).toHaveAttribute('href', '/instructor/lessons/new');
   expect(mockLessons).toHaveBeenCalledWith(
     expect.objectContaining({
-      where: { OR: [{ createdByClerkId: 'instructor-1' }, { createdByClerkId: null }] },
+      where: {},
       select: expect.objectContaining({
         _count: { select: { lessonNodes: true } },
         courseLessons: {

@@ -2,6 +2,7 @@
 
 import CourseTabs from '@/app/components/CourseTabs';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Course, Lesson, Enrollment, CourseContact, CourseLesson } from '@prisma/client';
 import styles from './page.module.css';
@@ -161,6 +162,11 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
         </p>
       </header>
 
+      <p>
+        <Link href={`/instructor/copy?mode=course&sourceCourseId=${course.id}`}>Duplicate course</Link>
+        {' · '}
+        <Link href={`/instructor/copy?mode=lessons&destinationId=${course.id}`}>Copy lessons from another course</Link>
+      </p>
       <CourseTabs courseId={course.id} active="edit" />
 
       <form onSubmit={handleSubmit} className={styles.form}>
