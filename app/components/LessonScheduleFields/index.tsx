@@ -11,9 +11,13 @@ import styles from './styles.module.css';
 export default function LessonScheduleFields({
   value,
   onChange,
+  onOpenDateFocus,
+  onOpenDateBlur,
 }: {
   value: LessonScheduleValue;
   onChange: (patch: Partial<LessonScheduleValue>) => void;
+  onOpenDateFocus?: () => void;
+  onOpenDateBlur?: () => void;
 }) {
   const percent = Number(value.latePenaltyPercent);
   const exampleHours = value.latePenaltyType === 'DAILY' ? 24 : 1;
@@ -29,6 +33,8 @@ export default function LessonScheduleFields({
             <input
               type="datetime-local"
               step="60"
+              onFocus={key === 'openDate' ? onOpenDateFocus : undefined}
+              onBlur={key === 'openDate' ? onOpenDateBlur : undefined}
               // Keep full precision in form state until this field is edited.
               value={value[key].slice(0, 16)}
               onChange={(event) => onChange({ [key]: event.target.value })}
