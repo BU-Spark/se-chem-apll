@@ -2,6 +2,8 @@
 
 import CourseTabs from '@/app/components/CourseTabs';
 import { useState } from 'react';
+import Link from 'next/link';
+import { useScheduleShift } from '@/app/components/ScheduleShiftPrompt';
 import { useRouter } from 'next/navigation';
 import type { Course, Lesson, Enrollment, CourseContact, CourseLesson } from '@prisma/client';
 import styles from './page.module.css';
@@ -64,6 +66,8 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
   });
 
   function addLesson(lesson: AvailableLesson) {
+    if (scheduleShift.pending) return;
+    scheduleShift.clearUndo();
     setImportedLessons((prev) => [
       ...prev,
       {
@@ -74,17 +78,19 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
     ]);
     setLessonQuery('');
   }
-  function updateImported(lessonId: string, patch: Partial<ImportedLesson>) {
-    setImportedLessons((prev) => prev.map((row) => (row.lessonId === lessonId ? { ...row, ...patch } : row)));
-  }
+  const scheduleShift = useScheduleShift(importedLessons, setImportedLessons);
+  const updateImported = scheduleShift.update;
 
   function removeImported(lessonId: string) {
+    if (scheduleShift.pending) return;
+    scheduleShift.clearUndo();
     setImportedLessons((prev) => prev.filter((row) => row.lessonId !== lessonId));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (scheduleShift.pending) return;
     for (const row of importedLessons) {
       const policyError = validateLessonPolicy(schedulePayload(row));
       if (policyError) {
@@ -161,6 +167,11 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
         </p>
       </header>
 
+      <p>
+        <Link href={`/instructor/copy?mode=course&sourceCourseId=${course.id}`}>Duplicate course</Link>
+        {' · '}
+        <Link href={`/instructor/copy?mode=lessons&destinationId=${course.id}`}>Copy lessons from another course</Link>
+      </p>
       <CourseTabs courseId={course.id} active="edit" />
 
       <form onSubmit={handleSubmit} className={styles.form}>
@@ -250,6 +261,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
             )}
           </div>
 
+          {scheduleShift.prompt}
           {importedLessons.length === 0 ? (
             <p className={styles.emptyImport}>No lessons imported yet.</p>
           ) : (
@@ -257,7 +269,12 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
               {importedLessons.map((row) => (
                 <li key={row.lessonId} className={styles.importItem}>
                   <p className={styles.importTitle}>{row.title}</p>
-                  <LessonScheduleFields value={row} onChange={(patch) => updateImported(row.lessonId, patch)} />
+                  <LessonScheduleFields
+                    value={row}
+                    onChange={(patch) => updateImported(row.lessonId, patch)}
+                    onOpenDateFocus={() => scheduleShift.startEditing(row.lessonId)}
+                    onOpenDateBlur={() => scheduleShift.finishEditing(row.lessonId)}
+                  />
                   <button type="button" className={styles.removeBtn} onClick={() => removeImported(row.lessonId)}>
                     Remove
                   </button>
@@ -277,7 +294,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
             <a href="/instructor/courses" className={styles.cancelLink}>
               Cancel
             </a>
-            <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>
+            <button type="submit" className={styles.submitBtn} disabled={saving || deleting || scheduleShift.pending}>
               {saving ? 'Saving…' : 'Save changes'}
             </button>
           </div>

@@ -71,11 +71,11 @@ describe('NodesPage', () => {
       })
     );
   });
-  it('keeps node access and lesson metadata restricted to the instructor', async () => {
+  it('allows global node browsing while restricting lesson management metadata', async () => {
     await NodesPage({});
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { OR: [{ createdByClerkId: 'instructor-1' }, { createdByClerkId: null }] },
+        where: {},
         select: expect.objectContaining({
           lessonNodes: {
             where: { lesson: { createdByClerkId: 'instructor-1' } },

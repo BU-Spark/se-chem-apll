@@ -12,8 +12,9 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
   const user = await requireInstructor();
   const [availableNodes, lessons] = await Promise.all([
     prisma.node.findMany({
-      where: { ...contentScope(user) },
+      where: {},
       select: {
+        createdByClerkId: true,
         id: true,
         title: true,
         summary: true,
@@ -43,7 +44,20 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
         </Link>
       </div>
 
-      <NodesGrid nodes={availableNodes} lessons={lessons} initialFilters={filters} />
+      <p>
+        <Link href="/instructor/copy?mode=nodes">Copy nodes from another course</Link>
+      </p>
+      <NodesGrid
+        nodes={availableNodes.map((item) => ({
+          ...item,
+          canEdit:
+            user.platformRole === 'ADMIN' ||
+            item.createdByClerkId === null ||
+            item.createdByClerkId === user.clerkUserId,
+        }))}
+        lessons={lessons}
+        initialFilters={filters}
+      />
     </div>
   );
 }

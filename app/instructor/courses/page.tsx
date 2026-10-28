@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import styles from '../../components/InstructorGrid/grid.module.css';
-import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { requireInstructor } from '@/lib/auth/server';
 import CoursesGrid from './CoursesGrid';
 import { readCourseFilters, type SearchParams } from './listFilters';
 
@@ -11,8 +11,9 @@ export default async function CoursesPage({ searchParams }: { searchParams?: Pro
   const user = await requireInstructor();
   const filters = readCourseFilters((await searchParams) ?? {});
   const courses = await prisma.course.findMany({
-    where: { ...contentScope(user) },
+    where: {},
     select: {
+      createdByClerkId: true,
       id: true,
       title: true,
       code: true,
@@ -32,7 +33,19 @@ export default async function CoursesPage({ searchParams }: { searchParams?: Pro
           + New course
         </Link>
       </div>
-      <CoursesGrid courses={courses} initialFilters={filters} />
+      <p>
+        <Link href="/instructor/copy?mode=course">Duplicate a course</Link>
+      </p>
+      <CoursesGrid
+        courses={courses.map((item) => ({
+          ...item,
+          canEdit:
+            user.platformRole === 'ADMIN' ||
+            item.createdByClerkId === null ||
+            item.createdByClerkId === user.clerkUserId,
+        }))}
+        initialFilters={filters}
+      />
     </div>
   );
 }
