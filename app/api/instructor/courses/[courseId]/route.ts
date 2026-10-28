@@ -1,6 +1,8 @@
+import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
+import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 interface RouteContext {
   params: Promise<{ courseId: string }>;
@@ -8,14 +10,20 @@ interface RouteContext {
 
 // GET /api/instructor/courses/[courseId]
 export async function GET(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
       enrollments: true,
       contacts: true,
     },
@@ -26,8 +34,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 // PATCH /api/instructor/courses/[courseId]
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
   let body: unknown;
@@ -37,12 +45,26 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, section, title, description } = body as {
+  const { code, section, title, description, lessons } = body as {
     code?: string;
     section?: string | null;
     title?: string;
     description?: string | null;
+    lessons?: Array<
+      LessonPolicyInput & {
+        lessonId: string;
+        sortOrder: number;
+      }
+    >;
   };
+
+  const owned = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   // If code or section is being updated, check for duplicates
   if (code !== undefined || section !== undefined) {
@@ -56,9 +78,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     // Only check for duplicates if code or section actually changed
     if (newCode !== currentCourse.code || newSection !== currentCourse.section) {
-      const existing = await prisma.course.findUnique({
+      const existing = await prisma.course.findFirst({
         where: {
-          code_section: { code: newCode, section: newSection },
+          code: newCode,
+          section: newSection,
         },
       });
 
@@ -68,6 +91,38 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  if (lessons !== undefined) {
+    for (const row of lessons) {
+      if (!row.lessonId) {
+        return NextResponse.json({ error: 'Each imported lesson needs a lessonId' }, { status: 422 });
+      }
+      const policyError = validateLessonPolicy(row);
+      if (policyError) return NextResponse.json({ error: policyError }, { status: 422 });
+    }
+
+    const lessonIds = [...new Set(lessons.map((row) => row.lessonId))];
+    if (lessonIds.length > 0) {
+      if (!(await referencedContentAllowed('lesson', lessonIds, user)))
+        return NextResponse.json({ error: 'Referenced lessons are unavailable.' }, { status: 403 });
+
+      const draftLesson = await prisma.lesson.findFirst({
+        where: { id: { in: lessonIds }, isDraft: true },
+        select: { id: true },
+      });
+      if (draftLesson) {
+        return NextResponse.json({ error: 'Draft lessons cannot be added to a course.' }, { status: 422 });
+      }
+    }
+  }
+
+  if (
+    lessons !== undefined &&
+    (await prisma.courseLesson.count({
+      where: { courseId, lessonId: { notIn: lessons.map((row) => row.lessonId) }, progress: { some: {} } },
+    }))
+  ) {
+    return NextResponse.json({ error: 'Assignments with student activity cannot be removed.' }, { status: 409 });
+  }
   const course = await prisma.course.update({
     where: { id: courseId },
     data: {
@@ -75,9 +130,22 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       ...(section !== undefined && { section: section?.trim() || null }),
       ...(title !== undefined && { title: title.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
+      ...(lessons !== undefined && {
+        courseLessons: {
+          deleteMany: { lessonId: { notIn: lessons.map((row) => row.lessonId) } },
+          upsert: lessons.map((row) => ({
+            where: { courseId_lessonId: { courseId, lessonId: row.lessonId } },
+            create: { lessonId: row.lessonId, ...lessonPolicyData(row), sortOrder: row.sortOrder },
+            update: { ...lessonPolicyData(row), sortOrder: row.sortOrder },
+          })),
+        },
+      }),
     },
     include: {
-      lessons: { orderBy: { sortOrder: 'asc' } },
+      courseLessons: {
+        include: { lesson: true },
+        orderBy: { sortOrder: 'asc' },
+      },
       enrollments: true,
       contacts: true,
     },
@@ -88,10 +156,22 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
 // DELETE /api/instructor/courses/[courseId]
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
+
+  const owned = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+    select: { id: true },
+  });
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  if (await prisma.courseLessonProgress.count({ where: { courseLesson: { courseId } } }))
+    return NextResponse.json({ error: 'Courses with student activity cannot be deleted.' }, { status: 409 });
   await prisma.course.delete({ where: { id: courseId } });
   return new NextResponse(null, { status: 204 });
 }

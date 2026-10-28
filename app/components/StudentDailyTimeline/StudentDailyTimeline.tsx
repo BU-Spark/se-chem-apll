@@ -1,10 +1,13 @@
 import styles from './StudentDailyTimeline.module.css';
 
+const formatDeadline = (date: Date) =>
+  new Date(date).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' });
+
 type Lesson = {
   id: string;
   title: string;
-  openDate?: string | null;
-  dueDate?: string | null;
+  openDate?: Date | null;
+  dueDate?: Date | null;
 };
 
 type DailyCourse = {
@@ -38,8 +41,8 @@ export default function StudentDailyTimeline({ data }: { data: DailyCourse[] }) 
               <li key={l.id} className={styles.lesson}>
                 <p className={styles.lessonTitle}>{l.title}</p>
                 <p className={styles.lessonMeta}>
-                  {l.openDate ? `Opens ${new Date(l.openDate).toLocaleString()}` : ''}
-                  {l.dueDate ? `${l.openDate ? ' · ' : ''}Due ${new Date(l.dueDate).toLocaleString()}` : ''}
+                  {l.openDate ? `Opens ${formatDeadline(l.openDate)}` : ''}
+                  {l.dueDate ? `${l.openDate ? ' · ' : ''}Due ${formatDeadline(l.dueDate)}` : ''}
                 </p>
               </li>
             ))}

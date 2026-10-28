@@ -1,0 +1,21 @@
+.ring {
+  --percent: 0;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--apll-teal-ring) calc(var(--percent) * 1%), var(--apll-sand) 0);
+}
+
+.value {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: var(--apll-cream);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--apll-text);
+}

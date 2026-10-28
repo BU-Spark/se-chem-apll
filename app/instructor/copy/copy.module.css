@@ -1,0 +1,85 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  color: #111827;
+}
+.page h1 {
+  font-size: 1.75rem;
+}
+.page h2 {
+  font-size: 1.1rem;
+}
+.page p {
+  color: #4b5563;
+}
+.form {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.875rem;
+  min-width: 0;
+}
+.panel legend {
+  font-weight: 600;
+}
+.field {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.6rem;
+  font: inherit;
+  background: white;
+  color: #111827;
+  width: 100%;
+}
+.choices {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+.choice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.4rem 0;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+}
+.actions button {
+  padding: 0.65rem 1rem;
+  background: #1f5fab;
+  color: white;
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.error {
+  color: #b91c1c;
+}
+.panel ul {
+  padding-left: 1.5rem;
+  overflow-wrap: anywhere;
+}

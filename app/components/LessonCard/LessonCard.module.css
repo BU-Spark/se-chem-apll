@@ -1,0 +1,79 @@
+.card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.75rem;
+  height: 5.25rem;
+  border-radius: 0.75rem;
+  background: var(--apll-sand);
+  color: var(--apll-text);
+  text-decoration: none;
+  transform: rotate(var(--tilt, 0deg));
+}
+
+/* Slight tilts so the row looks hand-placed, like the design. */
+.card:nth-of-type(3n + 1) {
+  --tilt: -2deg;
+}
+
+.card:nth-of-type(3n + 2) {
+  --tilt: 3deg;
+}
+
+.current {
+  background: var(--apll-teal);
+  --tilt: 0deg;
+}
+
+.check {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 0.9rem);
+  left: 50%;
+  z-index: 1;
+  min-width: 9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.75rem;
+  background: var(--apll-sand);
+  display: none;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+  transform: translateX(-50%) rotate(calc(var(--tilt, 0deg) * -1));
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  top: -0.45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0.5rem solid transparent;
+  border-top: none;
+  border-bottom-color: var(--apll-sand);
+}
+
+/* Always shown on the current lesson; on others while hovered or focused. */
+.current .tooltip,
+.card:hover .tooltip,
+.card:focus-visible .tooltip {
+  display: flex;
+}
+
+.card:hover:not(.current) .tooltip,
+.card:focus-visible:not(.current) .tooltip {
+  z-index: 2;
+}
+
+.tooltipTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.tooltipStatus {
+  font-size: 0.7rem;
+}

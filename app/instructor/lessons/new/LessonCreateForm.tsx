@@ -1,19 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Course } from '@prisma/client';
-import LessonBuilder from '@/app/components/LessonBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
+import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
   availableNodes: PaletteNode[];
-  courses: Course[];
 }
 
-export default function LessonCreateForm({ availableNodes, courses }: Props) {
+export default function LessonCreateForm({ availableNodes }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +21,7 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
   const [slug, setSlug] = useState('');
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
-  const [openDate, setOpenDate] = useState('');
-  const [dueDate, setDueDate] = useState('');
 
   // Auto-generate slug from title
   function handleTitleChange(val: string) {
@@ -40,22 +35,76 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
     );
   }
 
-  // Lesson nodes (drag-and-drop state)
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>([]);
+  const [edges, setEdges] = useState<LessonEdgeEntry[]>([]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleLessonNodesChange(updated: LessonNodeEntry[]) {
+    const validIds = new Set(updated.map((e) => e.instanceId));
+    setEdges((prev) => prev.filter((e) => validIds.has(e.sourceInstanceId) && validIds.has(e.targetInstanceId)));
+    setLessonNodes(updated);
+  }
+
+  async function persistLesson(asDraft: boolean) {
     setError(null);
 
-    if (lessonNodes.length === 0) {
-      setError('Add at least one node to the lesson before saving.');
-      return;
+    if (!asDraft) {
+      if (!title.trim()) {
+        setError('Title is required.');
+        return;
+      }
+      if (!slug.trim()) {
+        setError('Slug is required.');
+        return;
+      }
+      if (!summary.trim()) {
+        setError('Summary is required.');
+        return;
+      }
+      if (lessonNodes.length === 0) {
+        setError('Add at least one node to the lesson before saving.');
+        return;
+      }
+
+      if (
+        lessonNodes.some(
+          (entry) =>
+            entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100
+        )
+      ) {
+        setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+        return;
+      }
+
+      if (
+        lessonNodes.some((entry) => {
+          if (entry.quizBankCount === 0) {
+            return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+          }
+          return (
+            entry.quizQuestionCount === '' ||
+            !Number.isInteger(Number(entry.quizQuestionCount)) ||
+            Number(entry.quizQuestionCount) < 1
+          );
+        })
+      ) {
+        setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+        return;
+      }
     }
 
-    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
-      setError('Open date must be before due date.');
-      return;
-    }
+    const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
+    const serialisedEdges = edges
+      .map((e) => ({
+        sourceSortOrder: instanceToSortOrder.get(e.sourceInstanceId),
+        targetSortOrder: instanceToSortOrder.get(e.targetInstanceId),
+      }))
+      .filter(
+        (e): e is { sourceSortOrder: number; targetSortOrder: number } =>
+          e.sourceSortOrder !== undefined && e.targetSortOrder !== undefined
+      );
 
     setSaving(true);
     try {
@@ -67,16 +116,16 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           slug,
           summary,
           description: description || null,
-          courseId,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
-          openDate: openDate || null,
-          dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
-            passingPercentOverride: entry.passingPercentOverride ? Number(entry.passingPercentOverride) : null,
+            passingPercent: Number(entry.passingPercent),
+            quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
+          edges: serialisedEdges,
+          isDraft: asDraft,
         }),
       });
 
@@ -93,55 +142,36 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await persistLesson(false);
+  }
+
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New lesson</h1>
-        <p className={styles.pageSubtitle}>
-          Fill in the lesson details, then drag nodes from the library into the lesson canvas below.
-        </p>
+        <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
       </header>
 
+      <p>
+        <Link href="/instructor/copy?mode=nodes">Copy nodes from another course to your library</Link>
+      </p>
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Course <span className={styles.required}>*</span>
-              <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                {courses.length === 0 && <option value="">No courses — create one first</option>}
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                    {c.section ? ` §${c.section}` : ''} — {c.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Estimated duration (min)
-              <input
-                type="number"
-                min={1}
-                value={estimatedMinutes}
-                onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="30"
-              />
-            </label>
-          </div>
-
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Open date
-              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              Due date
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Estimated duration (min)
+            <input
+              type="number"
+              min={1}
+              value={estimatedMinutes}
+              onChange={(e) => setEstimatedMinutes(e.target.value)}
+              placeholder="30"
+            />
+          </label>
 
           <div className={styles.fieldRow2}>
             <label className={styles.field}>
@@ -187,14 +217,22 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           </label>
         </section>
 
-        {/* ── Builder ── */}
+        {/* ── Roadmap ── */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Build lesson</h2>
+          <h2 className={styles.sectionTitle}>Learning roadmap</h2>
           <p className={styles.sectionNote}>
-            Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
-            override it here.
+            Click empty space to add a node. Draw prerequisite paths between nodes — no cycles allowed.
           </p>
-          <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={setLessonNodes} />
+          <p className={styles.sectionNote}>
+            Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+          </p>
+          <LessonRoadmapBuilder
+            availableNodes={availableNodes}
+            lessonNodes={lessonNodes}
+            edges={edges}
+            onEdgesChange={setEdges}
+            onLessonNodesChange={handleLessonNodesChange}
+          />
         </section>
 
         {error && <p className={styles.error}>{error}</p>}
@@ -203,6 +241,9 @@ export default function LessonCreateForm({ availableNodes, courses }: Props) {
           <a href="/instructor/lessons" className={styles.cancelLink}>
             Cancel
           </a>
+          <button type="button" className={styles.draftBtn} onClick={() => persistLesson(true)} disabled={saving}>
+            {saving ? 'Saving…' : 'Save as draft'}
+          </button>
           <button type="submit" className={styles.submitBtn} disabled={saving}>
             {saving ? 'Saving…' : 'Create lesson'}
           </button>

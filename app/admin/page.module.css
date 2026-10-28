@@ -1,0 +1,262 @@
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  color: #1e293b;
+}
+.header {
+  margin-bottom: 1.5rem;
+}
+.header h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+.header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+.directory {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+.search {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+}
+.search input {
+  width: min(100%, 340px);
+  min-width: 0;
+}
+.search input,
+.roles select {
+  height: 36px;
+  padding: 0 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.search button,
+.roles button {
+  height: 36px;
+  padding: 0 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.search button:hover,
+.roles button:not(:disabled):hover {
+  background: #f1f5f9;
+}
+.count {
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.clearSearch,
+.pagination a {
+  font-size: 0.8125rem;
+  color: #1f5fab;
+  text-decoration: none;
+}
+.clearSearch:hover,
+.pagination a:hover {
+  text-decoration: underline;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.8125rem;
+}
+.directory .table {
+  min-width: 660px;
+}
+.table th {
+  padding: 0.7rem 1.25rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.table td {
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid #edf0f4;
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: #fafbfd;
+}
+.userColumn {
+  width: 45%;
+}
+.userName {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.userName strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.email {
+  color: #64748b;
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+.pendingBadge {
+  font-size: 0.625rem;
+  line-height: 1.6;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #64748b;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.roles,
+.roleColumns {
+  display: grid;
+  grid-template-columns: minmax(125px, 1fr) minmax(110px, 1fr) 66px;
+  gap: 0.65rem;
+  align-items: center;
+}
+.roles label {
+  min-width: 0;
+}
+.roles select {
+  width: 100%;
+}
+.roles button:disabled {
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  cursor: default;
+}
+.roles .saveActive {
+  color: #fff;
+  background: #1f5fab;
+  border-color: #1f5fab;
+}
+.roles .saveActive:not(:disabled):hover {
+  background: #174b89;
+}
+.roles [role='status'] {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: #475569;
+}
+.directoryFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.9rem 1.25rem;
+  background: #fafbfd;
+}
+.directoryFooter p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.table .empty {
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: #64748b;
+}
+.audit {
+  margin-top: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.audit summary {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.audit summary span {
+  margin-left: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+}
+.audit .table td {
+  overflow-wrap: anywhere;
+  max-width: 330px;
+}
+.page :is(input, select, button, a, summary):focus-visible {
+  outline: 2px solid #1f5fab;
+  outline-offset: 3px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 640px) {
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 0.85rem;
+    gap: 0.65rem;
+  }
+  .search {
+    flex-basis: 100%;
+  }
+  .search input {
+    flex: 1;
+  }
+  .header h1 {
+    font-size: 1.5rem;
+  }
+  .directoryFooter {
+    padding: 0.85rem;
+  }
+}

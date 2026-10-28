@@ -1,0 +1,156 @@
+import { generateClientId } from '@/lib/generateClientId';
+import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
+import { parseShortAnswerOptions } from '@/app/utils/shortAnswer';
+
+export type QuestionType = 'multipleChoice' | 'shortAnswer';
+export type CheckpointItemType = QuestionType | 'note';
+export type ShortAnswerMode = 'exact' | 'range';
+
+export interface FormQuestion {
+  persistedId?: string;
+  id: string;
+  prompt: string;
+  questionType: CheckpointItemType;
+  choices: string[];
+  correctIndices: number[];
+  answerMode: ShortAnswerMode;
+  expectedAnswer: string;
+  minimumAnswer: string;
+  maximumAnswer: string;
+}
+
+export type QuizFormQuestion = FormQuestion & { questionType: QuestionType };
+
+export function isQuizFormQuestion(question: FormQuestion): question is QuizFormQuestion {
+  return question.questionType !== 'note';
+}
+
+export interface FormCheckpoint {
+  persistedId?: string;
+  checkpointKey?: string;
+  placementHint?: string | null;
+  id: string;
+  timeOffsetSeconds: number | null;
+  questions: FormQuestion[];
+}
+
+export interface FormLearningObjective {
+  id: string;
+  value: string;
+}
+
+export function makeLearningObjective(value = '', id = generateClientId('learning-objective')): FormLearningObjective {
+  return { id, value };
+}
+
+export function makeQuestion(id = generateClientId('question')): QuizFormQuestion {
+  return {
+    id,
+    prompt: '',
+    questionType: 'multipleChoice',
+    choices: ['', ''],
+    correctIndices: [],
+    answerMode: 'exact',
+    expectedAnswer: '',
+    minimumAnswer: '',
+    maximumAnswer: '',
+  };
+}
+
+export function makeCheckpoint(
+  timeOffsetSeconds: number | null = null,
+  id = generateClientId('checkpoint')
+): FormCheckpoint {
+  return {
+    id,
+    timeOffsetSeconds,
+    checkpointKey: `checkpoint-${id}`,
+    placementHint: null,
+    questions: [makeQuestion()],
+  };
+}
+
+export function serializeQuestionOptions(q: FormQuestion) {
+  if (q.questionType === 'note') {
+    return { type: 'note' as const };
+  }
+  if (q.questionType === 'multipleChoice') {
+    return { type: 'multipleChoice' as const, choices: q.choices };
+  }
+  if (q.answerMode === 'exact') {
+    return {
+      type: 'shortAnswer' as const,
+      answerMode: 'exact' as const,
+      expectedAnswer: q.expectedAnswer.trim() === '' ? null : Number(q.expectedAnswer),
+    };
+  }
+  return {
+    type: 'shortAnswer' as const,
+    answerMode: 'range' as const,
+    minimumAnswer: q.minimumAnswer.trim() === '' ? null : Number(q.minimumAnswer),
+    maximumAnswer: q.maximumAnswer.trim() === '' ? null : Number(q.maximumAnswer),
+  };
+}
+
+export function dbQuestionToForm(q: {
+  id: string;
+  prompt: string;
+  options: unknown;
+  correctIndices: number[];
+  kind?: 'QUESTION' | 'NOTE';
+}): FormQuestion {
+  const isNote =
+    q.kind === 'NOTE' ||
+    (q.options !== null &&
+      typeof q.options === 'object' &&
+      !Array.isArray(q.options) &&
+      (q.options as { type?: unknown }).type === 'note');
+  const shortAnswer = parseShortAnswerOptions(q.options);
+  const rawOptions = q.options && typeof q.options === 'object' ? (q.options as Record<string, unknown>) : null;
+  const isShortAnswer = shortAnswer !== null || rawOptions?.type === 'shortAnswer';
+  const answerMode = shortAnswer?.answerMode ?? (rawOptions?.answerMode === 'range' ? 'range' : 'exact');
+  return {
+    id: q.id,
+    persistedId: q.id,
+    prompt: q.prompt,
+    questionType: isNote ? 'note' : isShortAnswer ? 'shortAnswer' : 'multipleChoice',
+    choices: isNote || isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
+    correctIndices: q.correctIndices,
+    answerMode,
+    expectedAnswer:
+      answerMode === 'exact' && typeof rawOptions?.expectedAnswer === 'number' ? String(rawOptions.expectedAnswer) : '',
+    minimumAnswer:
+      answerMode === 'range' && typeof rawOptions?.minimumAnswer === 'number' ? String(rawOptions.minimumAnswer) : '',
+    maximumAnswer:
+      answerMode === 'range' && typeof rawOptions?.maximumAnswer === 'number' ? String(rawOptions.maximumAnswer) : '',
+  };
+}
+
+export type NodeFormInitial = {
+  isDraft?: boolean;
+  title: string;
+  summary: string;
+  videoUrl: string;
+  tags: string[];
+  learningObjectives: string[];
+  checkpoints: Array<{
+    id: string;
+    timeOffsetSeconds: number | null;
+    checkpointKey?: string;
+    placementHint?: string | null;
+    questions: Array<{
+      id: string;
+      prompt: string;
+      options: unknown;
+      correctIndices: number[];
+      kind?: 'QUESTION' | 'NOTE';
+    }>;
+  }>;
+  quizQuestions: Array<{
+    variants?: import('@/app/utils/questionVariants').StoredVariant[];
+    id: string;
+    prompt: string;
+    options: unknown;
+    correctIndices: number[];
+  }>;
+};

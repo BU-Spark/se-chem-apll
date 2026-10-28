@@ -1,28 +1,29 @@
 import { prisma } from '@/lib/prisma';
 import LessonCreateForm from './LessonCreateForm';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function NewLessonPage() {
-  const [nodes, courses] = await Promise.all([
-    prisma.node.findMany({
-      include: {
-        _count: { select: { questions: true } },
-        questions: { where: { isPreLecture: true }, select: { id: true } },
-      },
-      orderBy: { title: 'asc' },
-    }),
-    prisma.course.findMany({ orderBy: { code: 'asc' } }),
-  ]);
+  const user = await requireInstructor();
+  const nodes = await prisma.node.findMany({
+    where: {
+      isDraft: false,
+      ...contentScope(user),
+    },
+    include: {
+      _count: { select: { quizQuestions: true, checkpoints: true } },
+    },
+    orderBy: { title: 'asc' },
+  });
 
   const paletteNodes = nodes.map((n) => ({
     id: n.id,
     title: n.title,
     summary: n.summary,
-    defaultPassingPercent: n.defaultPassingPercent,
-    questionCount: n._count.questions,
-    preLectureCount: n.questions.length,
+    quizBankCount: n._count.quizQuestions,
+    checkpointCount: n._count.checkpoints,
   }));
 
-  return <LessonCreateForm availableNodes={paletteNodes} courses={courses} />;
+  return <LessonCreateForm availableNodes={paletteNodes} />;
 }

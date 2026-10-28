@@ -1,0 +1,29 @@
+/* Shared APLL button looks, for <button> and <Link> alike. */
+.primary,
+.secondary {
+  display: inline-block;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--apll-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--apll-teal);
+}
+
+.primary:hover {
+  background: var(--apll-teal-hover);
+}
+
+.secondary {
+  background: var(--apll-sand);
+}
+
+.secondary:hover {
+  background: var(--apll-sand-hover);
+}

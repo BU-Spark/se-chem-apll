@@ -1,0 +1,28 @@
+.bar {
+  position: fixed;
+  bottom: 1.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.6rem 2.25rem;
+  background: var(--apll-sand);
+  border-radius: 9999px;
+}
+
+.item {
+  display: grid;
+  place-items: center;
+  color: var(--apll-icon);
+  border-radius: 9999px;
+  padding: 0.25rem;
+}
+
+a.item:hover {
+  color: var(--apll-text);
+}
+
+.active {
+  color: var(--apll-teal-strong);
+  background: var(--apll-cream);
+}
