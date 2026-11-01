@@ -1,13 +1,19 @@
 'use client';
 
 import CourseTabs from '@/app/components/CourseTabs';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useScheduleShift } from '@/app/components/ScheduleShiftPrompt';
 import { useRouter } from 'next/navigation';
 import type { Course, Lesson, Enrollment, CourseContact, CourseLesson } from '@prisma/client';
 import styles from './page.module.css';
 import LessonScheduleFields from '@/app/components/LessonScheduleFields';
+import {
+  parseInstructorContacts,
+  CONTACT_NAME_MAX_LENGTH,
+  CONTACT_EMAIL_MAX_LENGTH,
+  OFFICE_HOURS_MAX_LENGTH,
+} from '@/app/utils/courseContacts';
 import {
   emptyLessonSchedule,
   schedulePayload,
@@ -42,6 +48,25 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
   const [section, setSection] = useState(course.section || '');
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description || '');
+  const nextContactKey = useRef(0);
+  const [contacts, setContacts] = useState(() =>
+    course.contacts
+      .filter((contact) => contact.type === 'INSTRUCTOR')
+      .map((contact) => ({
+        key: contact.id,
+        id: contact.id as string | undefined,
+        name: contact.name,
+        email: contact.email,
+        officeHours: contact.officeHours ?? '',
+      }))
+  );
+
+  function updateContact(
+    key: string,
+    patch: Partial<Pick<(typeof contacts)[number], 'name' | 'email' | 'officeHours'>>
+  ) {
+    setContacts((previous) => previous.map((contact) => (contact.key === key ? { ...contact, ...patch } : contact)));
+  }
 
   const [importedLessons, setImportedLessons] = useState<ImportedLesson[]>(() =>
     course.courseLessons.map((cl) => ({
@@ -91,6 +116,11 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
     e.preventDefault();
     setError(null);
     if (scheduleShift.pending) return;
+    const parsed = parseInstructorContacts(contacts);
+    if (parsed.error !== undefined) {
+      setError(parsed.error);
+      return;
+    }
     for (const row of importedLessons) {
       const policyError = validateLessonPolicy(schedulePayload(row));
       if (policyError) {
@@ -108,6 +138,7 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
           section: section || null,
           title,
           description: description || null,
+          instructorContacts: parsed.contacts,
           lessons: importedLessons.map((row, idx) => ({
             lessonId: row.lessonId,
             ...schedulePayload(row),
@@ -223,6 +254,80 @@ export default function CourseEditForm({ course, availableLessons }: Props) {
               placeholder="Optional course description…"
             />
           </label>
+        </section>
+
+        <section className={styles.section} aria-labelledby="instructor-contacts-title">
+          <h2 id="instructor-contacts-title" className={styles.sectionTitle}>
+            Instructor contacts
+          </h2>
+          <p className={styles.sectionNote}>
+            Enrolled students see these contacts on their Profile page. Office hours are optional.
+          </p>
+          {contacts.length === 0 && <p className={styles.emptyImport}>No instructor contacts added.</p>}
+          {contacts.map((contact, index) => (
+            <fieldset key={contact.key} className={styles.contactCard} disabled={saving || deleting}>
+              <legend>Instructor {index + 1}</legend>
+              <div className={styles.fieldRow2}>
+                <label className={styles.field}>
+                  Name
+                  <input
+                    required
+                    maxLength={CONTACT_NAME_MAX_LENGTH}
+                    value={contact.name}
+                    onChange={(e) => updateContact(contact.key, { name: e.target.value })}
+                  />
+                </label>
+                <label className={styles.field}>
+                  Email
+                  <input
+                    required
+                    type="email"
+                    maxLength={CONTACT_EMAIL_MAX_LENGTH}
+                    value={contact.email}
+                    onChange={(e) => updateContact(contact.key, { email: e.target.value })}
+                  />
+                </label>
+              </div>
+              <label className={styles.field}>
+                Office hours (optional)
+                <textarea
+                  rows={3}
+                  maxLength={OFFICE_HOURS_MAX_LENGTH}
+                  value={contact.officeHours}
+                  placeholder="Tuesdays & Fridays · SCI 201 · 2–4 PM"
+                  onChange={(e) => updateContact(contact.key, { officeHours: e.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className={styles.removeBtn}
+                aria-label={`Remove instructor ${index + 1}`}
+                onClick={() => setContacts((previous) => previous.filter((row) => row.key !== contact.key))}
+              >
+                Remove instructor
+              </button>
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            className={styles.addContactBtn}
+            disabled={saving || deleting}
+            onClick={() => {
+              const key = `new-contact-${nextContactKey.current++}`;
+              setContacts((previous) => [
+                ...previous,
+                {
+                  key,
+                  id: undefined,
+                  name: '',
+                  email: '',
+                  officeHours: '',
+                },
+              ]);
+            }}
+          >
+            Add instructor
+          </button>
         </section>
 
         <section className={styles.section}>
