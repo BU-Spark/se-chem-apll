@@ -807,3 +807,25 @@ describe('QuestionBankEditor', () => {
     expect(questions[1].prompt).toBe('Imported question');
   });
 });
+
+it('preserves feedback across question type changes, duplication and CSV export', async () => {
+  const user = userEvent.setup();
+  render(<Harness initial={[validMcQuestion('q1', 'Feedback question')]} />);
+  await user.click(screen.getByRole('button', { name: 'Feedback question' }));
+  await user.type(screen.getByRole('textbox', { name: 'Feedback for correct answer (optional)' }), '**Well done**');
+  await user.type(screen.getByRole('textbox', { name: 'Feedback for incorrect answer (optional)' }), 'Check units');
+  await user.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByText('Well done').tagName).toBe('STRONG');
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Question type' }), 'shortAnswer');
+  await user.type(screen.getByRole('textbox', { name: 'Feedback for correct answer (optional)' }), '!');
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Question type' }), 'multipleChoice');
+  await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+  expect(harnessQuestions()).toHaveLength(2);
+  expect(
+    harnessQuestions().every((q) => q.feedbackCorrect === '**Well done**!' && q.feedbackIncorrect === 'Check units')
+  ).toBe(true);
+  await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+  const exported = (downloadCsvFile as jest.Mock).mock.calls.at(-1)!;
+  expect(exported).toEqual(expect.arrayContaining([expect.stringContaining('feedback_correct')]));
+});

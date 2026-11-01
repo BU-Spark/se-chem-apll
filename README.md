@@ -139,13 +139,14 @@ The node editor's **Checkpoints** step supports CSV import, export, and a downlo
 Checkpoint CSV uses one row per question or informational note. Its header is:
 
 ```csv
-checkpoint_key,checkpoint_order,item_order,checkpoint_seconds,placement_hint,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer
+checkpoint_key,checkpoint_order,item_order,checkpoint_seconds,placement_hint,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer,feedback_correct,feedback_incorrect
 ```
 
-- All columns must be present. `checkpoint_seconds` and `placement_hint` cells may be blank.
+- All columns except `feedback_correct` and `feedback_incorrect` must be present. `checkpoint_seconds` and `placement_hint` cells may be blank.
 - `checkpoint_key` is a case-sensitive label scoped to the node. Matching keys group rows, even if they are not adjacent. Keys are preserved on export and are not database IDs.
 - `checkpoint_order` and `item_order` are positive integers; gaps are allowed. Group order must agree across its rows, and item order must be unique within each group.
 - Nonblank timestamps and placement hints must agree within a group. Timestamps are non-negative whole seconds and cannot be shared by different groups. Blank timing remains unplaced; zero means the start of the video.
+- `feedback_correct` and `feedback_incorrect` provide optional instructor feedback for each question. Either column may be omitted or blank; older CSV files still import. Notes must leave both blank. Both fields support Markdown, LaTeX, and chemistry notation and can be edited and previewed in the question editor.
 - Types are `multipleChoice`, `shortAnswer`, and `note`. Notes use `prompt` and leave all answer cells blank. Multiple choice supports 2–8 choices and one-based correct indices, such as `"1,3"`. Numeric answers use `exact` or `range` mode.
 - Import previews the groups and errors before applying anything. Any error blocks the entire import. Limits are 2 MB and 5,000 item records.
 - Append places imported groups after existing groups and rejects key/time collisions. Replace requires confirmation. Neither mode saves automatically.
@@ -168,13 +169,14 @@ The suite uses only this explicit URL, creates and removes its own fixtures, and
 
 The quiz bank's **Download sample CSV** toolbar button (also available inside **Import CSV**) includes ordinary MCQ and numeric questions, numeric template variants with exact/range answers, and MCQ variants with different choices and different numbers of correct answers. The same demo is checked in at [samples/quiz-questions.csv](samples/quiz-questions.csv).
 
-The required columns are:
+The exported columns are (the last two feedback columns are optional on import):
 
 ```csv
-question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer
+question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer,feedback_correct,feedback_incorrect
 ```
 
 - Use one row for an ordinary question and leave `variant_key` blank. For variants, repeat `question_key` and assign each row a unique, nonempty `variant_key`. Keys only group rows within the file; import generates fresh internal IDs.
+- `feedback_correct` and `feedback_incorrect` are independently optional. Missing or blank values mean no feedback. Exports always include both columns. Feedback supports Markdown, LaTeX, chemistry notation, commas, quotes, and line breaks. Feedback is shared by all variants: repeat identical feedback on each row in a group; conflicting values reject that question group. Template variables are not substituted in feedback. The question editor supports editing and previewing both fields.
 - All rows in a question group must share the same type and prompt template. First appearance determines question order; row order determines variant order.
 - Add case-sensitive columns such as `var:compound` and `var:mass` to supply `{{compound}}` and `{{mass}}` placeholders. Variables work in prompts and MCQ choices; substitution is literal, with no formulas or answer calculation. Variable names start with a letter and contain only letters, numbers, and underscores. Each row must supply every variable it references; columns used only by other questions may stay blank.
 - Each MCQ variant supplies its own 2–8 choices, with trailing unused choice cells blank. `correct` contains 1-based choice positions, such as `1` or the quoted CSV cell `"1,3"` for multiple correct answers. Choice counts and correct-answer counts can differ per variant.
@@ -182,8 +184,10 @@ question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_
 - Markdown, LaTeX and chemistry notation are preserved. Quote CSV cells containing commas, quotes or newlines; spreadsheet apps handle this automatically on export.
 - Import validates complete question groups. If any variant is invalid, the entire question is skipped and errors identify the source rows. Other valid questions can still be imported. The limit is 5,000 data rows, including variants, and 2 MB per file.
 
-This is the canonical quiz CSV format; older headers without grouping keys are not accepted. Checkpoint CSV is unchanged and does not support variants.
+This is the canonical quiz CSV format; older headers without grouping keys are not accepted. Checkpoint CSV also supports these optional feedback columns and does not support variants.
 
+
+Before deploying question feedback, apply `20261101000000_question_feedback` with `npx prisma migrate deploy` and regenerate the client with `npx prisma generate`. Existing questions retain no feedback by default. This feature adds authoring and storage; student answer-time display is reserved for the student submission flow.
 
 ## Instructor dropdown styles
 
