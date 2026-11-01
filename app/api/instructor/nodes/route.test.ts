@@ -1,0 +1,471 @@
+import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
+jest.mock('@/lib/auth/identity', () => ({
+  getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
+}));
+import { POST } from './route';
+
+const mockCreate = jest.fn();
+
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: (body: unknown, init?: { status?: number }) => ({
+      status: init?.status ?? 200,
+      json: async () => body,
+    }),
+  },
+}));
+
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    node: { create: (...args: unknown[]) => mockCreate(...args) },
+  },
+}));
+
+function postRequest(body: unknown) {
+  return { json: async () => body };
+}
+
+describe('POST /api/instructor/nodes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
+    mockCreate.mockResolvedValue({ id: 'node-1', checkpoints: [], quizQuestions: [] });
+  });
+
+  it('persists variant rows together and rejects incomplete published variants', async () => {
+    const options = {
+      type: 'variantShortAnswer',
+      version: 1,
+      variants: [
+        {
+          id: 'salt',
+          values: { compound: 'NaCl', mass: '58.44' },
+          answer: { type: 'shortAnswer', answerMode: 'exact', expectedAnswer: 1 },
+        },
+      ],
+    };
+    const body = {
+      title: 'Moles',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      quizQuestions: [{ sortOrder: 0, prompt: '{{compound}} at {{mass}} g?', options, correctIndices: [] }],
+    };
+    expect((await POST(postRequest(body) as never)).status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toMatchObject({
+      options: { type: 'variantShortAnswer', version: 1 },
+      variants: { create: [{ ...options.variants[0], sortOrder: 0 }] },
+    });
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0].options).not.toHaveProperty('variants');
+    options.variants[0].values.mass = '';
+    expect((await POST(postRequest(body) as never)).status).toBe(422);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores quiz-only MCQ variants as relational creates with per-row answer sets', async () => {
+    const question = {
+      sortOrder: 0,
+      prompt: 'Select all even numbers.',
+      correctIndices: [],
+      options: {
+        type: 'variantMultipleChoice',
+        version: 1,
+        choices: [
+          { id: 'a', content: '{{a}}' },
+          { id: 'b', content: '{{b}}' },
+        ],
+      },
+      variants: [
+        { id: 'single', values: { a: '2', b: '3' }, answer: { type: 'multipleChoice', correctChoiceIds: ['a'] } },
+        { id: 'multi', values: { a: '2', b: '4' }, answer: { type: 'multipleChoice', correctChoiceIds: ['a', 'b'] } },
+      ],
+    };
+    const body = {
+      title: 'MCQ variants',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      quizQuestions: [question],
+    };
+    expect((await POST(postRequest(body) as never)).status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toMatchObject({
+      options: { type: 'variantMultipleChoice', version: 2 },
+      variants: {
+        create: question.variants.map((row, sortOrder) => ({
+          ...row,
+          sortOrder,
+          answer: {
+            ...row.answer,
+            choices: [
+              { id: 'a', content: row.values.a },
+              { id: 'b', content: row.values.b },
+            ],
+          },
+        })),
+      },
+    });
+    expect(
+      (
+        await POST(
+          postRequest({
+            ...body,
+            quizQuestions: [],
+            checkpoints: [{ sortOrder: 0, timeOffsetSeconds: 0, questions: [question] }],
+          }) as never
+        )
+      ).status
+    ).toBe(422);
+    question.variants[1].answer.correctChoiceIds = [];
+    expect((await POST(postRequest(body) as never)).status).toBe(422);
+  });
+
+  it('creates multiple untimed draft checkpoints with persistent keys and hints', async () => {
+    const response = await POST(
+      postRequest({
+        isDraft: true,
+        checkpoints: ['intro', 'end'].map((checkpointKey, sortOrder) => ({
+          checkpointKey,
+          sortOrder,
+          timeOffsetSeconds: null,
+          placementHint: 'Place later',
+          questions: [{ sortOrder: 0, kind: 'note', prompt: 'Observe.' }],
+        })),
+      }) as never
+    );
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual(
+      ['intro', 'end'].map((checkpointKey) =>
+        expect.objectContaining({ checkpointKey, timeOffsetSeconds: null, placementHint: 'Place later' })
+      )
+    );
+  });
+
+  it.each([
+    null,
+    [],
+    { isDraft: true, checkpoints: [null] },
+    { isDraft: true, checkpoints: [{ sortOrder: 0, timeOffsetSeconds: -1, questions: [] }] },
+  ])('rejects malformed draft data before persistence: %p', async (body) => {
+    const response = await POST(postRequest(body) as never);
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists checkpoints and quiz questions', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        tags: ['  safety  ', '', 'Procedure'],
+        learningObjectives: ['  Identify hazards.  ', '', 'Apply the safety procedure.'],
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                prompt: 'Checkpoint Q',
+                options: { type: 'multipleChoice', choices: ['A', 'B'] },
+                correctIndices: [0],
+              },
+            ],
+          },
+        ],
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [1],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.tags).toEqual(['safety', 'Procedure']);
+    expect(mockCreate.mock.calls[0][0].data.learningObjectives).toEqual([
+      'Identify hazards.',
+      'Apply the safety procedure.',
+    ]);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create).toEqual([
+      expect.objectContaining({
+        timeOffsetSeconds: 45,
+        questions: {
+          create: [expect.objectContaining({ prompt: 'Checkpoint Q', correctIndices: [0] })],
+        },
+      }),
+    ]);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create).toEqual([
+      expect.objectContaining({ prompt: 'Quiz Q', correctIndices: [1] }),
+    ]);
+  });
+
+  it('persists an incomplete draft without publish validation', async () => {
+    const response = await POST(
+      postRequest({
+        title: '',
+        videoUrl: null,
+        checkpoints: [],
+        quizQuestions: [],
+        isDraft: true,
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: '',
+          videoUrl: null,
+          isDraft: true,
+        }),
+      })
+    );
+  });
+
+  it('returns 422 when tags is not an array of strings', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        tags: ['ok', 12],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists checkpoint notes without answer data', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [
+              {
+                sortOrder: 0,
+                kind: 'note',
+                prompt: 'Notice how the flame changes color.',
+              },
+            ],
+          },
+        ],
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.checkpoints.create[0].questions.create).toEqual([
+      expect.objectContaining({
+        kind: 'NOTE',
+        prompt: 'Notice how the flame changes color.',
+        options: { type: 'note' },
+        correctIndices: [],
+      }),
+    ]);
+  });
+
+  it('rejects blank checkpoint notes', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, kind: 'note', prompt: '' }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when learningObjectives is not an array', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        learningObjectives: 'not an array',
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when learningObjectives contains a non-string value', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        learningObjectives: ['valid', 12],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 for duplicate checkpoint timestamps', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, prompt: 'A', options: ['A', 'B'], correctIndices: [0] }],
+          },
+          {
+            sortOrder: 1,
+            timeOffsetSeconds: 45,
+            questions: [{ sortOrder: 0, prompt: 'B', options: ['A', 'B'], correctIndices: [0] }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 1.5])('returns 422 for invalid checkpoint timestamp %p', async (timeOffsetSeconds) => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [
+          {
+            sortOrder: 0,
+            timeOffsetSeconds,
+            questions: [{ sortOrder: 0, prompt: 'Checkpoint', options: ['A', 'B'], correctIndices: [0] }],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 for a checkpoint without questions', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        checkpoints: [{ sortOrder: 0, timeOffsetSeconds: 10, questions: [] }],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists multiple correct answers on quiz questions', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Select all',
+            options: { type: 'multipleChoice', choices: ['A', 'B', 'C'] },
+            correctIndices: [0, 2],
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0].correctIndices).toEqual([0, 2]);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['empty', []],
+    ['duplicate', [0, 0]],
+    ['out of range', [2]],
+  ])('returns 422 for %s correct answer selections', async (_label, correctIndices) => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        quizQuestions: [{ sortOrder: 0, prompt: 'Question', options: ['A', 'B'], correctIndices }],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists explicit short-answer range options', async () => {
+    const options = { type: 'shortAnswer', answerMode: 'range', minimumAnswer: -2.5, maximumAnswer: 4 };
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        quizQuestions: [{ sortOrder: 0, prompt: 'Estimate', options }],
+      }) as never
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreate.mock.calls[0][0].data.quizQuestions.create[0]).toEqual(
+      expect.objectContaining({ options, correctIndices: [] })
+    );
+  });
+
+  it('returns 422 for a reversed short-answer range', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Estimate',
+            options: { type: 'shortAnswer', answerMode: 'range', minimumAnswer: 10, maximumAnswer: 5 },
+          },
+        ],
+      }) as never
+    );
+
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when video URL is missing or invalid', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://example.com/not-youtube',
+        quizQuestions: [
+          {
+            sortOrder: 0,
+            prompt: 'Quiz Q',
+            options: { type: 'multipleChoice', choices: ['A', 'B'] },
+            correctIndices: [0],
+          },
+        ],
+      }) as never
+    );
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  it('returns 422 when quiz questions are missing', async () => {
+    const response = await POST(
+      postRequest({
+        title: 'Safety video',
+        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        quizQuestions: [],
+      }) as never
+    );
+    expect(response.status).toBe(422);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});

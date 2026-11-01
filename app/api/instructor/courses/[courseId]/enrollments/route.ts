@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 
 interface RouteContext {
@@ -8,12 +8,17 @@ interface RouteContext {
 
 // GET /api/instructor/courses/[courseId]/enrollments
 export async function GET(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
 
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+  });
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   const enrollments = await prisma.enrollment.findMany({
@@ -28,12 +33,17 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 // POST /api/instructor/courses/[courseId]/enrollments
 // Body: { email: string }
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
 
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+  });
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   let body: unknown;
@@ -51,12 +61,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const normalizedEmail = email.trim().toLowerCase();
 
   // Find or create the student record
-  let student = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (!student) {
-    student = await prisma.user.create({
-      data: { email: normalizedEmail },
-    });
-  }
+  const student = await prisma.user.upsert({
+    where: { email: normalizedEmail },
+    create: { email: normalizedEmail },
+    update: {},
+  });
 
   // Check if already enrolled
   const existing = await prisma.enrollment.findUnique({
@@ -77,10 +86,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 // DELETE /api/instructor/courses/[courseId]/enrollments
 // Body: { studentId: string }
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId } = await params;
+
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+  });
+  if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
   let body: unknown;
   try {

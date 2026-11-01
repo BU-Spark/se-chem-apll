@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import LessonEditForm from './LessonEditForm';
 
 export const dynamic = 'force-dynamic';
@@ -10,12 +11,15 @@ interface Props {
 
 export default async function EditLessonPage({ params }: Props) {
   const { lessonId } = await params;
+  const user = await requireInstructor();
 
-  const [lesson, nodes, courses] = await Promise.all([
-    prisma.lesson.findUnique({
-      where: { id: lessonId },
+  const [lesson, nodes] = await Promise.all([
+    prisma.lesson.findFirst({
+      where: {
+        id: lessonId,
+        ...contentScope(user),
+      },
       include: {
-        course: true,
         lessonNodes: {
           include: { node: true },
           orderBy: { sortOrder: 'asc' },
@@ -27,13 +31,15 @@ export default async function EditLessonPage({ params }: Props) {
       },
     }),
     prisma.node.findMany({
+      where: {
+        isDraft: false,
+        ...contentScope(user),
+      },
       include: {
-        _count: { select: { questions: true } },
-        questions: { where: { isPreLecture: true }, select: { id: true } },
+        _count: { select: { quizQuestions: true, checkpoints: true } },
       },
       orderBy: { title: 'asc' },
     }),
-    prisma.course.findMany({ orderBy: { code: 'asc' } }),
   ]);
 
   if (!lesson) {
@@ -44,10 +50,9 @@ export default async function EditLessonPage({ params }: Props) {
     id: n.id,
     title: n.title,
     summary: n.summary,
-    defaultPassingPercent: n.defaultPassingPercent,
-    questionCount: n._count.questions,
-    preLectureCount: n.questions.length,
+    quizBankCount: n._count.quizQuestions,
+    checkpointCount: n._count.checkpoints,
   }));
 
-  return <LessonEditForm lesson={lesson} availableNodes={paletteNodes} courses={courses} />;
+  return <LessonEditForm lesson={lesson} availableNodes={paletteNodes} />;
 }

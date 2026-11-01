@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
 import CourseStudentsManager from './CourseStudentsManager';
 
 export const dynamic = 'force-dynamic';
@@ -10,17 +11,25 @@ interface Props {
 
 export default async function CourseStudentsPage({ params }: Props) {
   const { courseId } = await params;
+  const user = await requireInstructor();
 
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
     include: {
       enrollments: {
         include: { student: true },
         orderBy: { createdAt: 'asc' },
       },
-      lessons: {
+      courseLessons: {
         include: {
-          lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+          lesson: {
+            include: {
+              lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+            },
+          },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -36,7 +45,7 @@ export default async function CourseStudentsPage({ params }: Props) {
       courseCode={course.code}
       courseSection={course.section}
       initialEnrollments={course.enrollments}
-      lessons={course.lessons}
+      lessons={course.courseLessons.map((cl) => cl.lesson)}
     />
   );
 }

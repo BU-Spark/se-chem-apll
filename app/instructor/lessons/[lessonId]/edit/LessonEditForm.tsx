@@ -1,46 +1,33 @@
 'use client';
-
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Lesson, LessonNode, Node, Course } from '@prisma/client';
+import type { Lesson, LessonNode, Node } from '@prisma/client';
 import { generateClientId } from '@/lib/generateClientId';
-import LessonBuilder from '@/app/components/LessonBuilder';
 import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
-import type { PaletteNode } from '@/app/components/LessonBuilder/NodePalette';
-import type { LessonNodeEntry } from '@/app/components/LessonBuilder/NodeCard';
-import type { LessonEdgeEntry } from '@/app/types';
+import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
 import styles from './page.module.css';
 
 interface Props {
   lesson: Lesson & {
-    course: Course;
     lessonNodes: (LessonNode & { node: Node })[];
     lessonNodeEdges: { id: string; sourceId: string; targetId: string }[];
   };
   availableNodes: PaletteNode[];
-  courses: Course[];
 }
 
-type TabId = 'builder' | 'roadmap';
-
-export default function LessonEditForm({ lesson, availableNodes, courses }: Props) {
+export default function LessonEditForm({ lesson, availableNodes }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('builder');
 
   // Metadata
   const [title, setTitle] = useState(lesson.title);
-  const [slug, setSlug] = useState(lesson.slug);
+  const [slug, setSlug] = useState(lesson.slug ?? '');
   const [summary, setSummary] = useState(lesson.summary);
   const [description, setDescription] = useState(lesson.description || '');
-  const [courseId, setCourseId] = useState(lesson.courseId);
   const [estimatedMinutes, setEstimatedMinutes] = useState(lesson.estimatedMinutes?.toString() || '');
-  const [openDate, setOpenDate] = useState(
-    lesson.openDate ? new Date(lesson.openDate).toISOString().split('T')[0] : ''
-  );
-  const [dueDate, setDueDate] = useState(lesson.dueDate ? new Date(lesson.dueDate).toISOString().split('T')[0] : '');
 
   // Auto-generate slug from title
   function handleTitleChange(val: string) {
@@ -56,16 +43,21 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
 
   // Initialize lesson nodes from existing data
   const [lessonNodes, setLessonNodes] = useState<LessonNodeEntry[]>(() => {
-    const preLectureMap = new Map(availableNodes.map((n) => [n.id, n.preLectureCount]));
-    return lesson.lessonNodes.map((ln) => ({
-      instanceId: ln.id ?? generateClientId('lesson-node'),
-      nodeId: ln.nodeId,
-      title: ln.node.title,
-      defaultPassingPercent: ln.node.defaultPassingPercent,
-      passingPercentOverride: ln.passingPercentOverride?.toString() || '',
-      isRequired: ln.isRequired,
-      preLectureCount: preLectureMap.get(ln.nodeId) ?? 0,
-    }));
+    const quizBankMap = new Map(availableNodes.map((n) => [n.id, n.quizBankCount]));
+    return lesson.lessonNodes.map((ln) => {
+      const bank = quizBankMap.get(ln.nodeId) ?? 0;
+      const savedCount = (ln as LessonNode & { quizQuestionCount?: number }).quizQuestionCount;
+
+      return {
+        instanceId: ln.id ?? generateClientId('lesson-node'),
+        nodeId: ln.nodeId,
+        title: ln.node.title,
+        passingPercent: ln.passingPercent.toString(),
+        quizQuestionCount: savedCount !== undefined ? String(savedCount) : bank > 0 ? String(bank) : '0',
+        isRequired: ln.isRequired,
+        quizBankCount: bank,
+      };
+    });
   });
 
   // instanceId === LessonNode.id for persisted nodes, matching edge sourceId/targetId from DB
@@ -83,18 +75,55 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
     setLessonNodes(updated);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function persistLesson(asDraft: boolean) {
     setError(null);
 
-    if (lessonNodes.length === 0) {
-      setError('Add at least one node to the lesson before saving.');
-      return;
-    }
+    if (!asDraft) {
+      if (!title.trim()) {
+        setError('Title is required.');
+        return;
+      }
+      if (!slug.trim()) {
+        setError('Slug is required.');
+        return;
+      }
+      if (!summary.trim()) {
+        setError('Summary is required.');
+        return;
+      }
+      if (lessonNodes.length === 0) {
+        setError('Add at least one node to the lesson before saving.');
+        return;
+      }
 
-    if (openDate && dueDate && new Date(openDate) >= new Date(dueDate)) {
-      setError('Open date must be before due date.');
-      return;
+      if (
+        lessonNodes.some(
+          (entry) =>
+            entry.passingPercent === '' ||
+            !Number.isInteger(Number(entry.passingPercent)) ||
+            Number(entry.passingPercent) < 0 ||
+            Number(entry.passingPercent) > 100
+        )
+      ) {
+        setError('Choose a whole-number pass threshold between 0 and 100 for every node.');
+        return;
+      }
+
+      if (
+        lessonNodes.some((entry) => {
+          if (entry.quizBankCount === 0) {
+            return entry.quizQuestionCount !== '0' && entry.quizQuestionCount !== '';
+          }
+          return (
+            entry.quizQuestionCount === '' ||
+            !Number.isInteger(Number(entry.quizQuestionCount)) ||
+            Number(entry.quizQuestionCount) < 1
+          );
+        })
+      ) {
+        setError('Quiz question count must be a whole number of at least 1 for every node with a quiz bank.');
+        return;
+      }
     }
 
     const instanceToSortOrder = new Map(lessonNodes.map((entry, idx) => [entry.instanceId, idx]));
@@ -119,15 +148,15 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           summary,
           description: description || null,
           estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
-          openDate: openDate || null,
-          dueDate: dueDate || null,
           lessonNodes: lessonNodes.map((entry, idx) => ({
             nodeId: entry.nodeId,
             sortOrder: idx,
-            passingPercentOverride: entry.passingPercentOverride ? Number(entry.passingPercentOverride) : null,
+            passingPercent: Number(entry.passingPercent),
+            quizQuestionCount: Number(entry.quizQuestionCount),
             isRequired: entry.isRequired,
           })),
           edges: serialisedEdges,
+          isDraft: asDraft,
         }),
       });
 
@@ -142,6 +171,11 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await persistLesson(false);
   }
 
   async function handleDelete() {
@@ -171,54 +205,32 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
   }
 
   return (
-    <div className={styles.page}>
+    <div>
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Edit lesson</h1>
         <p className={styles.pageSubtitle}>
-          {lesson.course.code} · {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
+          {lesson.lessonNodes.length} node{lesson.lessonNodes.length !== 1 ? 's' : ''}
         </p>
       </header>
 
+      <p>
+        <Link href={`/instructor/copy?mode=nodes&destinationId=${lesson.id}`}>Copy nodes from another course</Link>
+      </p>
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Lesson details</h2>
 
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Course <span className={styles.required}>*</span>
-              <select required value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                {courses.length === 0 && <option value="">No courses — create one first</option>}
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                    {c.section ? ` §${c.section}` : ''} — {c.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Estimated duration (min)
-              <input
-                type="number"
-                min={1}
-                value={estimatedMinutes}
-                onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="30"
-              />
-            </label>
-          </div>
-
-          <div className={styles.fieldRow2}>
-            <label className={styles.field}>
-              Open date
-              <input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              Due date
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-          </div>
+          <label className={styles.field}>
+            Estimated duration (min)
+            <input
+              type="number"
+              min={1}
+              value={estimatedMinutes}
+              onChange={(e) => setEstimatedMinutes(e.target.value)}
+              placeholder="30"
+            />
+          </label>
 
           <div className={styles.fieldRow2}>
             <label className={styles.field}>
@@ -264,46 +276,23 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
           </label>
         </section>
 
-        {/* ── Tabs ── */}
-        <div className={styles.tabs}>
-          <button
-            type="button"
-            className={activeTab === 'builder' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('builder')}
-          >
-            Build lesson
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'roadmap' ? styles.tabActive : styles.tab}
-            onClick={() => setActiveTab('roadmap')}
-          >
-            Roadmap
-          </button>
-        </div>
-
-        {/* ── Builder tab ── */}
-        {activeTab === 'builder' && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Build lesson</h2>
-            <p className={styles.sectionNote}>
-              Add nodes from the library. Drag to reorder. Each node inherits its default pass threshold unless you
-              override it here.
-            </p>
-            <LessonBuilder availableNodes={availableNodes} entries={lessonNodes} onChange={handleLessonNodesChange} />
-          </section>
-        )}
-
-        {/* ── Roadmap tab ── */}
-        {activeTab === 'roadmap' && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Learning roadmap</h2>
-            <p className={styles.sectionNote}>
-              Draw prerequisite paths between nodes. Connections must form a directed acyclic graph — no cycles allowed.
-            </p>
-            <LessonRoadmapBuilder lessonNodes={lessonNodes} edges={edges} onEdgesChange={setEdges} />
-          </section>
-        )}
+        {/* ── Roadmap ── */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Learning roadmap</h2>
+          <p className={styles.sectionNote}>
+            Click empty space to add a node. Draw prerequisite paths between nodes — no cycles allowed.
+          </p>
+          <p className={styles.sectionNote}>
+            Pan with scroll/trackpad or right click drag. Drag nodes with left click; connect from the blue dots.
+          </p>
+          <LessonRoadmapBuilder
+            availableNodes={availableNodes}
+            lessonNodes={lessonNodes}
+            edges={edges}
+            onEdgesChange={setEdges}
+            onLessonNodesChange={handleLessonNodesChange}
+          />
+        </section>
 
         {error && <p className={styles.error}>{error}</p>}
 
@@ -315,8 +304,16 @@ export default function LessonEditForm({ lesson, availableNodes, courses }: Prop
             <a href="/instructor/lessons" className={styles.cancelLink}>
               Cancel
             </a>
+            <button
+              type="button"
+              className={styles.draftBtn}
+              onClick={() => persistLesson(true)}
+              disabled={saving || deleting}
+            >
+              {saving ? 'Saving…' : 'Save as draft'}
+            </button>
             <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {saving ? 'Saving…' : lesson.isDraft ? 'Publish lesson' : 'Save changes'}
             </button>
           </div>
         </div>

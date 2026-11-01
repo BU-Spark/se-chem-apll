@@ -1,0 +1,11 @@
+.links {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.links a {
+  color: var(--apll-text);
+  font-size: 0.9rem;
+  text-decoration: underline;
+}

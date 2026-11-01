@@ -1,0 +1,401 @@
+import { sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import NewNodePage from './page';
+
+const push = jest.fn();
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+}));
+
+jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
+  __esModule: true,
+  default: () => <div data-testid="youtube-player" />,
+}));
+
+// RichMarkdownEditor has its own focused integration coverage. Keep these
+// workflow tests centered on NodeForm state, validation, and payloads.
+jest.mock('@/app/components/QuestionBank/MarkdownField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    value,
+    onChange,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => (
+    <label>
+      {label}
+      <textarea
+        aria-label={label === 'Note' ? 'Note text' : label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
+  ),
+}));
+
+jest.mock('@/app/components/QuestionBank/QuestionBankEditor', () => {
+  return {
+    __esModule: true,
+    default: function MockQuestionBankEditor({
+      questions,
+      onChange,
+    }: {
+      questions: Array<{ id: string; type: string; prompt: string; [key: string]: unknown }>;
+      onChange: (next: typeof questions) => void;
+    }) {
+      return (
+        <div data-testid="question-bank-editor">
+          {questions.map((q, index) => (
+            <div key={q.id}>
+              <label>
+                Quiz question prompt {index + 1}
+                <input
+                  aria-label={`Quiz question prompt ${index + 1}`}
+                  value={q.prompt}
+                  onChange={(e) =>
+                    onChange(questions.map((item) => (item.id === q.id ? { ...item, prompt: e.target.value } : item)))
+                  }
+                />
+              </label>
+            </div>
+          ))}
+          <div data-testid="quiz-draft-row">
+            <label>
+              Draft quiz prompt
+              <input aria-label="Draft quiz prompt" name="prompt" />
+            </label>
+            <input aria-label="Draft quiz choice 1" name="choice1" placeholder="Choice 1" />
+            <input aria-label="Draft quiz choice 2" name="choice2" placeholder="Choice 2" />
+            <button
+              type="button"
+              onClick={(e) => {
+                const root = (e.currentTarget.parentElement as HTMLElement) ?? null;
+                const prompt = (root?.querySelector('input[name="prompt"]') as HTMLInputElement | null)?.value ?? '';
+                const choice1 = (root?.querySelector('input[name="choice1"]') as HTMLInputElement | null)?.value ?? '';
+                const choice2 = (root?.querySelector('input[name="choice2"]') as HTMLInputElement | null)?.value ?? '';
+                onChange([
+                  ...questions,
+                  {
+                    id: `mock-q-${questions.length + 1}`,
+                    type: 'multipleChoice' as const,
+                    prompt,
+                    choices: [
+                      { id: `mock-c-${questions.length + 1}-1`, content: choice1, correct: true },
+                      { id: `mock-c-${questions.length + 1}-2`, content: choice2, correct: false },
+                    ],
+                  },
+                ]);
+                root?.querySelectorAll('input').forEach((input) => {
+                  (input as HTMLInputElement).value = '';
+                });
+              }}
+            >
+              Commit draft
+            </button>
+          </div>
+        </div>
+      );
+    },
+  };
+});
+
+function questionCardFor(prompt: HTMLElement) {
+  return prompt.closest('[class*="questionCard"]') as HTMLElement;
+}
+
+async function goToCheckpoints(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('heading', { name: 'Checkpoints (QEV)' })).toBeInTheDocument();
+}
+
+describe('NewNodePage', () => {
+  beforeEach(() => {
+    push.mockReset();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'node-created-1' }) });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('imports untimed content without a video and saves it as a draft', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    const text = sampleCheckpointCsv();
+    const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => text });
+    await user.upload(screen.getByLabelText('Choose checkpoint CSV file'), file);
+    await screen.findByText('2 checkpoints · 3 items · 1 need timestamps');
+    await user.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
+    expect(screen.getByText('1 of 2 groups assigned')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body.isDraft).toBe(true);
+    expect(body.checkpoints[0]).toMatchObject({
+      checkpointKey: 'intro',
+      timeOffsetSeconds: null,
+      placementHint: 'After the introduction',
+    });
+    expect(body.checkpoints[0].questions).toHaveLength(2);
+    expect(body.checkpoints[0]).not.toHaveProperty('id');
+    expect(body.checkpoints[0].questions[0]).not.toHaveProperty('id');
+  });
+
+  it('submits checkpoints and quiz questions separately', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await user.type(screen.getByLabelText('New tag'), 'Safety{Enter}');
+    await user.type(screen.getByLabelText('Learning objective 1'), 'Understand safe lab practices.');
+    await user.click(screen.getByRole('button', { name: 'Add learning objective' }));
+    await user.type(screen.getByLabelText('Learning objective 2'), 'Apply the lab safety procedure.');
+    await goToCheckpoints(user);
+
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:00');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
+    const checkpointPrompt = screen.getByLabelText(/Question prompt/);
+    const questionCard = questionCardFor(checkpointPrompt);
+    const checkpointCard = questionCard.parentElement as HTMLElement;
+    await user.type(checkpointPrompt, 'Checkpoint question');
+    await user.type(within(questionCard).getByPlaceholderText('Choice 1'), 'A');
+    await user.type(within(questionCard).getByPlaceholderText('Choice 2'), 'B');
+    await user.click(within(questionCard).getAllByTitle('Mark as correct')[0]);
+
+    await user.click(within(checkpointCard).getByRole('button', { name: '+ Add question to checkpoint' }));
+    expect(within(checkpointCard).getByRole('button', { name: 'Question 1: Checkpoint question' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    const secondCheckpointPrompt = within(checkpointCard).getByLabelText(/Question prompt/);
+    await user.type(secondCheckpointPrompt, 'Second checkpoint question');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 1'), 'C');
+    await user.type(within(checkpointCard).getByPlaceholderText('Choice 2'), 'D');
+    await user.click(within(checkpointCard).getAllByTitle('Mark as correct')[0]);
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: /Quiz question bank/ })).toBeInTheDocument();
+
+    const quizGrid = screen.getByTestId('question-bank-editor');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'X');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'Y');
+    await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create node' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const body = JSON.parse(request.body);
+
+    expect(body.tags).toEqual(['Safety']);
+    expect(body.learningObjectives).toEqual(['Understand safe lab practices.', 'Apply the lab safety procedure.']);
+    expect(body.checkpoints).toEqual([
+      expect.objectContaining({
+        timeOffsetSeconds: 0,
+        questions: [
+          expect.objectContaining({ prompt: 'Checkpoint question' }),
+          expect.objectContaining({ prompt: 'Second checkpoint question' }),
+        ],
+      }),
+    ]);
+    expect(body.quizQuestions).toEqual([expect.objectContaining({ prompt: 'Quiz bank question' })]);
+    expect(body).not.toHaveProperty('questions');
+    expect(push).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Node created' })).toBeInTheDocument());
+    expect(screen.getByText(/Your node was created successfully/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Edit again' }));
+    expect(screen.getByRole('heading', { name: 'Preview & submit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe('/api/instructor/nodes/node-created-1');
+    expect((global.fetch as jest.Mock).mock.calls[1][1].method).toBe('PATCH');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Changes saved' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Back to nodes' }));
+    expect(push).toHaveBeenCalledWith('/instructor/nodes');
+  });
+
+  it('submits an informational note at a checkpoint without answer controls', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    await user.click(screen.getByRole('button', { name: 'Assign timestamps' }));
+    await user.type(screen.getByLabelText('Time (mm:ss)'), '0:00');
+    await user.click(screen.getByRole('button', { name: 'Assign time' }));
+    await user.click(screen.getByRole('button', { name: 'Continue to checkpoint editor' }));
+    await user.selectOptions(screen.getByLabelText('Type:'), 'note');
+
+    const note = screen.getByLabelText('Note text');
+    await user.type(note, 'Watch the flame color closely.');
+    expect(screen.queryByPlaceholderText('Choice 1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const quizGrid = screen.getByTestId('question-bank-editor');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz prompt/), 'Quiz bank question');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 1/), 'A');
+    await user.type(within(quizGrid).getByLabelText(/Draft quiz choice 2/), 'B');
+    await user.click(within(quizGrid).getByRole('button', { name: /Commit draft/ }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Create node' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    const body = JSON.parse(request.body);
+    expect(body.checkpoints[0].questions).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        prompt: 'Watch the flame color closely.',
+        options: { type: 'note' },
+        correctIndices: [],
+      }),
+    ]);
+  });
+
+  it('adds distinct untimed checkpoints without fabricated offsets', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    await user.type(screen.getByLabelText(/Question prompt/), 'First');
+    await user.click(
+      within(questionCardFor(screen.getByLabelText(/Question prompt/))).getAllByTitle('Mark as correct')[0]
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getAllByLabelText(/Question prompt/)).toHaveLength(1);
+  });
+
+  it('keeps one checkpoint open, preserves its selected question, and opens a neighbor after removal', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.type(screen.getByLabelText(/Title/), 'Safety video');
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+
+    const firstCheckpoint = screen
+      .getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' })
+      .closest('[class*="checkpointCard"]') as HTMLElement;
+    await user.type(within(firstCheckpoint).getByLabelText(/Question prompt/), 'First question');
+    await user.click(within(firstCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
+
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(screen.getByRole('button', { name: /Add checkpoint manually/ }));
+    const secondCheckpoint = screen
+      .getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' })
+      .closest('[class*="checkpointCard"]') as HTMLElement;
+    await user.click(within(secondCheckpoint).getByRole('button', { name: '+ Add question to checkpoint' }));
+    const secondCheckpointQuestion = within(secondCheckpoint).getByRole('button', {
+      name: 'Question 2: Untitled question',
+    });
+    expect(secondCheckpointQuestion).toHaveAttribute('aria-expanded', 'true');
+
+    const firstCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 1 at Needs timestamp' });
+    const secondCheckpointToggle = screen.getByRole('button', { name: 'Checkpoint 2 at Needs timestamp' });
+    expect(firstCheckpointToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(secondCheckpointToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(firstCheckpoint).queryByRole('button', { name: 'Question 1: First question' })
+    ).not.toBeInTheDocument();
+
+    await user.click(firstCheckpointToggle);
+    expect(firstCheckpointToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(secondCheckpointToggle).toHaveAttribute('aria-expanded', 'false');
+    const firstQuestion = within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' });
+    const secondQuestion = within(firstCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' });
+    expect(secondQuestion).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(firstQuestion);
+    expect(firstQuestion).toHaveAttribute('aria-expanded', 'true');
+    expect(secondQuestion).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(secondCheckpointToggle);
+    expect(within(secondCheckpoint).getByRole('button', { name: 'Question 2: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(firstCheckpointToggle);
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: First question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    await user.click(within(firstCheckpoint).getByRole('button', { name: 'Remove question 1' }));
+    expect(within(firstCheckpoint).getByRole('button', { name: 'Question 1: Untitled question' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+  });
+
+  it('saves an incomplete node as a draft from the first step', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const request = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(JSON.parse(request.body)).toEqual(
+      expect.objectContaining({
+        title: '',
+        videoUrl: null,
+        checkpoints: [],
+        quizQuestions: [],
+        isDraft: true,
+      })
+    );
+    expect(push).toHaveBeenCalledWith('/instructor/nodes');
+  });
+});

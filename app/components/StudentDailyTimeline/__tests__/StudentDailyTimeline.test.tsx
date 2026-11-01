@@ -11,8 +11,8 @@ describe('StudentDailyTimeline', () => {
         code: 'C101',
         section: 'A',
         lessons: [
-          { id: 'l1', title: 'Lesson One', openDate: new Date().toISOString(), dueDate: null },
-          { id: 'l2', title: 'Lesson Two', openDate: null, dueDate: new Date().toISOString() },
+          { id: 'l1', title: 'Lesson One', openDate: new Date(), dueDate: null },
+          { id: 'l2', title: 'Lesson Two', openDate: null, dueDate: new Date() },
         ],
       },
     ];

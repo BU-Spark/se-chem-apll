@@ -1,0 +1,24 @@
+.card {
+  width: 12.5rem;
+  min-height: 14rem;
+  border-radius: 1rem;
+  background: var(--apll-sand);
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  color: var(--apll-text);
+}
+
+.text {
+  font-size: 0.85rem;
+}
+
+.course {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.4;
+}

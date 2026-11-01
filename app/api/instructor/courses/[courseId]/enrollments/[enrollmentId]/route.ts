@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 
 interface RouteContext {
@@ -8,10 +8,18 @@ interface RouteContext {
 
 // DELETE /api/instructor/courses/[courseId]/enrollments/[enrollmentId]
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, error } = await apiAccess('instructor');
+  if (error) return error;
 
   const { courseId, enrollmentId } = await params;
+
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      ...contentScope(user),
+    },
+  });
+  if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const enrollment = await prisma.enrollment.findUnique({
     where: { id: enrollmentId },

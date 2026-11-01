@@ -1,5 +1,6 @@
 'use client';
 
+import CourseTabs from '@/app/components/CourseTabs';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import type { User, Enrollment, Lesson, LessonNode, Node } from '@prisma/client';
@@ -193,6 +194,8 @@ export default function CourseStudentsManager({
           </p>
         </div>
       </div>
+
+      <CourseTabs courseId={courseId} active="students" />
 
       {/* Course content summary */}
       {lessons.length > 0 && (

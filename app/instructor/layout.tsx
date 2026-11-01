@@ -1,16 +1,10 @@
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { requireInstructor, isAdmin } from '@/lib/auth/server';
 import styles from './layout.module.css';
 
 export default async function InstructorLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/sign-in');
-
-  const user = await currentUser();
-  const role = user?.unsafeMetadata?.role as string | undefined;
-  if (role === 'student') redirect('/student');
+  const user = await requireInstructor();
 
   return (
     <div className={styles.shell}>
@@ -42,21 +36,19 @@ export default async function InstructorLayout({ children }: { children: React.R
               Students
             </Link>
           </li>
+          {isAdmin(user) && (
+            <li>
+              <Link href="/admin" className={styles.navItem}>
+                Administration
+              </Link>
+            </li>
+          )}
+          <li>
+            <Link href="/debug-role" className={styles.navItem}>
+              Switch role
+            </Link>
+          </li>
         </ul>
-
-        <div style={{ marginTop: 'auto', padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-          <Link
-            href="/debug-role"
-            style={{
-              fontSize: '0.75rem',
-              color: 'rgba(255,255,255,0.5)',
-              textDecoration: 'none',
-              display: 'block',
-            }}
-          >
-            Debug Role
-          </Link>
-        </div>
       </nav>
 
       <main className={styles.main}>{children}</main>

@@ -93,3 +93,8 @@
 .actionLink:hover {
   background: #bbf7d0;
 }
+
+.statusSkipped {
+  color: #5b21b6;
+  background: #ede9fe;
+}

@@ -1,18 +1,40 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import styles from './page.module.css';
+import styles from '../../components/InstructorGrid/grid.module.css';
+import { requireInstructor, contentScope } from '@/lib/auth/server';
+import LessonsGrid from './LessonsGrid';
+import { readLessonFilters, type SearchParams } from './listFilters';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LessonsPage() {
-  const lessons = await prisma.lesson.findMany({
-    include: {
-      course: true,
-      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
+export default async function LessonsPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+  const user = await requireInstructor();
+  const filters = readLessonFilters((await searchParams) ?? {});
+  const [lessons, courses] = await Promise.all([
+    prisma.lesson.findMany({
+      where: {},
+      select: {
+        createdByClerkId: true,
+        id: true,
+        title: true,
+        summary: true,
+        isDraft: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { lessonNodes: true } },
+        courseLessons: {
+          where: { course: contentScope(user, false) },
+          select: { course: { select: { id: true, title: true } } },
+        },
+      },
+      orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
+    }),
+    prisma.course.findMany({
+      where: contentScope(user, false),
+      select: { id: true, title: true },
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+    }),
+  ]);
   return (
     <div>
       <div className={styles.header}>
@@ -21,30 +43,20 @@ export default async function LessonsPage() {
           + New lesson
         </Link>
       </div>
-
-      {lessons.length === 0 ? (
-        <p className={styles.empty}>No lessons yet. Create your first one above.</p>
-      ) : (
-        <ul className={styles.list}>
-          {lessons.map((lesson) => (
-            <li key={lesson.id} className={styles.card}>
-              <div className={styles.cardBody}>
-                <p className={styles.cardTitle}>{lesson.title}</p>
-                <p className={styles.cardMeta}>
-                  {lesson.course.code} &middot; {lesson.lessonNodes.length} node
-                  {lesson.lessonNodes.length !== 1 ? 's' : ''}
-                  {lesson.openDate && ` · Opens ${new Date(lesson.openDate).toLocaleDateString()}`}
-                  {lesson.dueDate && ` · Due ${new Date(lesson.dueDate).toLocaleDateString()}`}
-                </p>
-                <p className={styles.cardSlug}>/lessons/{lesson.slug}</p>
-              </div>
-              <Link href={`/instructor/lessons/${lesson.id}/edit`} className={styles.editLink}>
-                Edit
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <p>
+        <Link href="/instructor/copy?mode=lessons">Copy lessons from another course</Link>
+      </p>
+      <LessonsGrid
+        lessons={lessons.map((item) => ({
+          ...item,
+          canEdit:
+            user.platformRole === 'ADMIN' ||
+            item.createdByClerkId === null ||
+            item.createdByClerkId === user.clerkUserId,
+        }))}
+        courses={courses}
+        initialFilters={filters}
+      />
     </div>
   );
 }

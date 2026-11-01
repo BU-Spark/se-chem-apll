@@ -1,0 +1,9 @@
+question_key,variant_key,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer,var:compound,var:mass,var:category,var:example
+arithmetic,,multipleChoice,What is 2 + 2?,3,4,5,22,,,,,2,,,,,,,,
+primes,,multipleChoice,Which are prime numbers?,2,3,4,9,,,,,"1,2",,,,,,,,
+square-root,,shortAnswer,What is the square root of 16?,,,,,,,,,,exact,4,,,,,,
+pi,,shortAnswer,Estimate pi (acceptable range),,,,,,,,,,range,,3.1,3.2,,,,
+moles,water,shortAnswer,How many moles of {{compound}} are present in {{mass}}? Use rounded molar masses.,,,,,,,,,,exact,5,,,$\ce{H2O}$,90 g,,
+moles,methane,shortAnswer,How many moles of {{compound}} are present in {{mass}}? Use rounded molar masses.,,,,,,,,,,range,,4.98,5.02,$\ce{CH4}$,80 g,,
+elements,metals,multipleChoice,Which of these are {{category}}? Select every correct answer.,{{example}},Helium,Carbon,,,,,,1,,,,,,,alkali metals,Sodium
+elements,diatomic,multipleChoice,Which of these are {{category}}? Select every correct answer.,{{example}},Neon,Nitrogen,Argon,,,,,"1,3",,,,,,,diatomic elements at room temperature,Oxygen
