@@ -219,6 +219,8 @@ describe('checkpoint change detection', () => {
             sortOrder: 0,
             kind: 'NOTE',
             prompt: 'Changed note.',
+            feedbackCorrect: null,
+            feedbackIncorrect: null,
             options: { type: 'note' },
             correctIndices: [],
           },
@@ -422,4 +424,27 @@ describe('checkpoint change detection', () => {
     ).rejects.toThrow(/student responses/);
     expectNoWrites(tx);
   });
+});
+
+it('saves feedback-only checkpoint edits and clears removed feedback', async () => {
+  const tx = transaction();
+  tx.nodeResponse.count.mockResolvedValue(0);
+  const prior = {
+    ...question,
+    kind: 'QUESTION',
+    options: { type: 'multipleChoice', choices: ['A', 'B'] },
+    correctIndices: [0],
+    feedbackCorrect: 'Old feedback',
+    feedbackIncorrect: 'Try again',
+  };
+  const original = { ...checkpoint, questions: [prior] };
+  tx.nodeCheckpoint.findMany.mockResolvedValue([original]);
+  await saveCheckpoints(tx as unknown as Prisma.TransactionClient, 'node1', [
+    { ...original, questions: [{ ...prior, feedbackCorrect: 'New feedback', feedbackIncorrect: '' }] },
+  ]);
+  expect(tx.checkpointQuestion.update).toHaveBeenCalledWith({
+    where: { id: prior.id },
+    data: expect.objectContaining({ feedbackCorrect: 'New feedback', feedbackIncorrect: null }),
+  });
+  expect(tx.nodeResponse.count).toHaveBeenCalled();
 });

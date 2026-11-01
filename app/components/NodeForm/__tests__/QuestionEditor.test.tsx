@@ -70,3 +70,19 @@ describe('QuestionEditor', () => {
     expect(screen.getByRole('textbox', { name: 'Question prompt' })).toHaveValue('<u>Updated</u> question');
   });
 });
+
+it('edits and previews both feedback fields, and clears them when converting to a note', async () => {
+  const user = userEvent.setup();
+  render(<Harness />);
+  await user.type(screen.getByRole('textbox', { name: 'Feedback for correct answer (optional)' }), '**Good work**');
+  await user.type(screen.getByRole('textbox', { name: 'Feedback for incorrect answer (optional)' }), '*Check units*');
+  await user.click(screen.getByRole('button', { name: 'Preview' }));
+  expect(screen.getByText('Good work').tagName).toBe('STRONG');
+  expect(screen.getByText('Check units').tagName).toBe('EM');
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  await user.selectOptions(screen.getByRole('combobox'), 'note');
+  expect(screen.queryByRole('textbox', { name: 'Feedback for correct answer (optional)' })).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole('combobox'), 'multipleChoice');
+  expect(screen.getByRole('textbox', { name: 'Feedback for correct answer (optional)' })).toHaveValue('');
+  expect(screen.getByRole('textbox', { name: 'Feedback for incorrect answer (optional)' })).toHaveValue('');
+});

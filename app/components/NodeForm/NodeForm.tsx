@@ -94,6 +94,8 @@ function buildCheckpointPayload(checkpoints: FormCheckpoint[]) {
       ...(q.persistedId && { id: q.persistedId }),
       sortOrder: qIdx,
       prompt: q.prompt,
+      feedbackCorrect: q.questionType === 'note' ? null : q.feedbackCorrect,
+      feedbackIncorrect: q.questionType === 'note' ? null : q.feedbackIncorrect,
       kind: q.questionType === 'note' ? 'note' : 'question',
       options: serializeQuestionOptions(q),
       correctIndices: q.questionType === 'multipleChoice' ? q.correctIndices : [],

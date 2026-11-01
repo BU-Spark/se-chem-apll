@@ -4,6 +4,7 @@ import selectStyles from '@/app/components/Select/Select.module.css';
 import { useState } from 'react';
 import MarkdownField from '@/app/components/QuestionBank/MarkdownField';
 import QevItemPreview from './QevItemPreview';
+import FeedbackPreview from '@/app/components/QuestionBank/FeedbackPreview';
 import type { CheckpointItemType, FormQuestion, ShortAnswerMode } from './types';
 import styles from './NodeForm.module.css';
 
@@ -87,7 +88,13 @@ export default function QuestionEditor({
                 <select
                   className={`${selectStyles.control} ${selectStyles.compact}`}
                   value={q.questionType}
-                  onChange={(e) => onUpdate({ questionType: e.target.value as CheckpointItemType, correctIndices: [] })}
+                  onChange={(e) =>
+                    onUpdate({
+                      questionType: e.target.value as CheckpointItemType,
+                      correctIndices: [],
+                      ...(e.target.value === 'note' ? { feedbackCorrect: null, feedbackIncorrect: null } : {}),
+                    })
+                  }
                 >
                   <option value="multipleChoice">Multiple choice</option>
                   <option value="shortAnswer">Numeric short answer</option>
@@ -106,7 +113,10 @@ export default function QuestionEditor({
           </div>
 
           {view === 'preview' ? (
-            <QevItemPreview question={q} />
+            <>
+              <QevItemPreview question={q} />
+              {!isNote && <FeedbackPreview question={q} />}
+            </>
           ) : (
             <>
               <MarkdownField
@@ -119,6 +129,23 @@ export default function QuestionEditor({
                 }
                 rows={2}
               />
+
+              {!isNote && (
+                <>
+                  <MarkdownField
+                    label="Feedback for correct answer (optional)"
+                    value={q.feedbackCorrect ?? ''}
+                    onChange={(feedbackCorrect) => onUpdate({ feedbackCorrect })}
+                    placeholder="Explain why the answer is correct."
+                  />
+                  <MarkdownField
+                    label="Feedback for incorrect answer (optional)"
+                    value={q.feedbackIncorrect ?? ''}
+                    onChange={(feedbackIncorrect) => onUpdate({ feedbackIncorrect })}
+                    placeholder="Offer a hint or explain a common mistake."
+                  />
+                </>
+              )}
 
               {isNote ? null : q.questionType === 'multipleChoice' ? (
                 <div className={styles.choiceList}>

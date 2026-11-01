@@ -51,3 +51,20 @@ it('rejects corrupt roadmap references before any writes can be constructed', ()
     )
   ).toThrow('invalid edge');
 });
+
+it('preserves question feedback when copying nodes', () => {
+  const feedback = { feedbackCorrect: 'Good work', feedbackIncorrect: 'Try again' };
+  const source = {
+    ...copyNodeFixture,
+    checkpoints: copyNodeFixture.checkpoints.map((c) => ({
+      ...c,
+      questions: c.questions.map((q) => ({ ...q, ...feedback })),
+    })),
+    quizQuestions: copyNodeFixture.quizQuestions.map((q) => ({ ...q, ...feedback })),
+  };
+  const copy = buildContentCopy([], [source], 'owner');
+  expect(copy.nodeData[0]).toMatchObject({
+    checkpoints: { create: [{ questions: { create: [feedback] } }] },
+    quizQuestions: { create: [feedback] },
+  });
+});
