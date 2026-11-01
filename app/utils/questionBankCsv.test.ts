@@ -34,7 +34,9 @@ function saExact(overrides: Partial<Extract<AuthoringQuestion, { type: 'shortAns
 }
 
 function csvWithRows(rows: string[][]): string {
-  return Papa.unparse([[...QUIZ_CSV_HEADERS], ...rows.map((row, i) => [`q${i + 1}`, '', ...row])], { newline: '\n' });
+  return Papa.unparse([[...QUIZ_CSV_HEADERS], ...rows.map((row, i) => [`q${i + 1}`, '', ...row, '', ''])], {
+    newline: '\n',
+  });
 }
 
 describe('sampleQuestionBankCsv', () => {
