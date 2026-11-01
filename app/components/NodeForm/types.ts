@@ -10,6 +10,8 @@ export interface FormQuestion {
   persistedId?: string;
   id: string;
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   questionType: CheckpointItemType;
   choices: string[];
   correctIndices: number[];
@@ -95,6 +97,8 @@ export function serializeQuestionOptions(q: FormQuestion) {
 export function dbQuestionToForm(q: {
   id: string;
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   options: unknown;
   correctIndices: number[];
   kind?: 'QUESTION' | 'NOTE';
@@ -113,6 +117,8 @@ export function dbQuestionToForm(q: {
     id: q.id,
     persistedId: q.id,
     prompt: q.prompt,
+    feedbackCorrect: q.feedbackCorrect ?? undefined,
+    feedbackIncorrect: q.feedbackIncorrect ?? undefined,
     questionType: isNote ? 'note' : isShortAnswer ? 'shortAnswer' : 'multipleChoice',
     choices: isNote || isShortAnswer ? ['', ''] : (getMultipleChoiceChoices(q.options) ?? ['', '']),
     correctIndices: q.correctIndices,
@@ -141,6 +147,8 @@ export type NodeFormInitial = {
     questions: Array<{
       id: string;
       prompt: string;
+      feedbackCorrect?: string | null;
+      feedbackIncorrect?: string | null;
       options: unknown;
       correctIndices: number[];
       kind?: 'QUESTION' | 'NOTE';
@@ -150,6 +158,8 @@ export type NodeFormInitial = {
     variants?: import('@/app/utils/questionVariants').StoredVariant[];
     id: string;
     prompt: string;
+    feedbackCorrect?: string | null;
+    feedbackIncorrect?: string | null;
     options: unknown;
     correctIndices: number[];
   }>;

@@ -42,6 +42,8 @@ export default async function EditNodePage({ params }: Props) {
           questions: checkpoint.questions.map((q) => ({
             id: q.id,
             prompt: q.prompt,
+            feedbackCorrect: q.feedbackCorrect,
+            feedbackIncorrect: q.feedbackIncorrect,
             options: q.options,
             correctIndices: q.correctIndices,
             kind: q.kind,
@@ -51,6 +53,8 @@ export default async function EditNodePage({ params }: Props) {
           variants: q.variants,
           id: q.id,
           prompt: q.prompt,
+          feedbackCorrect: q.feedbackCorrect,
+          feedbackIncorrect: q.feedbackIncorrect,
           options: q.options,
           correctIndices: q.correctIndices,
         })),

@@ -247,17 +247,19 @@ model NodeCheckpoint {
 }
 
 model CheckpointQuestion {
-  id             String                 @id @default(cuid())
-  checkpointId   String
-  sortOrder      Int
-  kind           CheckpointQuestionKind @default(QUESTION)
-  prompt         String
+  id                String                 @id @default(cuid())
+  checkpointId      String
+  sortOrder         Int
+  kind              CheckpointQuestionKind @default(QUESTION)
+  prompt            String
+  feedbackCorrect   String?
+  feedbackIncorrect String?
   // For multiple-choice: { type: "multipleChoice", choices: string[] } or legacy string[]
   // For short answer:    { type: "shortAnswer", answerMode: "exact"|"range", ... }
-  options        Json
-  correctIndices Int[]                  @default([])
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  options           Json
+  correctIndices    Int[]                  @default([])
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   checkpoint NodeCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
   responses  NodeResponse[]
@@ -272,14 +274,16 @@ enum CheckpointQuestionKind {
 
 // Post-video (or foundational first-attempt) quiz bank; sampled via LessonNode.quizQuestionCount.
 model QuizQuestion {
-  id             String   @id @default(cuid())
-  nodeId         String
-  sortOrder      Int
-  prompt         String
-  options        Json
-  correctIndices Int[]    @default([])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(cuid())
+  nodeId            String
+  sortOrder         Int
+  prompt            String
+  feedbackCorrect   String?
+  feedbackIncorrect String?
+  options           Json
+  correctIndices    Int[]    @default([])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   node      Node                  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   responses NodeResponse[]

@@ -13,6 +13,8 @@ export type QuestionPayload = {
   id?: string;
   sortOrder: number;
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   options: unknown;
   correctIndices?: unknown;
   variants?: StoredVariant[];
@@ -200,6 +202,8 @@ export function serializeQuestionCreate(q: QuestionPayload) {
       : {}),
     sortOrder: q.sortOrder,
     prompt: q.prompt,
+    feedbackCorrect: q.feedbackCorrect?.trim() ? q.feedbackCorrect : null,
+    feedbackIncorrect: q.feedbackIncorrect?.trim() ? q.feedbackIncorrect : null,
     options: options as object,
     correctIndices: getMultipleChoiceChoices(q.options) ? ((q.correctIndices ?? []) as number[]) : [],
   };
@@ -211,6 +215,8 @@ export function serializeCheckpointQuestionCreate(q: CheckpointQuestionPayload) 
     return {
       sortOrder: q.sortOrder,
       kind: 'NOTE' as const,
+      feedbackCorrect: null,
+      feedbackIncorrect: null,
       prompt: q.prompt,
       options: { type: 'note' },
       correctIndices: [],
@@ -242,7 +248,15 @@ function validateNodeStructure(payload: NodeContentPayload): string | null {
     if (!object(value)) return 'Each item must be an object.';
     if (value.id !== undefined && (typeof value.id !== 'string' || !value.id)) return 'Invalid item ID.';
     if (typeof value.prompt !== 'string') return 'Item prompt must be text.';
+    for (const field of ['feedbackCorrect', 'feedbackIncorrect'] as const) {
+      if (value[field] != null && typeof value[field] !== 'string') return `${field} must be text or null.`;
+    }
     const kind = checkpointItemKind(value as CheckpointQuestionPayload);
+    if (
+      kind === 'note' &&
+      [value.feedbackCorrect, value.feedbackIncorrect].some((v) => typeof v === 'string' && v.trim())
+    )
+      return 'Notes cannot include answer feedback.';
     if (!kind || (!notes && kind === 'note')) return 'Unsupported item kind.';
     const indices = value.correctIndices === undefined ? [] : value.correctIndices;
     if (!Array.isArray(indices) || indices.some((n) => !Number.isInteger(n) || n < 0))
@@ -323,10 +337,15 @@ function validateNodeStructure(payload: NodeContentPayload): string | null {
 
 /** Semantic comparison ignores JSON object key order and legacy answer encodings. */
 export function questionContentKey(question: CheckpointQuestionPayload): string {
+  const feedback = [
+    question.feedbackCorrect?.trim() ? question.feedbackCorrect : null,
+    question.feedbackIncorrect?.trim() ? question.feedbackIncorrect : null,
+  ];
   const hydrated = quizVariantOptions(question);
   const variantOptions = hydrated ? independentQuizVariants(hydrated) : null;
   if (variantOptions)
     return JSON.stringify([
+      feedback,
       variantOptions.type,
       question.prompt,
       variantOptions.type === 'variantMultipleChoice'
@@ -351,6 +370,7 @@ export function questionContentKey(question: CheckpointQuestionPayload): string 
   if (choices)
     return JSON.stringify([
       'multipleChoice',
+      feedback,
       question.prompt,
       choices,
       [...((question.correctIndices ?? []) as number[])].sort((a, b) => a - b),
@@ -361,5 +381,5 @@ export function questionContentKey(question: CheckpointQuestionPayload): string 
     options && typeof options === 'object'
       ? Object.fromEntries(Object.entries(options).sort(([a], [b]) => a.localeCompare(b)))
       : options;
-  return JSON.stringify(['shortAnswer', question.prompt, sortedOptions]);
+  return JSON.stringify(['shortAnswer', feedback, question.prompt, sortedOptions]);
 }

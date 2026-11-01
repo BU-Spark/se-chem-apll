@@ -67,12 +67,14 @@ export async function updateQuestionRows(
         "sortOrder" = v."sortOrder",
         "kind" = CASE WHEN v."setContent" THEN v."kind"::"CheckpointQuestionKind" ELSE q."kind" END,
         "prompt" = CASE WHEN v."setContent" THEN v."prompt" ELSE q."prompt" END,
+        "feedbackCorrect" = CASE WHEN v."setContent" THEN v."feedbackCorrect" ELSE q."feedbackCorrect" END,
+        "feedbackIncorrect" = CASE WHEN v."setContent" THEN v."feedbackIncorrect" ELSE q."feedbackIncorrect" END,
         "options" = CASE WHEN v."setContent" THEN v."options" ELSE q."options" END,
         "correctIndices" = CASE WHEN v."setContent" THEN v."correctIndices" ELSE q."correctIndices" END,
         "updatedAt" = CURRENT_TIMESTAMP AT TIME ZONE 'UTC'
       FROM jsonb_to_recordset(${JSON.stringify(batch)}::jsonb) AS v(
         "id" text, "sortOrder" integer, "kind" text, "prompt" text,
-        "options" jsonb, "correctIndices" integer[], "setContent" boolean
+        "options" jsonb, "correctIndices" integer[], "feedbackCorrect" text, "feedbackIncorrect" text, "setContent" boolean
       )
       WHERE q."id" = v."id" AND q."checkpointId" IN (
         SELECT "id" FROM "NodeCheckpoint" WHERE "nodeId" = ${nodeId}
