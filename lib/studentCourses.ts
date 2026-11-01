@@ -71,15 +71,20 @@ export async function getEnrolledCourses(studentId: string, now = new Date()) {
   }));
 }
 
-// Instructor contacts across the student's courses, listing each instructor once.
+// Keep contacts course-specific: one instructor can have different hours in each course.
 export async function getStudentInstructors(studentId: string) {
   const contacts = await prisma.courseContact.findMany({
     where: { type: 'INSTRUCTOR', course: { enrollments: { some: asStudent(studentId) } } },
-    select: { id: true, name: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      officeHours: true,
+      course: { select: { code: true, section: true, title: true } },
+    },
     orderBy: { createdAt: 'asc' },
   });
-  const seenEmails = new Set<string>();
-  return contacts.filter((contact) => !seenEmails.has(contact.email) && seenEmails.add(contact.email));
+  return contacts;
 }
 
 /**
