@@ -24,7 +24,12 @@ declare global {
 
 export type YTPlayer = {
   getCurrentTime: () => number;
+  getDuration: () => number;
   pauseVideo: () => void;
+  playVideo: () => void;
+  // Show or hide captions ('captions' module).
+  loadModule: (module: string) => void;
+  unloadModule: (module: string) => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   destroy: () => void;
 };
@@ -32,6 +37,8 @@ export type YTPlayer = {
 type Props = {
   videoId: string;
   onReady?: (player: YTPlayer) => void;
+  // Extra YouTube player settings, e.g. { controls: 0 } to hide YouTube's own controls.
+  playerVars?: Record<string, number | string>;
 };
 
 let apiPromise: Promise<void> | null = null;
@@ -65,7 +72,7 @@ function loadYouTubeApi(): Promise<void> {
   return apiPromise;
 }
 
-export default function YouTubeAuthoringPlayer({ videoId, onReady }: Props) {
+export default function YouTubeAuthoringPlayer({ videoId, onReady, playerVars }: Props) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -96,6 +103,7 @@ export default function YouTubeAuthoringPlayer({ videoId, onReady }: Props) {
             enablejsapi: 1,
             rel: 0,
             modestbranding: 1,
+            ...playerVars,
           },
           events: {
             onReady: (event) => {
@@ -117,7 +125,7 @@ export default function YouTubeAuthoringPlayer({ videoId, onReady }: Props) {
       }
       mountRef.current = null;
     };
-  }, [videoId]);
+  }, [videoId, playerVars]);
 
   return <div ref={wrapperRef} />;
 }

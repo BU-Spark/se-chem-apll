@@ -41,7 +41,11 @@ describe('StudentCoursePage', () => {
     expect(screen.getByText('Introduction to carbon-based molecules.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Take me to current lesson' })).toHaveAttribute(
       'href',
-      '/student/coming-soon'
+      '/student/courses/course-1/lessons/b'
+    );
+    expect(screen.getByRole('link', { name: /Lesson 1: Atoms/ })).toHaveAttribute(
+      'href',
+      '/student/courses/course-1/lessons/a'
     );
     expect(screen.getByRole('link', { name: /Lesson 2: Bonds/ })).toHaveAttribute('aria-current', 'step');
     expect(screen.getByRole('link', { name: /Lesson 1: Atoms/ })).not.toHaveAttribute('aria-current');

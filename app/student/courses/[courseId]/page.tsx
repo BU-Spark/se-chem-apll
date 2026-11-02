@@ -29,8 +29,7 @@ export default async function StudentCoursePage({ params }: PageProps) {
         <h1 className={styles.title}>{course.title}</h1>
         {course.description && <p className={styles.description}>{course.description}</p>}
         {currentLesson && (
-          // The lesson page isn't built yet, so lessons open the coming soon page for now.
-          <Link href={ROUTES.comingSoon} className={buttons.primary}>
+          <Link href={ROUTES.studentLesson(course.id, currentLesson.id)} className={buttons.primary}>
             Take me to current lesson
           </Link>
         )}
@@ -47,7 +46,7 @@ export default async function StudentCoursePage({ params }: PageProps) {
               title={lesson.title}
               status={lesson.status}
               isCurrent={lesson.id === currentLesson?.id}
-              href={ROUTES.comingSoon}
+              href={ROUTES.studentLesson(course.id, lesson.id)}
             />
           ))}
         </nav>
