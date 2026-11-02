@@ -2,6 +2,8 @@ import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { parseInstructorContacts, type InstructorContactInput } from '@/app/utils/courseContacts';
 import { lessonPolicyData, validateLessonPolicy, type LessonPolicyInput } from '@/app/utils/lessonSubmissionPolicy';
 
 interface RouteContext {
@@ -45,7 +47,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, section, title, description, lessons } = body as {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Invalid course payload' }, { status: 400 });
+  }
+  const { code, section, title, description, lessons, instructorContacts } = body as {
+    instructorContacts?: unknown;
     code?: string;
     section?: string | null;
     title?: string;
@@ -65,6 +71,23 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     },
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  let contacts: InstructorContactInput[] | undefined;
+  if (instructorContacts !== undefined) {
+    const parsed = parseInstructorContacts(instructorContacts);
+    if (parsed.error !== undefined) return NextResponse.json({ error: parsed.error }, { status: 422 });
+    contacts = parsed.contacts;
+    const ids = contacts.flatMap((contact) => (contact.id ? [contact.id] : []));
+    if (ids.length > 0) {
+      const existing = await prisma.courseContact.findMany({
+        where: { courseId, type: 'INSTRUCTOR', id: { in: ids } },
+        select: { id: true },
+      });
+      if (existing.length !== ids.length) {
+        return NextResponse.json({ error: 'Instructor contacts are unavailable.' }, { status: 422 });
+      }
+    }
+  }
 
   // If code or section is being updated, check for duplicates
   if (code !== undefined || section !== undefined) {
@@ -123,35 +146,69 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   ) {
     return NextResponse.json({ error: 'Assignments with student activity cannot be removed.' }, { status: 409 });
   }
-  const course = await prisma.course.update({
-    where: { id: courseId },
-    data: {
-      ...(code !== undefined && { code: code.trim().toUpperCase() }),
-      ...(section !== undefined && { section: section?.trim() || null }),
-      ...(title !== undefined && { title: title.trim() }),
-      ...(description !== undefined && { description: description?.trim() || null }),
-      ...(lessons !== undefined && {
-        courseLessons: {
-          deleteMany: { lessonId: { notIn: lessons.map((row) => row.lessonId) } },
-          upsert: lessons.map((row) => ({
-            where: { courseId_lessonId: { courseId, lessonId: row.lessonId } },
-            create: { lessonId: row.lessonId, ...lessonPolicyData(row), sortOrder: row.sortOrder },
-            update: { ...lessonPolicyData(row), sortOrder: row.sortOrder },
-          })),
-        },
-      }),
-    },
-    include: {
-      courseLessons: {
-        include: { lesson: true },
-        orderBy: { sortOrder: 'asc' },
+  try {
+    const course = await prisma.course.update({
+      where: { id: courseId },
+      data: {
+        ...(contacts !== undefined && {
+          contacts: {
+            deleteMany: {
+              type: 'INSTRUCTOR',
+              id: { notIn: contacts.flatMap((contact) => (contact.id ? [contact.id] : [])) },
+            },
+            create: contacts
+              .filter((contact) => !contact.id)
+              .map(({ name, email, officeHours }) => ({
+                type: 'INSTRUCTOR' as const,
+                name,
+                email,
+                officeHours,
+              })),
+            update: contacts
+              .filter((contact) => contact.id)
+              .map(({ id, name, email, officeHours }) => ({
+                where: { id, courseId, type: 'INSTRUCTOR' as const },
+                data: { name, email, officeHours },
+              })),
+          },
+        }),
+        ...(code !== undefined && { code: code.trim().toUpperCase() }),
+        ...(section !== undefined && { section: section?.trim() || null }),
+        ...(title !== undefined && { title: title.trim() }),
+        ...(description !== undefined && { description: description?.trim() || null }),
+        ...(lessons !== undefined && {
+          courseLessons: {
+            deleteMany: { lessonId: { notIn: lessons.map((row) => row.lessonId) } },
+            upsert: lessons.map((row) => ({
+              where: { courseId_lessonId: { courseId, lessonId: row.lessonId } },
+              create: { lessonId: row.lessonId, ...lessonPolicyData(row), sortOrder: row.sortOrder },
+              update: { ...lessonPolicyData(row), sortOrder: row.sortOrder },
+            })),
+          },
+        }),
       },
-      enrollments: true,
-      contacts: true,
-    },
-  });
+      include: {
+        courseLessons: {
+          include: { lesson: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+        enrollments: true,
+        contacts: true,
+      },
+    });
 
-  return NextResponse.json(course);
+    return NextResponse.json(course);
+  } catch (error) {
+    // A submitted instructor may have been deleted after the availability check.
+    if (
+      contacts?.some((contact) => contact.id) &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      return NextResponse.json({ error: 'Instructor contacts are unavailable.' }, { status: 422 });
+    }
+    throw error;
+  }
 }
 
 // DELETE /api/instructor/courses/[courseId]

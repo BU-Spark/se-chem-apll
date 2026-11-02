@@ -78,19 +78,41 @@ describe('courseProgressPercent', () => {
 });
 
 describe('getStudentInstructors', () => {
-  it("lists instructors of the student's courses once each", async () => {
+  it('keeps course-specific hours for the same instructor across enrolled courses', async () => {
     mockContactFindMany.mockResolvedValue([
-      { id: 'a', name: 'Jane Smith', email: 'janesmith@bu.edu' },
-      { id: 'b', name: 'Jane Smith', email: 'janesmith@bu.edu' },
+      {
+        id: 'a',
+        name: 'Jane Smith',
+        email: 'janesmith@bu.edu',
+        officeHours: 'Monday, SCI 201, 2–4 PM',
+        course: { code: 'CH101', section: 'A1', title: 'Chemistry' },
+      },
+      {
+        id: 'b',
+        name: 'Jane Smith',
+        email: 'janesmith@bu.edu',
+        officeHours: 'Friday, SCI 202, 1–2 PM',
+        course: { code: 'CH102', section: null, title: 'Chemistry II' },
+      },
       { id: 'c', name: 'Ali Khan', email: 'alikhan@bu.edu' },
     ]);
 
-    expect((await getStudentInstructors('student-1')).map((instructor) => instructor.id)).toEqual(['a', 'c']);
+    const instructors = await getStudentInstructors('student-1');
+    expect(instructors.map((instructor) => instructor.id)).toEqual(['a', 'b', 'c']);
+    expect(instructors[0].officeHours).toContain('Monday');
+    expect(instructors[1].officeHours).toContain('Friday');
     expect(mockContactFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           type: 'INSTRUCTOR',
           course: { enrollments: { some: { studentId: 'student-1', role: 'STUDENT' } } },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          officeHours: true,
+          course: { select: { code: true, section: true, title: true } },
         },
       })
     );
