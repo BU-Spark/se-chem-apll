@@ -10,6 +10,7 @@ import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
 import buttons from '@/app/styles/buttons.module.css';
+import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import NotSureDialog from './NotSureDialog';
 import styles from './NodeQuiz.module.css';
 
@@ -75,7 +76,7 @@ export default function NodeQuiz({
     return (
       <NodeScreenFrame closeHref={lessonHref}>
         {error ? (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         ) : (
@@ -88,18 +89,18 @@ export default function NodeQuiz({
   if (!attempt) {
     return (
       <NodeScreenFrame closeHref={lessonHref}>
-        <h1 className={styles.introTitle}>{nodeTitle}</h1>
-        <p className={styles.introLead}>Take your first step forward in your learning journey.</p>
-        <p className={styles.introText}>
+        <h1 className={screen.title}>{nodeTitle}</h1>
+        <p className={screen.lead}>Take your first step forward in your learning journey.</p>
+        <p className={screen.text}>
           We&rsquo;ll take a quick look at what you already know. If you don&rsquo;t know an answer, that&rsquo;s
           okay&mdash;this is just a starting point, not a test.
         </p>
         {error && (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         )}
-        <div className={styles.actions}>
+        <div className={screen.actions}>
           <Link href={lessonHref} className={buttons.secondary}>
             Back
           </Link>
@@ -140,12 +141,12 @@ export default function NodeQuiz({
           key={question.id}
           question={question}
           answer={answers[question.id]}
-          onChoose={(choiceIndex) => setAnswer({ selectedIndices: [choiceIndex] })}
+          onSelect={(selectedIndices) => setAnswer({ selectedIndices })}
           onType={(rawAnswer) => setAnswer({ rawAnswer })}
         />
 
         {error && (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         )}

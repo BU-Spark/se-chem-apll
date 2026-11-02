@@ -1,4 +1,4 @@
-/* Text and button styles shared by every node result screen. */
+/* Text, button and error styles shared by every node screen. */
 .title {
   font-size: 2.25rem;
   font-weight: 700;
@@ -20,4 +20,9 @@
   display: flex;
   gap: 2rem;
   margin-top: 1rem;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
 }

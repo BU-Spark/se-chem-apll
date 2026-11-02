@@ -1,13 +1,9 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireStudent } from '@/lib/auth/server';
 import { canWatchVideo, getStudentNode } from '@/lib/studentNode';
 import { ROUTES } from '@/app/routes';
 import QevLesson from '@/app/components/QevLesson/QevLesson';
-import QevVideo from '@/app/components/QevVideo/QevVideo';
-import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
-import buttons from '@/app/styles/buttons.module.css';
-import styles from './page.module.css';
+import WatchVideo from '@/app/components/WatchVideo/WatchVideo';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,15 +27,12 @@ export default async function StudentNodeVideoPage({ params }: PageProps) {
   // Without video questions there's nothing to record: watch, then continue to the quiz.
   if (!view.hasVideoQuestions) {
     return (
-      <NodeScreenFrame closeHref={lessonHref}>
-        <h1 className={styles.title}>{view.node.title} Video Lesson</h1>
-        <div className={styles.video}>
-          <QevVideo videoUrl={view.video.url} muxPlaybackId={view.video.muxPlaybackId} />
-        </div>
-        <Link href={ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')} className={buttons.primary}>
-          Continue
-        </Link>
-      </NodeScreenFrame>
+      <WatchVideo
+        nodeTitle={view.node.title}
+        video={view.video}
+        lessonHref={lessonHref}
+        quizHref={ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')}
+      />
     );
   }
 

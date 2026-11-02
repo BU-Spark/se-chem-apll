@@ -23,6 +23,7 @@ const player: VideoControls = {
 };
 jest.mock('@/app/components/QevVideo/QevVideo', () => ({
   __esModule: true,
+  END_TOLERANCE_SECONDS: 1,
   default: ({ onReady }: { onReady?: (c: VideoControls) => void }) => {
     onReady?.(player);
     return <div>video</div>;

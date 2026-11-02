@@ -3,6 +3,8 @@ export interface QuizQuestion {
   id: string;
   prompt: string;
   choices: string[] | null;
+  // More than one choice is correct ("Select all that apply").
+  allowsMultiple: boolean;
 }
 
 // notSure is "I'm Not Sure", graded as wrong by the server.

@@ -23,13 +23,16 @@ interface QevVideoProps {
   onReady?: (controls: VideoControls) => void;
   // While a question is open the video stays paused: Play is disabled.
   playLocked?: boolean;
+  // Called once the video reaches its end.
+  onEnded?: () => void;
 }
 
 // YouTube without its own controls or keyboard shortcuts, so students can't skip ahead.
 const NO_SKIP_YOUTUBE = { controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3 };
 const PROGRESS_MS = 300;
-// Players can stop slightly before their reported duration; this close counts as the end.
-const END_TOLERANCE_SECONDS = 0.25;
+// Players can stop slightly before their reported duration, so the last second counts as the end.
+// Shared by every video screen so they agree on when a video has ended.
+export const END_TOLERANCE_SECONDS = 1;
 
 function MuxVideo({ playbackId, onReady }: { playbackId: string; onReady: (controls: VideoControls) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -84,7 +87,7 @@ const formatTime = (seconds: number) =>
  * The node's video (YouTube or Mux) with the lesson's own controls: Play/Pause, a view-only
  * progress bar, and captions. There is no seek bar, so the whole video has to be watched.
  */
-export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false }: QevVideoProps) {
+export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false, onEnded }: QevVideoProps) {
   const youTubeId = videoUrl ? parseYouTubeId(videoUrl) : null;
   const controlsRef = useRef<VideoControls | null>(null);
   const [ready, setReady] = useState(false);
@@ -125,6 +128,11 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
     }, PROGRESS_MS);
     return () => clearInterval(timer);
   }, [ready]);
+
+  const ended = progress.duration > 0 && progress.time >= progress.duration - END_TOLERANCE_SECONDS;
+  useEffect(() => {
+    if (ended) onEnded?.();
+  }, [ended, onEnded]);
 
   const hasVideo = Boolean(youTubeId || muxPlaybackId);
   const percent = progress.duration > 0 ? Math.min(100, (100 * progress.time) / progress.duration) : 0;
