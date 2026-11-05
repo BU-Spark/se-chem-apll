@@ -1,0 +1,32 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(255, 252, 246, 0.75);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 32rem;
+  padding: 2.5rem 3rem;
+  border-radius: 1.5rem;
+  background: var(--apll-sand);
+  color: var(--apll-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.text {
+  line-height: 1.45;
+}

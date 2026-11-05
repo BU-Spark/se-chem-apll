@@ -26,9 +26,20 @@ export function answerToOptions(answer: ShortAnswerQuestion['answer']): VariantA
  * shape (shared options plus separate variant rows).
  */
 
-export function dbQuestionToAuthoring(q: {
+export function dbQuestionToAuthoring(q: Parameters<typeof readQuestion>[0]): AuthoringQuestion {
+  return {
+    ...readQuestion(q),
+    ...(q.feedbackCorrect != null ? { feedbackCorrect: q.feedbackCorrect } : {}),
+    ...(q.feedbackIncorrect != null ? { feedbackIncorrect: q.feedbackIncorrect } : {}),
+  };
+}
+
+function readQuestion(q: {
   id: string;
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
+
   options: unknown;
   correctIndices: number[];
   variants?: StoredVariant[];
@@ -130,6 +141,14 @@ export function dbQuestionToAuthoring(q: {
 }
 
 export function authoringQuestionToPayload(q: AuthoringQuestion, sortOrder: number): QuestionPayload {
+  return {
+    ...writeQuestion(q, sortOrder),
+    ...(q.feedbackCorrect !== undefined ? { feedbackCorrect: q.feedbackCorrect } : {}),
+    ...(q.feedbackIncorrect !== undefined ? { feedbackIncorrect: q.feedbackIncorrect } : {}),
+  };
+}
+
+function writeQuestion(q: AuthoringQuestion, sortOrder: number): QuestionPayload {
   if (q.variants) {
     return {
       sortOrder,

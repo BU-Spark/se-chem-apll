@@ -1,0 +1,94 @@
+.player {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #eef2f2;
+  display: grid;
+  place-items: center;
+}
+
+/* The YouTube iframe is created inside a wrapper div; make both fill the frame. */
+.frame > div,
+.frame iframe,
+.media {
+  width: 100%;
+  height: 100%;
+}
+
+/* Clicks go to our controls only, so YouTube's own overlay can't be used to skip. */
+.frame iframe {
+  pointer-events: none;
+}
+
+.missing {
+  color: var(--apll-text);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: var(--apll-text);
+}
+
+.play,
+.cc {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 9999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.play {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--apll-teal);
+  color: var(--apll-text);
+}
+
+.cc {
+  padding: 0.3rem 0.65rem;
+  background: var(--apll-sand);
+  color: var(--apll-text);
+  font-size: 0.8rem;
+}
+
+.ccOn {
+  background: var(--apll-teal);
+}
+
+.play:disabled,
+.cc:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* View-only: shows progress but can't be dragged. */
+.track {
+  flex: 1;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--apll-sand);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--apll-teal-strong);
+}
+
+.time {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}

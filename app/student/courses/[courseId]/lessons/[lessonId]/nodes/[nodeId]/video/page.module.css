@@ -1,0 +1,9 @@
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.video {
+  width: 100%;
+  max-width: 40rem;
+}

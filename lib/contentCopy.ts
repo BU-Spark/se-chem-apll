@@ -53,6 +53,8 @@ export function buildContentCopy(lessons: CopyLesson[], nodes: CopyNode[], owner
               sortOrder: question.sortOrder,
               kind: question.kind,
               prompt: question.prompt,
+              feedbackCorrect: question.feedbackCorrect,
+              feedbackIncorrect: question.feedbackIncorrect,
               options: json(question.options),
               correctIndices: question.correctIndices,
             })),
@@ -63,6 +65,8 @@ export function buildContentCopy(lessons: CopyLesson[], nodes: CopyNode[], owner
         create: node.quizQuestions.map((question) => ({
           sortOrder: question.sortOrder,
           prompt: question.prompt,
+          feedbackCorrect: question.feedbackCorrect,
+          feedbackIncorrect: question.feedbackIncorrect,
           options: json(question.options),
           correctIndices: question.correctIndices,
           variants: {

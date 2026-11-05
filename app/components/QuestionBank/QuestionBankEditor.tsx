@@ -309,7 +309,11 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
         (nextType === 'multipleChoice'
           ? { ...makeMultipleChoiceQuestion(editableQuestion.id), prompt: editableQuestion.prompt }
           : { ...makeShortAnswerQuestion(editableQuestion.id), prompt: editableQuestion.prompt });
-      updateActive(next);
+      updateActive({
+        ...next,
+        feedbackCorrect: editableQuestion.feedbackCorrect,
+        feedbackIncorrect: editableQuestion.feedbackIncorrect,
+      });
     },
     [editableQuestion, updateActive]
   );
