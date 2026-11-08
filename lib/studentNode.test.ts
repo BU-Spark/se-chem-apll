@@ -94,8 +94,8 @@ describe('getStudentNode', () => {
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
         checkpoints: [
-          { timeOffsetSeconds: 30, questions: [{ id: 'cq1' }] },
-          { timeOffsetSeconds: null, questions: [{ id: 'cq2' }] },
+          { timeOffsetSeconds: 30, questions: [{ id: 'cq1', kind: 'QUESTION', prompt: 'Q1' }] },
+          { timeOffsetSeconds: null, questions: [{ id: 'cq2', kind: 'QUESTION', prompt: 'Q2' }] },
         ],
       },
     });
@@ -145,7 +145,10 @@ describe('getStudentNode', () => {
       lastQuiz: { correct: 1, total: 3 },
       lastVideo: undefined,
       video: { url: 'https://youtu.be/abc', muxPlaybackId: null },
-      questionTimes: { cq1: 30, cq2: null },
+      timeline: [
+        { kind: 'QUESTION', id: 'cq1', at: 30 },
+        { kind: 'QUESTION', id: 'cq2', at: null },
+      ],
       hasVideoQuestions: true,
       coursePercent: 50,
     });
@@ -207,24 +210,65 @@ describe('getStudentNode', () => {
     });
   });
 
-  it('handles a video with zero questions (or only notes)', async () => {
+  it('handles a video with zero questions', async () => {
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
         learningObjectives: [],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
-        // A checkpoint with only notes: the query keeps QUESTION rows, so it has none.
         checkpoints: [{ timeOffsetSeconds: 30, questions: [] }],
       },
     });
     mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
       screen: 'REFRESH',
-      questionTimes: {},
+      timeline: [],
       hasVideoQuestions: false,
       lastVideo: undefined,
     });
+  });
+
+  it("includes notes in the timeline, in the instructor's order, without counting them as questions", async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [
+          {
+            timeOffsetSeconds: 30,
+            questions: [
+              { id: 'n1', kind: 'NOTE', prompt: 'Watch the **flame**.' },
+              { id: 'q1', kind: 'QUESTION', prompt: 'What color?' },
+            ],
+          },
+          { timeOffsetSeconds: null, questions: [{ id: 'n2', kind: 'NOTE', prompt: 'Well done.' }] },
+        ],
+      },
+    });
+    mockAttemptFindMany.mockResolvedValue([]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      timeline: [
+        { kind: 'NOTE', id: 'n1', at: 30, prompt: 'Watch the **flame**.' },
+        { kind: 'QUESTION', id: 'q1', at: 30 },
+        { kind: 'NOTE', id: 'n2', at: null, prompt: 'Well done.' },
+      ],
+      hasVideoQuestions: true,
+    });
+
+    // A video with only notes has no questions to grade.
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [{ timeOffsetSeconds: 30, questions: [{ id: 'n1', kind: 'NOTE', prompt: 'Only a note' }] }],
+      },
+    });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ hasVideoQuestions: false });
   });
 
   it('shows Incomplete with the last score after three failed quizzes', async () => {

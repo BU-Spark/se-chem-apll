@@ -1,7 +1,8 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import QevLesson from '../QevLesson';
 import type { VideoControls } from '@/app/components/QevVideo/QevVideo';
+import type { TimelineItem } from '@/lib/studentNode';
 
 const mockPush = jest.fn();
 const mockRefresh = jest.fn();
@@ -36,10 +37,9 @@ jest.mock('@/app/components/QevVideo/QevVideo', () => ({
   },
 }));
 
-const questions = [
-  { id: 'late', prompt: 'Asked at the end', choices: ['Yes', 'No'] },
-  { id: 'early', prompt: 'Asked at 10 seconds', choices: ['A', 'B'] },
-];
+const question = (id: string, prompt: string, choices = ['A', 'B']) => ({ id, prompt, choices, allowsMultiple: false });
+const asked = (id: string, at: number | null): TimelineItem => ({ kind: 'QUESTION', id, at });
+const note = (id: string, at: number | null, prompt: string): TimelineItem => ({ kind: 'NOTE', id, at, prompt });
 
 function mockApi(...bodies: unknown[]) {
   const fetchMock = jest.fn();
@@ -59,19 +59,21 @@ async function advanceTo(seconds: number) {
   });
 }
 
-function renderLesson() {
+function renderLesson(timeline: TimelineItem[], doneHref = '/node') {
   return render(
     <QevLesson
       courseLessonId="cl-1"
       lessonNodeId="ln1"
       nodeTitle="Atoms"
       video={{ url: 'https://youtu.be/abc', muxPlaybackId: null }}
-      questionTimes={{ early: 10, late: null }}
+      timeline={timeline}
       lessonHref="/lesson"
-      doneHref="/node"
+      doneHref={doneHref}
     />
   );
 }
+
+const WAITING = /It pauses here for questions and notes/;
 
 describe('QevLesson', () => {
   beforeEach(() => {
@@ -86,18 +88,21 @@ describe('QevLesson', () => {
   it('pauses at a question, checks the answer, and keeps the video playing', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const fetchMock = mockApi(
-      { id: 'attempt-1', questions },
+      {
+        id: 'attempt-1',
+        questions: [question('late', 'Asked at the end', ['Yes', 'No']), question('early', 'Asked at 10 seconds')],
+      },
       { correct: true },
       { correct: false },
       { id: 'attempt-1' }
     );
-    renderLesson();
+    renderLesson([asked('early', 10), asked('late', null)]);
 
     expect(sent(fetchMock, 0)).toEqual([
       '/api/student/assignments/cl-1',
       { action: 'start', nodeId: 'ln1', kind: 'CHECKPOINT', key: '00000000-0000-4000-8000-000000000000' },
     ]);
-    expect(await screen.findByText(/Questions will appear here/)).toBeInTheDocument();
+    expect(await screen.findByText(WAITING)).toBeInTheDocument();
 
     // The timed question opens when the video reaches 10 seconds.
     await advanceTo(5);
@@ -127,8 +132,8 @@ describe('QevLesson', () => {
         action: 'finish',
         attemptId: 'attempt-1',
         answers: [
-          { questionId: 'early', selectedIndices: [0] },
           { questionId: 'late', selectedIndices: [1] },
+          { questionId: 'early', selectedIndices: [0] },
         ],
       },
     ]);
@@ -140,9 +145,9 @@ describe('QevLesson', () => {
 
   it('only lets the student move on once the video has ended', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    mockApi({ id: 'attempt-1', questions: [questions[1]] }, { correct: true }, { id: 'attempt-1' });
-    renderLesson();
-    await screen.findByText(/Questions will appear here/);
+    mockApi({ id: 'attempt-1', questions: [question('early', 'Asked at 10 seconds')] }, { correct: true }, {});
+    renderLesson([asked('early', 10)]);
+    await screen.findByText(WAITING);
 
     await advanceTo(10);
     await user.click(screen.getByRole('radio', { name: /A/ }));
@@ -151,30 +156,15 @@ describe('QevLesson', () => {
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
 
     await advanceTo(99.5);
-    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/node');
   });
 
   it('opens a question timed past the end of the video when the video ends', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    mockApi(
-      { id: 'attempt-1', questions: [{ id: 'typo', prompt: 'Timed after the end', choices: ['A', 'B'] }] },
-      { correct: true },
-      { id: 'attempt-1' }
-    );
-    render(
-      <QevLesson
-        courseLessonId="cl-1"
-        lessonNodeId="ln1"
-        nodeTitle="Atoms"
-        video={{ url: 'https://youtu.be/abc', muxPlaybackId: null }}
-        questionTimes={{ typo: 500 }}
-        lessonHref="/lesson"
-        doneHref="/node"
-      />
-    );
-    await screen.findByText(/Questions will appear here/);
+    mockApi({ id: 'attempt-1', questions: [question('typo', 'Timed after the end')] }, { correct: true }, {});
+    renderLesson([asked('typo', 500)]);
+    await screen.findByText(WAITING);
 
     await advanceTo(99.5);
     expect(screen.getByText('Timed after the end')).toBeInTheDocument();
@@ -186,22 +176,119 @@ describe('QevLesson', () => {
   });
 
   it('opens the end question when YouTube says ended but still reports an old time (dev skip to the end)', async () => {
-    mockApi({ id: 'attempt-1', questions: [{ id: 'end', prompt: 'At the end', choices: ['A', 'B'] }] });
-    render(
-      <QevLesson
-        courseLessonId="cl-1"
-        lessonNodeId="ln1"
-        nodeTitle="Atoms"
-        video={{ url: 'https://youtu.be/abc', muxPlaybackId: null }}
-        questionTimes={{ end: null }}
-        lessonHref="/lesson"
-        doneHref="/node"
-      />
-    );
-    await screen.findByText(/Questions will appear here/);
+    mockApi({ id: 'attempt-1', questions: [question('end', 'At the end')] });
+    renderLesson([asked('end', null)]);
+    await screen.findByText(WAITING);
 
     youTubeSaysEnded = true;
     await advanceTo(0.7);
     expect(screen.getByText('At the end')).toBeInTheDocument();
+  });
+
+  it('opens every end-of-video question in turn, without restarting the video', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const fetchMock = mockApi(
+      { id: 'attempt-1', questions: [question('end1', 'First at the end'), question('end2', 'Second at the end')] },
+      { correct: true },
+      { correct: true },
+      {}
+    );
+    renderLesson([asked('end1', null), asked('end2', null)]);
+    await screen.findByText(WAITING);
+
+    await advanceTo(99.8);
+    await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText('Second at the end')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Second at the end'));
+    expect(sent(fetchMock, 3)[1]).toMatchObject({ action: 'finish' });
+    expect(player.play).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(mockPush).toHaveBeenCalledWith('/node');
+  });
+
+  describe('notes', () => {
+    it('pauses at a note, shows it, and resumes on Continue without checking or counting it', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const fetchMock = mockApi(
+        { id: 'attempt-1', questions: [question('q', 'Asked at 30 seconds')] },
+        { correct: true },
+        {}
+      );
+      renderLesson([note('n', 10, 'Watch the **flame** color.'), asked('q', 30)]);
+      await screen.findByText(WAITING);
+      expect(screen.getByText('1/1 Questions')).toBeInTheDocument();
+
+      await advanceTo(10);
+      expect(player.pause).toHaveBeenCalled();
+      expect(screen.getByRole('region', { name: 'Note' })).toHaveTextContent('Watch the **flame** color.');
+      expect(screen.getByText('1/1 Questions')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(player.play).toHaveBeenCalled();
+      expect(screen.queryByRole('region', { name: 'Note' })).not.toBeInTheDocument();
+
+      // Only the question is checked and saved.
+      await advanceTo(30);
+      await user.click(screen.getByRole('radio', { name: /A/ }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByRole('status');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(sent(fetchMock, 1)[1]).toEqual({
+        attemptId: 'attempt-1',
+        answer: { questionId: 'q', selectedIndices: [0] },
+      });
+      expect(sent(fetchMock, 2)[1]).toEqual({
+        action: 'finish',
+        attemptId: 'attempt-1',
+        answers: [{ questionId: 'q', selectedIndices: [0] }],
+      });
+    });
+
+    it("shows a note before a question at the same time, in the instructor's order", async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      mockApi({ id: 'attempt-1', questions: [question('q', 'The question')] });
+      renderLesson([note('n', 20, 'Read me first'), asked('q', 20)]);
+      await screen.findByText(WAITING);
+
+      await advanceTo(20);
+      expect(screen.getByText('Read me first')).toBeInTheDocument();
+      expect(screen.queryByText('The question')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await advanceTo(20);
+      expect(screen.getByText('The question')).toBeInTheDocument();
+    });
+
+    it('shows notes on a video without questions, with no attempt, then continues to the next step', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const fetchMock = mockApi();
+      renderLesson([note('n', 15, 'Only a note')], '/quiz');
+      expect(screen.getByText(WAITING)).toBeInTheDocument();
+      expect(screen.queryByText(/Questions$/)).not.toBeInTheDocument();
+
+      await advanceTo(15);
+      expect(screen.getByText('Only a note')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      await advanceTo(99.5);
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(mockPush).toHaveBeenCalledWith('/quiz');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('shows Continue after a video with no questions or notes once it ends', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    mockApi();
+    renderLesson([], '/quiz');
+    expect(screen.getByText(/Finish the video to continue/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+
+    await advanceTo(99.5);
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(mockPush).toHaveBeenCalledWith('/quiz');
   });
 });

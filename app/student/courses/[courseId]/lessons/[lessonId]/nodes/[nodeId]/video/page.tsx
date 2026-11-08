@@ -3,7 +3,6 @@ import { requireStudent } from '@/lib/auth/server';
 import { canWatchVideo, getStudentNode } from '@/lib/studentNode';
 import { ROUTES } from '@/app/routes';
 import QevLesson from '@/app/components/QevLesson/QevLesson';
-import WatchVideo from '@/app/components/WatchVideo/WatchVideo';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,29 +21,17 @@ export default async function StudentNodeVideoPage({ params }: PageProps) {
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
   if (!canWatchVideo(view.screen)) redirect(nodeHref);
 
-  const lessonHref = ROUTES.studentLesson(courseId, lessonId);
-
-  // Without video questions there's nothing to record: watch, then continue to the quiz.
-  if (!view.hasVideoQuestions) {
-    return (
-      <WatchVideo
-        nodeTitle={view.node.title}
-        video={view.video}
-        lessonHref={lessonHref}
-        quizHref={ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')}
-      />
-    );
-  }
-
   return (
     <QevLesson
       courseLessonId={lessonId}
       lessonNodeId={nodeId}
       nodeTitle={view.node.title}
       video={view.video}
-      questionTimes={view.questionTimes}
-      lessonHref={lessonHref}
-      doneHref={nodeHref}
+      timeline={view.timeline}
+      lessonHref={ROUTES.studentLesson(courseId, lessonId)}
+      // With questions, the node page shows the video result; without, there's nothing to grade,
+      // so the student goes on to the quiz.
+      doneHref={view.hasVideoQuestions ? nodeHref : ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')}
     />
   );
 }

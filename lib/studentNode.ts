@@ -5,6 +5,15 @@ import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 
 export type NodeScreen = 'LOCKED' | 'COMPLETE' | 'INCOMPLETE' | 'INTRO' | 'QUIZ' | 'REFRESH' | 'RETRY' | 'VIDEO_RESULT';
 
+/**
+ * One pause in a node's video, in the instructor's order. A question's content comes from the
+ * student's attempt; a note carries its text and is only shown, never answered or graded.
+ * at: seconds into the video, or null for after the video ends.
+ */
+export type TimelineItem =
+  | { kind: 'QUESTION'; id: string; at: number | null }
+  | { kind: 'NOTE'; id: string; at: number | null; prompt: string };
+
 export interface NodeHistory {
   isFoundational: boolean;
   failedQuizzes: number;
@@ -43,7 +52,7 @@ export const canWatchVideo = (screen: NodeScreen) =>
 /**
  * The quiz page opens after the video lesson. A regular node's retry goes straight back to it.
  * A video without questions leaves no record, so the server can't check it was watched: the
- * video page only shows Continue once the video ends (WatchVideo).
+ * video lesson only shows Continue once the video ends.
  */
 export const canOpenQuiz = (screen: NodeScreen, hasVideoQuestions: boolean, isFoundational: boolean) =>
   screen === 'VIDEO_RESULT' || (screen === 'RETRY' && !isFoundational) || (canWatchVideo(screen) && !hasVideoQuestions);
@@ -85,7 +94,7 @@ export async function getStudentNode(
               orderBy: { sortOrder: 'asc' },
               select: {
                 timeOffsetSeconds: true,
-                questions: { where: { kind: 'QUESTION' }, select: { id: true } },
+                questions: { orderBy: { sortOrder: 'asc' }, select: { id: true, kind: true, prompt: true } },
               },
             },
           },
@@ -113,6 +122,13 @@ export async function getStudentNode(
     (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
   );
   const videoScore = scoreOf(videoSinceFail);
+  const timeline: TimelineItem[] = details.node.checkpoints.flatMap((checkpoint) =>
+    checkpoint.questions.map(({ id, kind, prompt }) =>
+      kind === 'NOTE'
+        ? { kind, id, at: checkpoint.timeOffsetSeconds, prompt }
+        : { kind, id, at: checkpoint.timeOffsetSeconds }
+    )
+  );
 
   return {
     courseTitle: roadmap.courseTitle,
@@ -133,13 +149,8 @@ export async function getStudentNode(
       passed: videoScore.total === 0 || (100 * videoScore.correct) / videoScore.total >= details.passingPercent,
     },
     video: { url: details.node.videoUrl, muxPlaybackId: details.node.muxPlaybackId },
-    // When each video question appears, in seconds; null means after the video ends.
-    questionTimes: Object.fromEntries(
-      details.node.checkpoints.flatMap((checkpoint) =>
-        checkpoint.questions.map((question) => [question.id, checkpoint.timeOffsetSeconds])
-      )
-    ) as Record<string, number | null>,
-    hasVideoQuestions: details.node.checkpoints.some((checkpoint) => checkpoint.questions.length > 0),
+    timeline,
+    hasVideoQuestions: timeline.some((item) => item.kind === 'QUESTION'),
     coursePercent: courseProgressPercent(course?.lessons ?? []),
   };
 }
