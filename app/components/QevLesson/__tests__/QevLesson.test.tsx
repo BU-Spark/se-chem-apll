@@ -13,17 +13,23 @@ jest.mock('@/app/components/QuestionBank/MarkdownPreview', () => ({
 
 // A fake player whose time the test controls.
 let time = 0;
+// Real YouTube can say "ended" while still reporting an old time.
+let youTubeSaysEnded = false;
 const player: VideoControls = {
   currentTime: () => time,
   duration: () => 100,
+  ended: () => youTubeSaysEnded,
   pause: jest.fn(),
   play: jest.fn(),
   seekTo: jest.fn(),
   setCaptions: jest.fn(),
+  setSpeed: jest.fn(),
 };
 jest.mock('@/app/components/QevVideo/QevVideo', () => ({
   __esModule: true,
-  END_TOLERANCE_SECONDS: 1,
+  // Keep the real end rules; only the player itself is faked.
+  END_TOLERANCE_SECONDS: jest.requireActual('@/app/components/QevVideo/QevVideo').END_TOLERANCE_SECONDS,
+  hasEnded: jest.requireActual('@/app/components/QevVideo/QevVideo').hasEnded,
   default: ({ onReady }: { onReady?: (c: VideoControls) => void }) => {
     onReady?.(player);
     return <div>video</div>;
@@ -72,6 +78,7 @@ describe('QevLesson', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     time = 0;
+    youTubeSaysEnded = false;
     global.crypto.randomUUID = () => '00000000-0000-4000-8000-000000000000';
   });
   afterEach(() => jest.useRealTimers());
@@ -176,5 +183,25 @@ describe('QevLesson', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Correct');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/node');
+  });
+
+  it('opens the end question when YouTube says ended but still reports an old time (dev skip to the end)', async () => {
+    mockApi({ id: 'attempt-1', questions: [{ id: 'end', prompt: 'At the end', choices: ['A', 'B'] }] });
+    render(
+      <QevLesson
+        courseLessonId="cl-1"
+        lessonNodeId="ln1"
+        nodeTitle="Atoms"
+        video={{ url: 'https://youtu.be/abc', muxPlaybackId: null }}
+        questionTimes={{ end: null }}
+        lessonHref="/lesson"
+        doneHref="/node"
+      />
+    );
+    await screen.findByText(/Questions will appear here/);
+
+    youTubeSaysEnded = true;
+    await advanceTo(0.7);
+    expect(screen.getByText('At the end')).toBeInTheDocument();
   });
 });

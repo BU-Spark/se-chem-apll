@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Hls from 'hls.js';
 import YouTubeAuthoringPlayer from '@/app/components/NodeForm/YouTubeAuthoringPlayer';
 import { parseYouTubeId } from '@/app/utils/youtube';
@@ -10,10 +10,13 @@ import styles from './QevVideo.module.css';
 export interface VideoControls {
   currentTime: () => number;
   duration: () => number;
+  // The player itself says the video has finished.
+  ended: () => boolean;
   pause: () => void;
   play: () => void;
   seekTo: (seconds: number) => void;
   setCaptions: (on: boolean) => void;
+  setSpeed: (rate: number) => void;
 }
 
 interface QevVideoProps {
@@ -33,6 +36,21 @@ const PROGRESS_MS = 300;
 // Players can stop slightly before their reported duration, so the last second counts as the end.
 // Shared by every video screen so they agree on when a video has ended.
 export const END_TOLERANCE_SECONDS = 1;
+
+// YouTube's state number for a finished video.
+const YOUTUBE_ENDED = 0;
+
+/**
+ * Whether the video is at its end. The player's own "ended" counts too: after jumping to the end,
+ * YouTube reports the video as ended but can keep returning an old current time.
+ */
+export const hasEnded = (controls: VideoControls) =>
+  controls.ended() ||
+  (controls.duration() > 0 && controls.currentTime() >= controls.duration() - END_TOLERANCE_SECONDS);
+
+// Students can slow down, never speed up.
+const SPEEDS = [1, 0.75, 0.5];
+const REWIND_SECONDS = 10;
 
 function MuxVideo({ playbackId, onReady }: { playbackId: string; onReady: (controls: VideoControls) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -67,9 +85,11 @@ function MuxVideo({ playbackId, onReady }: { playbackId: string; onReady: (contr
         onReady({
           currentTime: () => video.currentTime,
           duration: () => video.duration || 0,
+          ended: () => video.ended,
           pause: () => video.pause(),
           play: () => void video.play(),
           seekTo: (seconds) => (video.currentTime = seconds),
+          setSpeed: (rate) => (video.playbackRate = rate),
           setCaptions: (on) => {
             if (hlsRef.current) hlsRef.current.subtitleDisplay = on;
             for (const track of Array.from(video.textTracks)) track.mode = on ? 'showing' : 'hidden';
@@ -84,8 +104,9 @@ const formatTime = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 /**
- * The node's video (YouTube or Mux) with the lesson's own controls: Play/Pause, a view-only
- * progress bar, and captions. There is no seek bar, so the whole video has to be watched.
+ * The node's video (YouTube or Mux) with the lesson's own controls: Play/Pause, a seek bar that
+ * only goes back (to anything already watched, never past the furthest point), Back 10 seconds,
+ * slower speeds, and captions. It pauses when the student leaves the tab.
  */
 export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false, onEnded }: QevVideoProps) {
   const youTubeId = videoUrl ? parseYouTubeId(videoUrl) : null;
@@ -94,6 +115,11 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
   const [playing, setPlaying] = useState(false);
   const [captions, setCaptions] = useState(false);
   const [progress, setProgress] = useState({ time: 0, duration: 0 });
+  const [ended, setEnded] = useState(false);
+  // The furthest point watched: the student can go back to anything before it, never past it.
+  const [furthest, setFurthest] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [pausedAway, setPausedAway] = useState(false);
 
   const handleReady = useCallback(
     (controls: VideoControls) => {
@@ -103,6 +129,7 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
         play: () => {
           controls.play();
           setPlaying(true);
+          setPausedAway(false);
         },
         pause: () => {
           controls.pause();
@@ -121,21 +148,44 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
     if (!ready) return;
     const timer = setInterval(() => {
       const controls = controlsRef.current!;
-      const time = controls.currentTime();
+      const atEnd = hasEnded(controls);
       const duration = controls.duration();
+      // At the end, show the full bar even if the player still reports an older time.
+      const time = atEnd ? duration : controls.currentTime();
       setProgress({ time, duration });
-      if (duration > 0 && time >= duration - END_TOLERANCE_SECONDS) setPlaying(false);
+      setFurthest((previous) => Math.max(previous, time));
+      setEnded(atEnd);
+      if (atEnd) setPlaying(false);
     }, PROGRESS_MS);
     return () => clearInterval(timer);
   }, [ready]);
 
-  const ended = progress.duration > 0 && progress.time >= progress.duration - END_TOLERANCE_SECONDS;
+  // Leaving the tab pauses the video; the student presses Play to continue.
+  useEffect(() => {
+    if (!playing) return;
+    const pauseIfHidden = () => {
+      if (!document.hidden) return;
+      controlsRef.current?.pause();
+      setPausedAway(true);
+    };
+    document.addEventListener('visibilitychange', pauseIfHidden);
+    return () => document.removeEventListener('visibilitychange', pauseIfHidden);
+  }, [playing]);
+
+  // Moves the video, but never past the furthest point watched.
+  function seek(seconds: number) {
+    const target = Math.max(0, Math.min(seconds, furthest));
+    controlsRef.current?.seekTo(target);
+    setProgress((previous) => ({ ...previous, time: target }));
+  }
+
   useEffect(() => {
     if (ended) onEnded?.();
   }, [ended, onEnded]);
 
   const hasVideo = Boolean(youTubeId || muxPlaybackId);
-  const percent = progress.duration > 0 ? Math.min(100, (100 * progress.time) / progress.duration) : 0;
+  const percentOf = (seconds: number) =>
+    progress.duration > 0 ? Math.min(100, (100 * seconds) / progress.duration) : 0;
 
   return (
     <div className={styles.player}>
@@ -148,9 +198,11 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
               handleReady({
                 currentTime: () => player.getCurrentTime(),
                 duration: () => player.getDuration(),
+                ended: () => player.getPlayerState() === YOUTUBE_ENDED,
                 pause: () => player.pauseVideo(),
                 play: () => player.playVideo(),
                 seekTo: (seconds) => player.seekTo(seconds, true),
+                setSpeed: (rate) => player.setPlaybackRate(rate),
                 setCaptions: (on) => (on ? player.loadModule('captions') : player.unloadModule('captions')),
               })
             }
@@ -173,21 +225,52 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
           >
             {playing ? '❚❚' : '▶'}
           </button>
-          <div
-            className={styles.track}
-            role="progressbar"
-            aria-label="Video progress"
-            aria-valuemin={0}
-            aria-valuemax={Math.round(progress.duration)}
-            aria-valuenow={Math.round(progress.time)}
-            aria-valuetext={`${formatTime(progress.time)} of ${formatTime(progress.duration)}`}
-          >
-            <span className={styles.fill} style={{ width: `${percent}%` }} />
-          </div>
-          <span className={styles.time}>{formatTime(progress.time)}</span>
           <button
             type="button"
-            className={captions ? `${styles.cc} ${styles.ccOn}` : styles.cc}
+            className={styles.pill}
+            onClick={() => seek(progress.time - REWIND_SECONDS)}
+            disabled={!ready || playLocked}
+            aria-label={`Back ${REWIND_SECONDS} seconds`}
+          >
+            ↺ {REWIND_SECONDS}
+          </button>
+          <input
+            type="range"
+            className={styles.track}
+            min={0}
+            max={Math.max(progress.duration, 1)}
+            step={0.1}
+            value={progress.time}
+            onChange={(event) => seek(Number(event.currentTarget.value))}
+            disabled={!ready || playLocked}
+            aria-label="Video position"
+            aria-valuetext={`${formatTime(progress.time)} of ${formatTime(progress.duration)}`}
+            // Colors the bar: played, then watched (can go back to), then not watched yet.
+            style={
+              { '--played': `${percentOf(progress.time)}%`, '--watched': `${percentOf(furthest)}%` } as CSSProperties
+            }
+          />
+          <span className={styles.time}>{formatTime(progress.time)}</span>
+          <select
+            className={styles.pill}
+            value={speed}
+            onChange={(event) => {
+              const rate = Number(event.currentTarget.value);
+              controlsRef.current?.setSpeed(rate);
+              setSpeed(rate);
+            }}
+            disabled={!ready}
+            aria-label="Playback speed"
+          >
+            {SPEEDS.map((rate) => (
+              <option key={rate} value={rate}>
+                {rate}x
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={captions ? `${styles.pill} ${styles.ccOn}` : styles.pill}
             onClick={() => {
               controlsRef.current?.setCaptions(!captions);
               setCaptions(!captions);
@@ -199,6 +282,11 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
             CC
           </button>
         </div>
+      )}
+      {pausedAway && (
+        <p role="status" className={styles.away}>
+          Paused while you were away. Press play to continue.
+        </p>
       )}
     </div>
   );

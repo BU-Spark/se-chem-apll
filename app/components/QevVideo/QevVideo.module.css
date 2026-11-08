@@ -40,7 +40,7 @@
 }
 
 .play,
-.cc {
+.pill {
   flex: 0 0 auto;
   border: none;
   border-radius: 9999px;
@@ -56,7 +56,8 @@
   color: var(--apll-text);
 }
 
-.cc {
+/* CC, Back 10 and the speed menu. */
+.pill {
   padding: 0.3rem 0.65rem;
   background: var(--apll-sand);
   color: var(--apll-text);
@@ -68,27 +69,49 @@
 }
 
 .play:disabled,
-.cc:disabled {
+.pill:disabled,
+.track:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* View-only: shows progress but can't be dragged. */
+/* Seek bar: played (dark), watched so far (light, can go back to), not watched yet (sand). */
 .track {
   flex: 1;
   height: 0.45rem;
   border-radius: 9999px;
-  background: var(--apll-sand);
-  overflow: hidden;
+  appearance: none;
+  background: linear-gradient(
+    90deg,
+    var(--apll-teal-strong) var(--played),
+    var(--apll-teal) var(--played) var(--watched),
+    var(--apll-sand) var(--watched)
+  );
+  cursor: pointer;
 }
 
-.fill {
-  display: block;
-  height: 100%;
+.track::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: var(--apll-teal-strong);
+}
+
+.track::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: none;
+  border-radius: 9999px;
   background: var(--apll-teal-strong);
 }
 
 .time {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+
+.away {
+  color: var(--apll-text);
+  font-weight: 600;
 }
