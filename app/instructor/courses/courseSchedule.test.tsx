@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CourseCreateForm from './new/CourseCreateForm';
 import CourseEditForm from './[courseId]/edit/CourseEditForm';
 
@@ -87,5 +87,171 @@ it('loads and saves an existing daily policy without changing timestamps', async
     hideAfterDue: false,
     latePenaltyType: 'DAILY',
     latePenaltyPercent: 10,
+  });
+});
+
+const scheduledCourse = {
+  id: 'course-1',
+  code: 'CHEM101',
+  title: 'Chemistry course',
+  section: null,
+  description: null,
+  enrollments: [],
+  contacts: [],
+  courseLessons: [
+    {
+      lessonId: lesson.id,
+      lesson,
+      openDate: new Date('2026-10-10T12:30Z'),
+      dueDate: new Date('2026-10-12T12:30Z'),
+      lateDeadline: new Date('2026-10-14T12:30Z'),
+      hideAfterDue: false,
+      latePenaltyType: 'DAILY',
+      latePenaltyPercent: 10,
+    },
+    {
+      lessonId: 'lesson-2',
+      lesson: { id: 'lesson-2', title: 'Physics' },
+      openDate: null,
+      dueDate: new Date('2026-10-20T12:30Z'),
+      lateDeadline: null,
+      hideAfterDue: false,
+      latePenaltyType: 'NONE',
+      latePenaltyPercent: 0,
+    },
+  ],
+};
+
+it('previews and shifts every date once, preserves blanks, and saves the shifted schedule', async () => {
+  render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+  fireEvent.change(screen.getAllByLabelText('Open date (UTC)')[0], { target: { value: '2026-10-11T12:30' } });
+  expect(await screen.findByRole('dialog', { name: 'Shift the other dates?' })).toBeInTheDocument();
+  expect(screen.getByText(/forward by 1 day/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  expect(global.fetch).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole('button', { name: 'Shift all dates' }));
+  expect(screen.getAllByLabelText('Open date (UTC)')[0]).toHaveValue('2026-10-11T12:30');
+  expect(screen.getAllByLabelText('Open date (UTC)')[1]).toHaveValue('');
+  expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-13T12:30');
+  expect(screen.getAllByLabelText('Due date (UTC)')[1]).toHaveValue('2026-10-21T12:30');
+  fireEvent.submit(screen.getByRole('button', { name: 'Save changes' }).closest('form')!);
+  await waitFor(() => expect(mockPush).toHaveBeenCalled());
+  const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+  expect(body.lessons[0]).toMatchObject({
+    openDate: '2026-10-11T12:30:00.000Z',
+    dueDate: '2026-10-13T12:30:00.000Z',
+    lateDeadline: '2026-10-15T12:30:00.000Z',
+    latePenaltyPercent: 10,
+  });
+  expect(body.lessons[1]).toMatchObject({ openDate: null, lateDeadline: null });
+});
+
+it('can decline the shift, undo the change, then apply a new delta', async () => {
+  render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+  const open = screen.getAllByLabelText('Open date (UTC)')[0];
+  fireEvent.change(open, { target: { value: '2026-10-09T12:30' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Only change this date' }));
+  expect(open).toHaveValue('2026-10-09T12:30');
+  expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-12T12:30');
+  fireEvent.click(screen.getByRole('button', { name: 'Undo date change' }));
+  expect(open).toHaveValue('2026-10-10T12:30');
+  fireEvent.change(open, { target: { value: '2026-10-12T12:30' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Shift all dates' }));
+  expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-14T12:30');
+});
+
+it('does not prompt when adding or clearing an open date', () => {
+  render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+  fireEvent.change(screen.getAllByLabelText('Open date (UTC)')[1], { target: { value: '2026-10-19T12:30' } });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.change(screen.getAllByLabelText('Open date (UTC)')[0], { target: { value: '' } });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+describe('reactive schedule preview', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+  const pause = () =>
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+
+  it('waits for a typing pause, then follows further edits using the original baseline', () => {
+    render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+    const open = screen.getAllByLabelText('Open date (UTC)')[0];
+    fireEvent.focus(open);
+    fireEvent.change(open, { target: { value: '2026-10-11T12:30' } });
+    expect(open).toHaveValue('2026-10-11T12:30');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    fireEvent.change(open, { target: { value: '2026-10-12T12:30' } });
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    pause();
+    expect(screen.getByText(/forward by 2 days/)).toBeInTheDocument();
+    fireEvent.change(open, { target: { value: '2026-10-13T12:30' } });
+    expect(screen.getByText(/forward by 3 days/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-12T12:30');
+    expect(screen.getAllByLabelText('Due date (UTC)')[1]).toHaveValue('2026-10-20T12:30');
+    fireEvent.click(screen.getByRole('button', { name: 'Shift all dates' }));
+    expect(open).toHaveValue('2026-10-13T12:30');
+    expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-15T12:30');
+    expect(screen.getAllByLabelText('Due date (UTC)')[1]).toHaveValue('2026-10-23T12:30');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo date change' }));
+    expect(open).toHaveValue('2026-10-10T12:30');
+    expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-12T12:30');
+  });
+
+  it('hides unfinished previews and restores the original baseline after typing resumes', () => {
+    render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+    const open = screen.getAllByLabelText('Open date (UTC)')[0];
+    fireEvent.focus(open);
+    fireEvent.change(open, { target: { value: '2026-10-11T12:30' } });
+    pause();
+    expect(screen.getByRole('button', { name: 'Shift all dates' })).toBeEnabled();
+    fireEvent.change(open, { target: { value: '' } });
+    pause();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.change(open, { target: { value: '2026-10-14T12:30' } });
+    pause();
+    expect(screen.getByText(/forward by 4 days/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Only change this date' }));
+    expect(open).toHaveValue('2026-10-14T12:30');
+    expect(screen.getAllByLabelText('Due date (UTC)')[0]).toHaveValue('2026-10-12T12:30');
+    fireEvent.change(open, { target: { value: '2026-10-15T12:30' } });
+    pause();
+    expect(screen.getByText(/forward by 1 day/)).toBeInTheDocument();
+  });
+
+  it('removes the prompt when the date returns to its original value', () => {
+    render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+    const open = screen.getAllByLabelText('Open date (UTC)')[0];
+    fireEvent.change(open, { target: { value: '2026-10-11T12:30' } });
+    pause();
+    fireEvent.change(open, { target: { value: '2026-10-10T12:30' } });
+    pause();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+  });
+
+  it('preserves other draft changes when applying and undoing the latest shift', () => {
+    render(<CourseEditForm course={scheduledCourse as never} availableLessons={[]} />);
+    const open = screen.getAllByLabelText('Open date (UTC)')[0];
+    const due = screen.getAllByLabelText('Due date (UTC)')[0];
+    fireEvent.change(open, { target: { value: '2026-10-11T12:30' } });
+    pause();
+    fireEvent.change(due, { target: { value: '2026-10-13T12:30' } });
+    fireEvent.click(screen.getByLabelText('Deduction (%)'));
+    fireEvent.change(screen.getByLabelText('Deduction (%)'), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Shift all dates' }));
+    expect(due).toHaveValue('2026-10-14T12:30');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo date change' }));
+    expect(open).toHaveValue('2026-10-10T12:30');
+    expect(due).toHaveValue('2026-10-13T12:30');
+    expect(screen.getByLabelText('Deduction (%)')).toHaveValue(15);
   });
 });

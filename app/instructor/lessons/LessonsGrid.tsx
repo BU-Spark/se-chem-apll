@@ -152,7 +152,17 @@ export default function LessonsGrid({
         tooltipField: 'summary',
         filter: 'agTextColumnFilter',
         cellRenderer: ({ data }: ICellRendererParams<LessonGridRow>) =>
-          data ? <EditorTitle href={`/instructor/lessons/${data.id}/edit`} title={data.title} /> : null,
+          data ? (
+            <EditorTitle
+              href={
+                data.canEdit === false
+                  ? `/instructor/copy?mode=lessons&lessonId=${data.id}`
+                  : `/instructor/lessons/${data.id}/edit`
+              }
+              title={data.title}
+              destination={data.canEdit === false ? 'copy workflow' : 'editor'}
+            />
+          ) : null,
       },
       {
         field: 'isDraft',

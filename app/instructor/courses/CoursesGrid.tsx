@@ -130,7 +130,17 @@ export default function CoursesGrid({
         tooltipField: 'description',
         filter: 'agTextColumnFilter',
         cellRenderer: ({ data }: ICellRendererParams<CourseGridRow>) =>
-          data ? <EditorTitle href={`/instructor/courses/${data.id}/edit`} title={data.title} /> : null,
+          data ? (
+            <EditorTitle
+              href={
+                data.canEdit === false
+                  ? `/instructor/copy?mode=course&sourceCourseId=${data.id}`
+                  : `/instructor/courses/${data.id}/edit`
+              }
+              title={data.title}
+              destination={data.canEdit === false ? 'copy workflow' : 'editor'}
+            />
+          ) : null,
       },
       { field: 'code', headerName: 'Course code', filter: 'agTextColumnFilter', width: 175 },
       { field: 'section', headerName: 'Section', filter: 'agTextColumnFilter', width: 130 },
@@ -141,7 +151,9 @@ export default function CoursesGrid({
         filter: 'agNumberColumnFilter',
         width: 130,
         cellRenderer: ({ data }: ICellRendererParams<CourseGridRow>) =>
-          data ? (
+          data?.canEdit === false ? (
+            data.studentCount
+          ) : data ? (
             <Link
               className={styles.titleLink}
               href={`/instructor/courses/${data.id}/students`}
@@ -168,6 +180,19 @@ export default function CoursesGrid({
         width: 195,
         valueFormatter: ({ value }) => updatedLabel(value, displayNow.current),
         tooltipValueGetter: ({ value }) => updatedTooltip(value),
+      },
+      {
+        colId: 'duplicate',
+        headerName: 'Copy',
+        sortable: false,
+        filter: false,
+        width: 150,
+        cellRenderer: ({ data }: ICellRendererParams<CourseGridRow>) =>
+          data ? (
+            <Link className={styles.titleLink} href={`/instructor/copy?mode=course&sourceCourseId=${data.id}`}>
+              Duplicate course
+            </Link>
+          ) : null,
       },
       { colId: 'createdAt', field: 'createdTimestamp', hide: true },
     ],

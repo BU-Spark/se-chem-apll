@@ -21,6 +21,8 @@ export type MultipleChoiceQuestion = {
   id: string;
   type: 'multipleChoice';
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   choices: AuthoringChoice[];
   variants?: MultipleChoiceVariant[];
 };
@@ -33,6 +35,8 @@ export type ShortAnswerQuestion = {
   id: string;
   type: 'shortAnswer';
   prompt: string;
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   /** Raw input strings are kept so partial values like "1e-" survive editing. */
   answer: ExactAnswer | RangeAnswer;
   variants?: AuthoringVariant[];

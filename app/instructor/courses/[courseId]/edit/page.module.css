@@ -37,6 +37,38 @@
   margin: 0;
 }
 
+.contactCard {
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contactCard legend {
+  padding: 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.addContactBtn {
+  align-self: flex-start;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #1f5fab;
+  border-radius: 0.5rem;
+  color: #1f5fab;
+  background: #fff;
+  cursor: pointer;
+}
+
+.addContactBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .fieldRow2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -154,7 +186,6 @@
   cursor: not-allowed;
 }
 
-
 /* temporary styles */
 .sectionNote {
   margin: 0;
@@ -270,4 +301,3 @@
   width: 1rem;
   height: 1rem;
 }
-

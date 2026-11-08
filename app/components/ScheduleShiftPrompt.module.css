@@ -1,0 +1,52 @@
+.prompt {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  color: #111827;
+}
+.prompt h3 {
+  margin-top: 0;
+}
+.preview {
+  overflow-x: auto;
+  max-height: 300px;
+}
+.preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.preview caption {
+  text-align: left;
+  padding: 0.5rem 0;
+}
+.preview th,
+.preview td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #bfdbfe;
+  text-align: left;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+.actions button {
+  border: 1px solid #1f5fab;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  background: white;
+  color: #1f5fab;
+  cursor: pointer;
+}
+.actions button:last-child {
+  background: #1f5fab;
+  color: white;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

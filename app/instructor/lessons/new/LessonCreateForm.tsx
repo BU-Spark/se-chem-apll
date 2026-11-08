@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LessonRoadmapBuilder from '@/app/components/LessonRoadmapBuilder';
 import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types';
@@ -153,6 +154,9 @@ export default function LessonCreateForm({ availableNodes }: Props) {
         <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
       </header>
 
+      <p>
+        <Link href="/instructor/copy?mode=nodes">Copy nodes from another course to your library</Link>
+      </p>
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>

@@ -4,6 +4,7 @@ import selectStyles from '@/app/components/Select/Select.module.css';
 import { useState } from 'react';
 import MarkdownField from './MarkdownField';
 import QuestionPreview from './QuestionPreview';
+import FeedbackPreview from './FeedbackPreview';
 import VariantsEditor from './VariantsEditor';
 import MultipleChoiceVariantsEditor from './MultipleChoiceVariantsEditor';
 import { generateClientId } from '@/lib/generateClientId';
@@ -317,7 +318,10 @@ export default function QuestionDetailEditor({
       )}
 
       {view === 'preview' ? (
-        <QuestionPreview question={question} />
+        <>
+          <QuestionPreview question={question} />
+          <FeedbackPreview question={question} />
+        </>
       ) : (
         <>
           <MarkdownField
@@ -329,6 +333,22 @@ export default function QuestionDetailEditor({
             rows={3}
             error={issuesForField(issues, 'prompt')}
           />
+
+          <MarkdownField
+            label="Feedback for correct answer (optional)"
+            value={question.feedbackCorrect ?? ''}
+            onChange={(feedbackCorrect) => onChange({ ...question, feedbackCorrect })}
+            placeholder="Explain why the answer is correct."
+          />
+          <MarkdownField
+            label="Feedback for incorrect answer (optional)"
+            value={question.feedbackIncorrect ?? ''}
+            onChange={(feedbackIncorrect) => onChange({ ...question, feedbackIncorrect })}
+            placeholder="Offer a hint or explain a common mistake."
+          />
+          {question.variants && (
+            <p>Feedback is shared across all variants. Template variables are not substituted in feedback.</p>
+          )}
 
           {question.type === 'multipleChoice' ? (
             <>

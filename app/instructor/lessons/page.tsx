@@ -12,8 +12,9 @@ export default async function LessonsPage({ searchParams }: { searchParams?: Pro
   const filters = readLessonFilters((await searchParams) ?? {});
   const [lessons, courses] = await Promise.all([
     prisma.lesson.findMany({
-      where: { ...contentScope(user) },
+      where: {},
       select: {
+        createdByClerkId: true,
         id: true,
         title: true,
         summary: true,
@@ -42,7 +43,20 @@ export default async function LessonsPage({ searchParams }: { searchParams?: Pro
           + New lesson
         </Link>
       </div>
-      <LessonsGrid lessons={lessons} courses={courses} initialFilters={filters} />
+      <p>
+        <Link href="/instructor/copy?mode=lessons">Copy lessons from another course</Link>
+      </p>
+      <LessonsGrid
+        lessons={lessons.map((item) => ({
+          ...item,
+          canEdit:
+            user.platformRole === 'ADMIN' ||
+            item.createdByClerkId === null ||
+            item.createdByClerkId === user.clerkUserId,
+        }))}
+        courses={courses}
+        initialFilters={filters}
+      />
     </div>
   );
 }

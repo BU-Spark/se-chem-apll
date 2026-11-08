@@ -20,7 +20,15 @@ function transaction() {
     checkpointQuestion: { createMany: jest.fn() },
   };
 }
-const item = { sortOrder: 0, kind: 'NOTE' as const, prompt: 'Observe.', options: { type: 'note' }, correctIndices: [] };
+const item = {
+  feedbackCorrect: null,
+  feedbackIncorrect: null,
+  sortOrder: 0,
+  kind: 'NOTE' as const,
+  prompt: 'Observe.',
+  options: { type: 'note' },
+  correctIndices: [],
+};
 
 describe('checkpoint batch writes', () => {
   it('bounds batches by row count and serialized size without losing rows', () => {

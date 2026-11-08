@@ -11,7 +11,9 @@ import { generateClientId } from '@/lib/generateClientId';
  */
 
 // Shared answer columns; checkpoint CSV deliberately excludes quiz grouping and variables.
-export const QUESTION_CSV_HEADERS = [
+export const OPTIONAL_FEEDBACK_CSV_HEADERS = ['feedback_correct', 'feedback_incorrect'] as const;
+
+export const REQUIRED_QUESTION_CSV_HEADERS = [
   'type',
   'prompt',
   'choice_1',
@@ -29,6 +31,8 @@ export const QUESTION_CSV_HEADERS = [
   'maximum_answer',
 ] as const;
 
+export const QUESTION_CSV_HEADERS = [...REQUIRED_QUESTION_CSV_HEADERS, ...OPTIONAL_FEEDBACK_CSV_HEADERS] as const;
+
 export const QUIZ_CSV_HEADERS = ['question_key', 'variant_key', ...QUESTION_CSV_HEADERS] as const;
 
 const SAMPLE_VARIABLES = ['compound', 'mass', 'category', 'example'];
@@ -45,6 +49,8 @@ export const SAMPLE_QUESTION_BANK_CSV_ROWS: string[][] = [
     choice_3: '5',
     choice_4: '22',
     correct: '2',
+    feedback_correct: 'Correct! $2 + 2 = 4$.',
+    feedback_incorrect: 'Try adding two pairs together.',
   }),
   sampleRow({
     question_key: 'primes',
@@ -174,6 +180,8 @@ export function questionToCsvCells(question: AuthoringQuestion): string[] {
     answer?.mode === 'exact' ? answer.expected : '',
     answer?.mode === 'range' ? answer.minimum : '',
     answer?.mode === 'range' ? answer.maximum : '',
+    guardTextCell(question.feedbackCorrect ?? ''),
+    guardTextCell(question.feedbackIncorrect ?? ''),
   ];
 }
 
@@ -252,7 +260,7 @@ function headerIndexMap(headerRow: string[]): Map<string, number> | CsvRowError[
     map.set(key, idx);
   });
 
-  for (const required of QUIZ_CSV_HEADERS) {
+  for (const required of ['question_key', 'variant_key', ...REQUIRED_QUESTION_CSV_HEADERS]) {
     if (!map.has(required)) {
       errors.push({ row: 1, message: `Missing required column "${required}".` });
     }
@@ -308,6 +316,10 @@ export function rowToQuestion(
   const type = cellAt(row, map, 'type').trim().toLowerCase();
   // Prompt/choice content keeps its whitespace; only validation trims.
   const prompt = unguardTextCell(cellAt(row, map, 'prompt'));
+  const feedback = {
+    feedbackCorrect: unguardTextCell(cellAt(row, map, 'feedback_correct')),
+    feedbackIncorrect: unguardTextCell(cellAt(row, map, 'feedback_incorrect')),
+  };
 
   if (prompt.trim() === '') {
     return { row: rowNumber, message: `${rowLabel}: prompt is required.` };
@@ -346,6 +358,7 @@ export function rowToQuestion(
 
     const correct = new Set(parsed);
     return {
+      ...feedback,
       id: generateClientId('question'),
       type: 'multipleChoice',
       prompt,
@@ -364,6 +377,7 @@ export function rowToQuestion(
       return { row: rowNumber, message: `${rowLabel}: expected_answer must be a finite number.` };
     }
     return {
+      ...feedback,
       id: generateClientId('question'),
       type: 'shortAnswer',
       prompt,
@@ -380,6 +394,7 @@ export function rowToQuestion(
     return { row: rowNumber, message: `${rowLabel}: minimum_answer must be less than or equal to maximum_answer.` };
   }
   return {
+    ...feedback,
     id: generateClientId('question'),
     type: 'shortAnswer',
     prompt,
@@ -451,6 +466,12 @@ export function csvToQuestions(text: string, maxRows = 5000): CsvImportResult {
       const first = entries[0]?.question;
       if (first && (first.type !== question.type || first.prompt !== question.prompt)) {
         fail('All variants must have the same type and prompt template.');
+      }
+      if (
+        first &&
+        (first.feedbackCorrect !== question.feedbackCorrect || first.feedbackIncorrect !== question.feedbackIncorrect)
+      ) {
+        fail('All variants must have the same feedback for correct and incorrect answers.');
       }
       const required = questionVariables(
         [question.prompt, ...(question.type === 'multipleChoice' ? question.choices.map((c) => c.content) : [])].join(

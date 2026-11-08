@@ -8,14 +8,15 @@ const mockCourses = jest.fn();
 const mockGrid = jest.fn((props: unknown) => <div>{props ? 'Course grid' : ''}</div>);
 jest.mock('@/lib/prisma', () => ({ prisma: { course: { findMany: (...args: unknown[]) => mockCourses(...args) } } }));
 jest.mock('./CoursesGrid', () => ({ __esModule: true, default: (props: unknown) => mockGrid(props) }));
-it('preserves course visibility, fetches counts and passes URL state', async () => {
+it('allows global course browsing, fetches counts and passes URL state', async () => {
   mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
   mockCourses.mockResolvedValue([]);
   render(await CoursesPage({ searchParams: Promise.resolve({ sort: 'code:asc' }) }));
   expect(screen.getByRole('link', { name: '+ New course' })).toHaveAttribute('href', '/instructor/courses/new');
   expect(mockCourses).toHaveBeenCalledWith({
-    where: { OR: [{ createdByClerkId: 'instructor-1' }, { createdByClerkId: null }] },
+    where: {},
     select: {
+      createdByClerkId: true,
       id: true,
       title: true,
       code: true,

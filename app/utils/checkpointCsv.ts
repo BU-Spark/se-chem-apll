@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 import {
   QUESTION_CSV_HEADERS,
+  OPTIONAL_FEEDBACK_CSV_HEADERS,
   rowToQuestion,
   questionToCsvCells,
   guardTextCell,
@@ -41,7 +42,8 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
     map.set(key, index);
   });
   CHECKPOINT_CSV_HEADERS.forEach((header) => {
-    if (!map.has(header)) fail(1, `Missing column "${header}".`);
+    if (!OPTIONAL_FEEDBACK_CSV_HEADERS.some((optional) => optional === header) && !map.has(header))
+      fail(1, `Missing column "${header}".`);
   });
   if (!rows.length) fail(1, 'The file must contain at least one item.');
   if (rows.length > CHECKPOINT_CSV_MAX_ROWS) fail(1, `The limit is ${CHECKPOINT_CSV_MAX_ROWS} records.`);
@@ -162,6 +164,8 @@ export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
     questions: checkpoint.questions.map((item, itemOrder) => ({
       sortOrder: itemOrder,
       prompt: item.prompt,
+      feedbackCorrect: item.feedbackCorrect,
+      feedbackIncorrect: item.feedbackIncorrect,
       kind: item.questionType === 'note' ? 'note' : 'question',
       options: serializeQuestionOptions(item),
       correctIndices: item.questionType === 'multipleChoice' ? item.correctIndices : [],
@@ -175,11 +179,13 @@ export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
     checkpoint.questions.forEach((item, itemIndex) => {
       const questionCells =
         item.questionType === 'note'
-          ? ['note', guardTextCell(item.prompt), ...Array<string>(13).fill('')]
+          ? ['note', guardTextCell(item.prompt), ...Array<string>(QUESTION_CSV_HEADERS.length - 2).fill('')]
           : questionToCsvCells(
               dbQuestionToAuthoring({
                 id: item.id,
                 prompt: item.prompt,
+                feedbackCorrect: item.feedbackCorrect,
+                feedbackIncorrect: item.feedbackIncorrect,
                 options: serializeQuestionOptions(item),
                 correctIndices: item.correctIndices,
               })
@@ -225,6 +231,8 @@ export function sampleCheckpointCsv(): string {
         '',
         '',
         '',
+        'Correct! Two pairs make four.',
+        'Try adding two pairs together.',
       ],
       [
         'intro',
@@ -247,8 +255,19 @@ export function sampleCheckpointCsv(): string {
         '9',
         '',
         '',
+        '',
+        '',
       ],
-      ['forces', '2', '1', '120', '', 'note', 'Consider the forces in this example.', ...Array<string>(13).fill('')],
+      [
+        'forces',
+        '2',
+        '1',
+        '120',
+        '',
+        'note',
+        'Consider the forces in this example.',
+        ...Array<string>(QUESTION_CSV_HEADERS.length - 2).fill(''),
+      ],
     ],
     { newline: '\n' }
   );
