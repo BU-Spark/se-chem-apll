@@ -159,4 +159,21 @@ describe('QevVideo', () => {
     expect(onEnded).toHaveBeenCalled();
     jest.useRealTimers();
   });
+
+  it('tells the page only once, even with a new callback or after rewatching the end', async () => {
+    jest.useFakeTimers();
+    const onEnded = jest.fn();
+    const { rerender } = render(<QevVideo {...youTube} onEnded={() => onEnded()} />);
+    time = 120;
+    await act(async () => jest.advanceTimersByTime(400));
+    rerender(<QevVideo {...youTube} onEnded={() => onEnded()} />);
+
+    // Go back, then watch to the end again.
+    time = 60;
+    await act(async () => jest.advanceTimersByTime(400));
+    time = 120;
+    await act(async () => jest.advanceTimersByTime(400));
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
 });

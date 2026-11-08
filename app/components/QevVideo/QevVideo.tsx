@@ -179,8 +179,12 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
     setProgress((previous) => ({ ...previous, time: target }));
   }
 
+  // Tell the page once per video load, even if it re-renders or the student watches the end again.
+  const reportedEnd = useRef(false);
   useEffect(() => {
-    if (ended) onEnded?.();
+    if (!ended || reportedEnd.current) return;
+    reportedEnd.current = true;
+    onEnded?.();
   }, [ended, onEnded]);
 
   const hasVideo = Boolean(youTubeId || muxPlaybackId);
