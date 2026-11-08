@@ -32,9 +32,7 @@ describe('nodeScreen', () => {
   ] as const)(
     'foundational: %s with %i failed quizzes, video watched=%p shows %s',
     (status, failedQuizzes, watched, screen) => {
-      expect(
-        nodeScreen(status, { isFoundational: true, lessonOpen: true, failedQuizzes, watchedVideoSinceFail: watched })
-      ).toBe(screen);
+      expect(nodeScreen(status, { isFoundational: true, failedQuizzes, watchedVideoSinceFail: watched })).toBe(screen);
     }
   );
 
@@ -48,27 +46,9 @@ describe('nodeScreen', () => {
   ] as const)(
     'regular: %s with %i failed quizzes, video watched=%p shows %s',
     (status, failedQuizzes, watched, screen) => {
-      expect(
-        nodeScreen(status, { isFoundational: false, lessonOpen: true, failedQuizzes, watchedVideoSinceFail: watched })
-      ).toBe(screen);
+      expect(nodeScreen(status, { isFoundational: false, failedQuizzes, watchedVideoSinceFail: watched })).toBe(screen);
     }
   );
-});
-
-describe('nodeScreen while the lesson is not open', () => {
-  it('only lets finished nodes show their result', () => {
-    const closed = { lessonOpen: false, failedQuizzes: 1, watchedVideoSinceFail: false };
-    expect(nodeScreen('NOT_STARTED', { ...closed, isFoundational: true })).toBe('CLOSED');
-    expect(nodeScreen('IN_PROGRESS', { ...closed, isFoundational: false })).toBe('CLOSED');
-    expect(nodeScreen('COMPLETED', { ...closed, isFoundational: true })).toBe('COMPLETE');
-    expect(nodeScreen('INCOMPLETE', { ...closed, isFoundational: false })).toBe('INCOMPLETE');
-    expect(nodeScreen('LOCKED', { ...closed, isFoundational: true })).toBe('LOCKED');
-  });
-
-  it('opens neither the video nor the quiz page', () => {
-    expect(canWatchVideo('CLOSED')).toBe(false);
-    expect(canOpenQuiz('CLOSED', false, false)).toBe(false);
-  });
 });
 
 describe('canWatchVideo and canOpenQuiz', () => {
@@ -103,7 +83,7 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
       availability: 'OPEN',
     });
@@ -158,6 +138,7 @@ describe('getStudentNode', () => {
         title: 'Atoms',
         isFoundational: true,
         status: 'NOT_STARTED',
+        canOpen: true,
         learningObjectives: ['Balance equations.'],
       },
       screen: 'REFRESH',
@@ -192,7 +173,7 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
       availability: 'OPEN',
     });
@@ -206,16 +187,16 @@ describe('getStudentNode', () => {
     });
   });
 
-  it('shows CLOSED for an unfinished node once the lesson has closed', async () => {
+  it('shows an unfinished node of a closed lesson as locked, so it cannot be started', async () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'IN_PROGRESS' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'IN_PROGRESS', canOpen: false }],
       edges: [],
       availability: 'CLOSED',
     });
     mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
-    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'CLOSED' });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'LOCKED' });
   });
 
   it('shows the quiz when the node has not been tried yet', async () => {
@@ -250,7 +231,7 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE', canOpen: true }],
       edges: [],
       availability: 'OPEN',
     });
