@@ -31,9 +31,9 @@ jest.mock('@/app/components/QevVideo/QevVideo', () => ({
   // Keep the real end rules; only the player itself is faked.
   END_TOLERANCE_SECONDS: jest.requireActual('@/app/components/QevVideo/QevVideo').END_TOLERANCE_SECONDS,
   hasEnded: jest.requireActual('@/app/components/QevVideo/QevVideo').hasEnded,
-  default: ({ onReady }: { onReady?: (c: VideoControls) => void }) => {
+  default: ({ onReady, startAt }: { onReady?: (c: VideoControls) => void; startAt?: number }) => {
     onReady?.(player);
-    return <div>video</div>;
+    return <div>video from {startAt}</div>;
   },
 }));
 
@@ -42,7 +42,8 @@ const asked = (id: string, at: number | null): TimelineItem => ({ kind: 'QUESTIO
 const note = (id: string, at: number | null, prompt: string): TimelineItem => ({ kind: 'NOTE', id, at, prompt });
 
 function mockApi(...bodies: unknown[]) {
-  const fetchMock = jest.fn();
+  // Anything not queued below (like background progress saves) just succeeds.
+  const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   for (const body of bodies) fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
   global.fetch = fetchMock as never;
   return fetchMock;
@@ -59,7 +60,7 @@ async function advanceTo(seconds: number) {
   });
 }
 
-function renderLesson(timeline: TimelineItem[], doneHref = '/node') {
+function renderLesson(timeline: TimelineItem[], doneHref = '/node', resumeAt = 0) {
   return render(
     <QevLesson
       courseLessonId="cl-1"
@@ -67,6 +68,7 @@ function renderLesson(timeline: TimelineItem[], doneHref = '/node') {
       nodeTitle="Atoms"
       video={{ url: 'https://youtu.be/abc', muxPlaybackId: null }}
       timeline={timeline}
+      resumeAt={resumeAt}
       lessonHref="/lesson"
       doneHref={doneHref}
     />
@@ -236,7 +238,9 @@ describe('QevLesson', () => {
       await user.click(screen.getByRole('radio', { name: /A/ }));
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByRole('status');
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // The attempt API gets only the question (progress saves are separate).
+      const attemptCalls = fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/video-progress'));
+      expect(attemptCalls).toHaveLength(3);
       expect(sent(fetchMock, 1)[1]).toEqual({
         attemptId: 'attempt-1',
         answer: { questionId: 'q', selectedIndices: [0] },
@@ -264,7 +268,7 @@ describe('QevLesson', () => {
 
     it('shows notes on a video without questions, with no attempt, then continues to the next step', async () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-      const fetchMock = mockApi();
+      const fetchMock = mockApi({ ok: true });
       renderLesson([note('n', 15, 'Only a note')], '/quiz');
       expect(screen.getByText(WAITING)).toBeInTheDocument();
       expect(screen.queryByText(/Questions$/)).not.toBeInTheDocument();
@@ -276,19 +280,84 @@ describe('QevLesson', () => {
       await advanceTo(99.5);
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(mockPush).toHaveBeenCalledWith('/quiz');
-      expect(fetchMock).not.toHaveBeenCalled();
+      // No attempt: the only call saves that the video was watched (and starts over next time).
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sent(fetchMock, 0)).toEqual([
+        '/api/student/assignments/cl-1/video-progress',
+        { nodeId: 'ln1', positionSeconds: 0, watched: true },
+      ]);
     });
   });
 
-  it('shows Continue after a video with no questions or notes once it ends', async () => {
+  it('shows Continue after a video with no questions or notes once it ends, saving the watch once', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    mockApi();
+    const fetchMock = mockApi({ ok: true });
     renderLesson([], '/quiz');
     expect(screen.getByText(/Finish the video to continue/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
 
+    expect(fetchMock).not.toHaveBeenCalled();
+
     await advanceTo(99.5);
+    await advanceTo(99.9);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/quiz');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sent(fetchMock, 0)).toEqual([
+      '/api/student/assignments/cl-1/video-progress',
+      { nodeId: 'ln1', positionSeconds: 0, watched: true },
+    ]);
+  });
+
+  it('starts over next time once the answers are saved, without marking a video with questions watched', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const fetchMock = mockApi({ id: 'attempt-1', questions: [question('end', 'At the end')] }, { correct: true }, {});
+    renderLesson([asked('end', null)]);
+    await screen.findByText(WAITING);
+    await advanceTo(99.5);
+    await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('status');
+    const progressSaves = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/video-progress'));
+    expect(progressSaves.map(([, init]) => JSON.parse(init.body))).toEqual([
+      { nodeId: 'ln1', positionSeconds: 0, watched: false },
+    ]);
+  });
+
+  describe('resuming', () => {
+    it('starts where the student left, re-asks earlier questions, and skips notes already passed', async () => {
+      mockApi({ id: 'attempt-1', questions: [question('q', 'Asked at 20 seconds')] });
+      renderLesson([note('n', 10, 'Seen before'), asked('q', 20)], '/node', 30);
+      expect(await screen.findByText('video from 30')).toBeInTheDocument();
+      await screen.findByText(WAITING);
+
+      await advanceTo(30);
+      expect(screen.getByText('Asked at 20 seconds')).toBeInTheDocument();
+      expect(screen.queryByText('Seen before')).not.toBeInTheDocument();
+    });
+
+    it('saves how far the student got when they leave', async () => {
+      const fetchMock = mockApi({ ok: true });
+      const { unmount } = renderLesson([], '/quiz');
+      await advanceTo(40);
+      unmount();
+      expect(sent(fetchMock, 0)).toEqual([
+        '/api/student/assignments/cl-1/video-progress',
+        { nodeId: 'ln1', positionSeconds: 40 },
+      ]);
+    });
+
+    it('saves every few seconds while watching, only when the position moved', async () => {
+      const fetchMock = mockApi();
+      renderLesson([], '/quiz');
+      await advanceTo(12);
+      await act(async () => jest.advanceTimersByTime(5000));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sent(fetchMock, 0)[1]).toEqual({ nodeId: 'ln1', positionSeconds: 12 });
+
+      // Paused at the same spot: nothing new to save.
+      await act(async () => jest.advanceTimersByTime(5000));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

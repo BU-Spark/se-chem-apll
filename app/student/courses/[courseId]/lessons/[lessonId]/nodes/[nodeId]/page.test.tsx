@@ -97,6 +97,12 @@ describe('StudentNodePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('sends a watched video without questions straight to the quiz', async () => {
+    mockGetStudentNode.mockResolvedValue({ ...view('VIDEO_RESULT'), lastVideo: undefined });
+    await expect(StudentNodePage({ params })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mockRedirect).toHaveBeenCalledWith('/student/courses/c1/lessons/cl1/nodes/ln1/quiz');
+  });
+
   it('sends a node it cannot open back to the lesson map', async () => {
     mockGetStudentNode.mockResolvedValue(view('LOCKED'));
     await expect(StudentNodePage({ params })).rejects.toThrow('NEXT_REDIRECT');

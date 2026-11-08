@@ -68,12 +68,14 @@ export default async function StudentNodePage({ params }: PageProps) {
     case 'INCOMPLETE':
       return <NodeIncomplete {...quizScore} coursePercent={view.coursePercent} lessonHref={lessonHref} />;
     case 'VIDEO_RESULT':
+      // A video without questions has no result to show: the student goes on to the quiz.
+      if (!view.lastVideo) redirect(quizHref);
       return (
         <VideoResult
-          passed={view.lastVideo!.passed}
+          passed={view.lastVideo.passed}
           isFoundational={view.node.isFoundational}
-          correct={view.lastVideo!.correct}
-          total={view.lastVideo!.total}
+          correct={view.lastVideo.correct}
+          total={view.lastVideo.total}
           coursePercent={view.coursePercent}
           lessonHref={lessonHref}
           rewatchHref={videoHref}

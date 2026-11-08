@@ -79,7 +79,7 @@ export async function getStudentNode(
   const node = roadmap?.nodes.find((roadmapNode) => roadmapNode.id === lessonNodeId);
   if (!roadmap || !node) return null;
 
-  const [details, attempts, course] = await Promise.all([
+  const [details, attempts, videoProgress, course] = await Promise.all([
     // The roadmap above already found this node, so it exists.
     prisma.lessonNode.findUniqueOrThrow({
       where: { id: lessonNodeId },
@@ -112,16 +112,16 @@ export async function getStudentNode(
       orderBy: { completedAt: 'desc' },
       select: { kind: true, isPassing: true, completedAt: true, responses: { select: { isCorrect: true } } },
     }),
+    prisma.nodeVideoProgress.findUnique({
+      where: { studentId_courseLessonId_lessonNodeId: { studentId, courseLessonId, lessonNodeId } },
+      select: { positionSeconds: true, watchedAt: true },
+    }),
     getStudentCourse(studentId, courseId),
   ]);
 
   const quizzes = attempts.filter((attempt) => attempt.kind === 'QUIZ');
   const failedQuizzes = quizzes.filter((attempt) => attempt.isPassing === false);
   const lastFailAt = failedQuizzes[0]?.completedAt;
-  const videoSinceFail = attempts.find(
-    (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
-  );
-  const videoScore = scoreOf(videoSinceFail);
   const timeline: TimelineItem[] = details.node.checkpoints.flatMap((checkpoint) =>
     checkpoint.questions.map(({ id, kind, prompt }) =>
       kind === 'NOTE'
@@ -129,6 +129,14 @@ export async function getStudentNode(
         : { kind, id, at: checkpoint.timeOffsetSeconds }
     )
   );
+  const hasVideoQuestions = timeline.some((item) => item.kind === 'QUESTION');
+  // A video without questions has no attempt, so its saved watch shows it was watched.
+  const watchedAt = videoProgress?.watchedAt;
+  const watchedWithoutQuestions = !hasVideoQuestions && Boolean(watchedAt) && (!lastFailAt || watchedAt! > lastFailAt);
+  const videoSinceFail = attempts.find(
+    (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
+  );
+  const videoScore = scoreOf(videoSinceFail);
 
   return {
     courseTitle: roadmap.courseTitle,
@@ -139,7 +147,7 @@ export async function getStudentNode(
       ? nodeScreen(node.status, {
           isFoundational: node.isFoundational,
           failedQuizzes: failedQuizzes.length,
-          watchedVideoSinceFail: Boolean(videoSinceFail),
+          watchedVideoSinceFail: Boolean(videoSinceFail) || watchedWithoutQuestions,
         })
       : 'LOCKED',
     lastQuiz: scoreOf(quizzes[0]),
@@ -150,7 +158,9 @@ export async function getStudentNode(
     },
     video: { url: details.node.videoUrl, muxPlaybackId: details.node.muxPlaybackId },
     timeline,
-    hasVideoQuestions: timeline.some((item) => item.kind === 'QUESTION'),
+    hasVideoQuestions,
+    // Where the student left the video (0 to start over).
+    resumeAt: videoProgress?.positionSeconds ?? 0,
     coursePercent: courseProgressPercent(course?.lessons ?? []),
   };
 }

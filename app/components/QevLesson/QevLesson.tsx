@@ -19,6 +19,7 @@ import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import styles from './QevLesson.module.css';
 
 const POLL_MS = 300;
+const SAVE_EVERY_MS = 5000;
 
 interface QevLessonProps {
   courseLessonId: string;
@@ -27,6 +28,8 @@ interface QevLessonProps {
   video: { url: string | null; muxPlaybackId: string | null };
   // The video's questions and notes, in the instructor's order.
   timeline: TimelineItem[];
+  // Where the student left the video last time, in seconds (0 to start over).
+  resumeAt: number;
   lessonHref: string;
   // Where Continue goes after the video (the video result, or the quiz when there are no questions).
   doneHref: string;
@@ -38,11 +41,12 @@ type Stop = Extract<TimelineItem, { kind: 'NOTE' }> | { kind: 'QUESTION'; at: nu
 /**
  * The video's pauses by time, untimed ones last. The sort keeps equal times in the instructor's
  * order. Questions use the attempt's copy; one no longer in the video still gets asked at the end,
- * since the attempt needs every answer.
+ * since the attempt needs every answer. When resuming, notes already passed aren't shown again;
+ * questions are, since answers are only saved at the end.
  */
-function buildStops(timeline: TimelineItem[], questions: QuizQuestion[]): Stop[] {
+function buildStops(timeline: TimelineItem[], questions: QuizQuestion[], resumeAt: number): Stop[] {
   const timed = timeline.flatMap((item): Stop[] => {
-    if (item.kind === 'NOTE') return [item];
+    if (item.kind === 'NOTE') return item.at != null && item.at < resumeAt ? [] : [item];
     const question = questions.find((q) => q.id === item.id);
     return question ? [{ kind: 'QUESTION', at: item.at, question }] : [];
   });
@@ -50,6 +54,21 @@ function buildStops(timeline: TimelineItem[], questions: QuizQuestion[]): Stop[]
     .filter((question) => !timeline.some((item) => item.id === question.id))
     .map((question): Stop => ({ kind: 'QUESTION', at: null, question }));
   return [...timed, ...leftover].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
+}
+
+// Saves where the student is in the video, in the background: a failed save only means resuming a
+// bit earlier next time. keepalive lets it finish while the student is leaving the page.
+function saveVideoProgress(
+  courseLessonId: string,
+  nodeId: string,
+  progress: { positionSeconds: number; watched?: boolean }
+) {
+  void fetch(`/api/student/assignments/${courseLessonId}/video-progress`, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nodeId, ...progress }),
+  }).catch(() => {});
 }
 
 /**
@@ -64,6 +83,7 @@ export default function QevLesson({
   nodeTitle,
   video,
   timeline,
+  resumeAt,
   lessonHref,
   doneHref,
 }: QevLessonProps) {
@@ -98,10 +118,37 @@ export default function QevLesson({
     });
   });
 
+  // How far the student has got (the furthest point played), saved every few seconds and on
+  // leaving, so coming back resumes there.
+  const position = useRef(resumeAt);
+  const savedPosition = useRef(resumeAt);
+  const progressDone = useRef(false);
+  useEffect(() => {
+    const save = () => {
+      if (progressDone.current || position.current <= savedPosition.current + 1) return;
+      savedPosition.current = position.current;
+      saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: position.current });
+    };
+    const timer = setInterval(save, SAVE_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+      save();
+    };
+  }, [courseLessonId, lessonNodeId]);
+
+  // Once the video lesson is done, the next visit starts over. A video without questions has no
+  // attempt, so this also records that it was watched (coming back then goes to the quiz).
+  const lessonDone = hasQuestions ? saved : videoEnded;
+  useEffect(() => {
+    if (!lessonDone || progressDone.current) return;
+    progressDone.current = true;
+    saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: 0, watched: !hasQuestions });
+  }, [lessonDone, hasQuestions, courseLessonId, lessonNodeId]);
+
   // Wait for the attempt's questions before stopping anywhere, so the order never shifts.
   const stops = useMemo(
-    () => (hasQuestions && !attempt ? null : buildStops(timeline, attempt?.questions ?? [])),
-    [attempt, hasQuestions, timeline]
+    () => (hasQuestions && !attempt ? null : buildStops(timeline, attempt?.questions ?? [], resumeAt)),
+    [attempt, hasQuestions, timeline, resumeAt]
   );
   const stop = stops?.[stopIndex];
   const questionCount = stops?.filter((s) => s.kind === 'QUESTION').length ?? 0;
@@ -114,6 +161,7 @@ export default function QevLesson({
     const timer = setInterval(() => {
       const player = controls.current;
       if (!player) return;
+      position.current = Math.max(position.current, player.currentTime());
       const ended = hasEnded(player);
       if (ended) setVideoEnded(true);
       if (!stop) return;
@@ -220,6 +268,7 @@ export default function QevLesson({
             muxPlaybackId={video.muxPlaybackId}
             onReady={(c) => (controls.current = c)}
             playLocked={stopOpen}
+            startAt={resumeAt}
           />
           {!stopOpen && !videoEnded && <DevSkipButton onClick={devSkip}>Skip to next pause (dev only)</DevSkipButton>}
         </div>

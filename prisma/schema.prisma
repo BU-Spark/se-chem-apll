@@ -54,6 +54,7 @@ model User {
   analytics            StudentAnalytics?
   surveyResponses      SurveyResponse[]
   badgeProgress        StudentBadge[]
+  videoProgress        NodeVideoProgress[]
 
   @@map("Student")
 }
@@ -196,9 +197,10 @@ model CourseLesson {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
-  course   Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lesson   Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  progress CourseLessonProgress[]
+  course        Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson        Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  progress      CourseLessonProgress[]
+  videoProgress NodeVideoProgress[]
 
   @@unique([courseId, lessonId])
   @@index([lessonId])
@@ -319,11 +321,12 @@ model LessonNode {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  lesson        Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  node          Node             @relation(fields: [nodeId], references: [id])
+  lesson        Lesson              @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  node          Node                @relation(fields: [nodeId], references: [id])
   attempts      NodeAttempt[]
-  edgesAsSource LessonNodeEdge[] @relation("EdgeSource")
-  edgesAsTarget LessonNodeEdge[] @relation("EdgeTarget")
+  edgesAsSource LessonNodeEdge[]    @relation("EdgeSource")
+  edgesAsTarget LessonNodeEdge[]    @relation("EdgeTarget")
+  videoProgress NodeVideoProgress[]
 
   @@unique([lessonId, sortOrder])
 }
@@ -405,6 +408,25 @@ model LessonSubmission {
   @@unique([progressId, idempotencyKey])
   @@unique([id, progressId])
   @@index([progressId, finalPercent, submittedAt])
+}
+
+// Where a student is in a node's video, so leaving and coming back resumes there. Videos without
+// questions have no attempt, so watchedAt also records that the video was watched to the end.
+model NodeVideoProgress {
+  id              String       @id @default(cuid())
+  studentId       String
+  courseLessonId  String
+  lessonNodeId    String
+  // Where to resume; back to 0 once the video lesson is done, so a rewatch starts over.
+  positionSeconds Float        @default(0)
+  // The latest time a video without questions was watched to the end.
+  watchedAt       DateTime?
+  updatedAt       DateTime     @updatedAt
+  student         User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseLesson    CourseLesson @relation(fields: [courseLessonId], references: [id], onDelete: Cascade)
+  lessonNode      LessonNode   @relation(fields: [lessonNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseLessonId, lessonNodeId])
 }
 
 model NodeAttempt {

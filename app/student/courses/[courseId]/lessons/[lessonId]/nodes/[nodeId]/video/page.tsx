@@ -28,6 +28,7 @@ export default async function StudentNodeVideoPage({ params }: PageProps) {
       nodeTitle={view.node.title}
       video={view.video}
       timeline={view.timeline}
+      resumeAt={view.resumeAt}
       lessonHref={ROUTES.studentLesson(courseId, lessonId)}
       // With questions, the node page shows the video result; without, there's nothing to grade,
       // so the student goes on to the quiz.
