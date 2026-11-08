@@ -13,6 +13,14 @@ describe('RoadmapNode', () => {
     expect(screen.getByText('Regular · Locked')).toBeInTheDocument();
   });
 
+  it('marks a node without a link as unavailable, and a linked node as available', () => {
+    const { rerender } = render(<RoadmapNode title="Atoms" isFoundational status="NOT_STARTED" />);
+    expect(screen.getByRole('button', { name: /Atoms/ })).toHaveAttribute('aria-disabled', 'true');
+
+    rerender(<RoadmapNode title="Atoms" isFoundational status="NOT_STARTED" href="/node" />);
+    expect(screen.getByRole('link', { name: /Atoms/ })).not.toHaveAttribute('aria-disabled');
+  });
+
   it('labels nodes in progress', () => {
     render(<RoadmapNode title="Atoms" isFoundational={false} status="IN_PROGRESS" href="/node" />);
     expect(screen.getByRole('link', { name: 'Atoms, Regular, In progress' })).toBeInTheDocument();

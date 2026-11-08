@@ -7,7 +7,8 @@ interface RoadmapNodeProps {
   title: string;
   isFoundational: boolean;
   status: NodeStatus;
-  // Where the node opens; nodes without one (locked) only show their tooltip.
+  // Where the node opens. Without one (locked, or a closed lesson) the node is unavailable:
+  // it can still be focused to read its tooltip, but does nothing.
   href?: string;
 }
 
@@ -41,7 +42,7 @@ export default function RoadmapNode({ title, isFoundational, status, href }: Roa
       {content}
     </Link>
   ) : (
-    <button type="button" className={className} aria-label={label}>
+    <button type="button" className={className} aria-label={label} aria-disabled="true">
       {content}
     </button>
   );

@@ -34,6 +34,15 @@
   color: #4b4b4b;
 }
 
+/* Can't be opened right now. Locked nodes are already grey, so only the others fade. */
+.node[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.node[aria-disabled='true']:not(.LOCKED) {
+  opacity: 0.55;
+}
+
 .tooltip {
   position: absolute;
   top: calc(100% + 0.8rem);
