@@ -18,7 +18,9 @@ describe('RoadmapNode', () => {
     expect(screen.getByRole('button', { name: /Atoms/ })).toHaveAttribute('aria-disabled', 'true');
 
     rerender(<RoadmapNode title="Atoms" isFoundational status="NOT_STARTED" href="/node" />);
-    expect(screen.getByRole('link', { name: /Atoms/ })).not.toHaveAttribute('aria-disabled');
+    const link = screen.getByRole('link', { name: /Atoms/ });
+    expect(link).toHaveAttribute('href', '/node');
+    expect(link).not.toHaveAttribute('aria-disabled');
   });
 
   it('labels nodes in progress', () => {
