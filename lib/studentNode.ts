@@ -3,10 +3,21 @@ import { prisma } from '@/lib/prisma';
 import { courseProgressPercent, getStudentCourse } from '@/lib/studentCourses';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 
-export type NodeScreen = 'LOCKED' | 'COMPLETE' | 'INCOMPLETE' | 'INTRO' | 'QUIZ' | 'REFRESH' | 'RETRY' | 'VIDEO_RESULT';
+export type NodeScreen =
+  | 'LOCKED'
+  | 'CLOSED'
+  | 'COMPLETE'
+  | 'INCOMPLETE'
+  | 'INTRO'
+  | 'QUIZ'
+  | 'REFRESH'
+  | 'RETRY'
+  | 'VIDEO_RESULT';
 
 export interface NodeHistory {
   isFoundational: boolean;
+  // The lesson accepts work now (not before its open date or after it closed).
+  lessonOpen: boolean;
   failedQuizzes: number;
   // The video lesson was finished after the most recent failed quiz (or at all, before any fail).
   watchedVideoSinceFail: boolean;
@@ -14,7 +25,7 @@ export interface NodeHistory {
 
 /**
  * Which screen a student sees for a node. Completed and incomplete come from the node's status,
- * which counts the allowed quiz tries.
+ * which counts the allowed quiz tries. While the lesson isn't open, unfinished nodes are CLOSED.
  * Foundational: quiz (knowledge check) → pass: complete · 1st fail: refresh → video → video result
  * → quiz → 2nd fail: "keep moving forward" → video → video result → quiz → 3rd fail: incomplete.
  * Regular: intro → video → video result → quiz → pass: complete · 1st fail: "keep moving forward"
@@ -22,11 +33,12 @@ export interface NodeHistory {
  */
 export function nodeScreen(
   status: NodeStatus,
-  { isFoundational, failedQuizzes, watchedVideoSinceFail }: NodeHistory
+  { isFoundational, lessonOpen, failedQuizzes, watchedVideoSinceFail }: NodeHistory
 ): NodeScreen {
   if (status === 'LOCKED') return 'LOCKED';
   if (status === 'COMPLETED') return 'COMPLETE';
   if (status === 'INCOMPLETE') return 'INCOMPLETE';
+  if (!lessonOpen) return 'CLOSED';
   if (!isFoundational) {
     if (failedQuizzes > 0) return 'RETRY';
     return watchedVideoSinceFail ? 'VIDEO_RESULT' : 'INTRO';
@@ -120,6 +132,7 @@ export async function getStudentNode(
     node: { ...node, learningObjectives: details.node.learningObjectives },
     screen: nodeScreen(node.status, {
       isFoundational: node.isFoundational,
+      lessonOpen: roadmap.availability === 'OPEN',
       failedQuizzes: failedQuizzes.length,
       watchedVideoSinceFail: Boolean(videoSinceFail),
     }),

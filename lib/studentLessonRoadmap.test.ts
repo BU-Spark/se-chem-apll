@@ -1,4 +1,4 @@
-import { computeNodeStatuses, getStudentLessonRoadmap } from './studentLessonRoadmap';
+import { canOpenNode, computeNodeStatuses, getStudentLessonRoadmap } from './studentLessonRoadmap';
 
 const mockCourseLessonFindFirst = jest.fn();
 const mockAttemptFindMany = jest.fn();
@@ -70,6 +70,19 @@ describe('computeNodeStatuses', () => {
   });
 });
 
+describe('canOpenNode', () => {
+  it('opens unlocked nodes while the lesson is open, and only finished ones otherwise', () => {
+    expect(canOpenNode('NOT_STARTED', 'OPEN')).toBe(true);
+    expect(canOpenNode('LOCKED', 'OPEN')).toBe(false);
+    for (const availability of ['CLOSED', 'NOT_OPEN'] as const) {
+      expect(canOpenNode('NOT_STARTED', availability)).toBe(false);
+      expect(canOpenNode('IN_PROGRESS', availability)).toBe(false);
+      expect(canOpenNode('COMPLETED', availability)).toBe(true);
+      expect(canOpenNode('INCOMPLETE', availability)).toBe(true);
+    }
+  });
+});
+
 describe('getStudentLessonRoadmap', () => {
   const courseLesson = (overrides: Record<string, unknown> = {}) => ({
     dueDate: null,
@@ -124,10 +137,12 @@ describe('getStudentLessonRoadmap', () => {
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
       nodes: [
-        { id: 'ln1', title: 'Atoms', isFoundational: true, status: 'COMPLETED' },
-        { id: 'ln2', title: 'Bonds', isFoundational: false, status: 'NOT_STARTED' },
+        { id: 'ln1', title: 'Atoms', isFoundational: true, status: 'COMPLETED', canOpen: true },
+        { id: 'ln2', title: 'Bonds', isFoundational: false, status: 'NOT_STARTED', canOpen: true },
       ],
       edges: [{ sourceId: 'ln1', targetId: 'ln2' }],
+      availability: 'OPEN',
+      availabilityDate: null,
     });
     expect(mockAttemptFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -156,6 +171,34 @@ describe('getStudentLessonRoadmap', () => {
 
     mockAttemptFindMany.mockResolvedValue([quiz('ln1', false)]);
     expect((await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now))!.nodes[0].status).toBe('IN_PROGRESS');
+  });
+
+  it('marks a closed lesson, with its close date, and only lets finished nodes open', async () => {
+    const due = new Date('2026-10-20T00:00:00Z');
+    mockCourseLessonFindFirst.mockResolvedValue(courseLesson({ dueDate: due, lateDeadline: null }));
+    mockAttemptFindMany.mockResolvedValue([quiz('ln1', true)]);
+    const roadmap = await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now);
+    expect(roadmap).toMatchObject({ availability: 'CLOSED', availabilityDate: due });
+    expect(roadmap!.nodes.map((node) => node.canOpen)).toEqual([true, false]);
+  });
+
+  it('uses the late deadline as the close date when there is one', async () => {
+    const late = new Date('2026-10-22T00:00:00Z');
+    mockCourseLessonFindFirst.mockResolvedValue(
+      courseLesson({ dueDate: new Date('2026-10-20T00:00:00Z'), lateDeadline: late })
+    );
+    expect(await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now)).toMatchObject({
+      availability: 'CLOSED',
+      availabilityDate: late,
+    });
+  });
+
+  it('marks a lesson that is not open yet, with its open date', async () => {
+    const opens = new Date('2026-11-10T00:00:00Z');
+    mockCourseLessonFindFirst.mockResolvedValue(courseLesson({ openDate: opens }));
+    const roadmap = await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now);
+    expect(roadmap).toMatchObject({ availability: 'NOT_OPEN', availabilityDate: opens });
+    expect(roadmap!.nodes.every((node) => !node.canOpen)).toBe(true);
   });
 
   it('makes a regular node incomplete after two failed tries', async () => {

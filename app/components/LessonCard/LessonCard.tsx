@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { LessonStatus } from '@prisma/client';
-import { PROGRESS_LABELS } from '@/app/utils/progressStatus';
+import { AVAILABILITY_LABELS, PROGRESS_LABELS, type LessonAvailability } from '@/app/utils/progressStatus';
 import a11y from '@/app/styles/a11y.module.css';
 import styles from './LessonCard.module.css';
 
@@ -8,14 +8,19 @@ interface LessonCardProps {
   number: number;
   title: string;
   status: LessonStatus;
+  // Not open yet or closed adds that to the status, e.g. "Not started · Closed".
+  availability?: LessonAvailability;
   isCurrent: boolean;
   href: string;
 }
 
 // One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
-export default function LessonCard({ number, title, status, isCurrent, href }: LessonCardProps) {
+export default function LessonCard({ number, title, status, availability = 'OPEN', isCurrent, href }: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
-  const statusLabel = PROGRESS_LABELS[status];
+  const statusLabel =
+    availability === 'OPEN'
+      ? PROGRESS_LABELS[status]
+      : `${PROGRESS_LABELS[status]} · ${AVAILABILITY_LABELS[availability]}`;
 
   return (
     <Link

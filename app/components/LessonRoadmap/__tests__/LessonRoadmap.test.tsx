@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import LessonRoadmap from '../LessonRoadmap';
 
 const nodes = [
-  { id: 'a', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED' as const },
-  { id: 'b', title: 'Bonds', isFoundational: false, status: 'LOCKED' as const },
-  { id: 'c', title: 'Gases', isFoundational: false, status: 'LOCKED' as const },
+  { id: 'a', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED' as const, canOpen: true },
+  { id: 'b', title: 'Bonds', isFoundational: false, status: 'LOCKED' as const, canOpen: false },
+  { id: 'c', title: 'Gases', isFoundational: false, status: 'LOCKED' as const, canOpen: false },
 ];
 const edges = [
   { sourceId: 'a', targetId: 'b' },
@@ -29,7 +29,7 @@ describe('LessonRoadmap', () => {
     expect(leftOf(/Bonds/)).toBe(leftOf(/Gases/));
   });
 
-  it('links nodes the student can open, but not locked ones', () => {
+  it('links only the nodes the student can open', () => {
     render(<LessonRoadmap nodes={nodes} edges={edges} nodeHref={nodeHref} />);
     expect(screen.getByRole('link', { name: /Atoms/ })).toHaveAttribute('href', '/node/a');
     expect(screen.getByRole('button', { name: /Bonds, Regular, Locked/ })).toBeInTheDocument();

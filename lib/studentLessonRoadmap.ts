@@ -1,7 +1,7 @@
-import type { NodeStatus } from '@/app/utils/progressStatus';
+import type { LessonAvailability, NodeStatus } from '@/app/utils/progressStatus';
 import { prisma } from '@/lib/prisma';
 import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
-import { asStudent } from '@/lib/studentCourses';
+import { asStudent, lessonAvailability } from '@/lib/studentCourses';
 import { quizOutcomes, toOutcomeNode } from '@/lib/nodeOutcomes';
 
 export interface RoadmapNode {
@@ -9,6 +9,8 @@ export interface RoadmapNode {
   title: string;
   isFoundational: boolean;
   status: NodeStatus;
+  // The student can open the node page (locked nodes can't; in a closed lesson, only finished ones).
+  canOpen: boolean;
 }
 
 export interface RoadmapEdge {
@@ -40,6 +42,13 @@ export function computeNodeStatuses(
   return statuses;
 }
 
+// Whether a node's page can be opened: not locked, and while the lesson isn't open, only to see
+// the result of a finished node.
+export function canOpenNode(status: NodeStatus, availability: LessonAvailability) {
+  if (status === 'LOCKED') return false;
+  return availability === 'OPEN' || status === 'COMPLETED' || status === 'INCOMPLETE';
+}
+
 /**
  * One lesson of a course as a node map for the student, or null when the student isn't
  * enrolled, or the lesson is a draft, hidden after its due date, or not in this course.
@@ -58,7 +67,9 @@ export async function getStudentLessonRoadmap(
       course: { enrollments: { some: asStudent(studentId) } },
     },
     select: {
+      openDate: true,
       dueDate: true,
+      lateDeadline: true,
       hideAfterDue: true,
       course: { select: { title: true } },
       lesson: {
@@ -91,11 +102,22 @@ export async function getStudentLessonRoadmap(
   const { completedIds, incompleteIds } = quizOutcomes(lessonNodes.map(toOutcomeNode), quizzes);
   const statuses = computeNodeStatuses([...nodeIds], edges, completedIds, incompleteIds, startedIds);
 
+  const availability = lessonAvailability(courseLesson, now);
   const nodes: RoadmapNode[] = lessonNodes.map((lessonNode) => ({
     ...toOutcomeNode(lessonNode),
     title: lessonNode.node.title,
     status: statuses[lessonNode.id],
+    canOpen: canOpenNode(statuses[lessonNode.id], availability),
   }));
 
-  return { courseTitle: courseLesson.course.title, lessonTitle: courseLesson.lesson.title, nodes, edges };
+  return {
+    courseTitle: courseLesson.course.title,
+    lessonTitle: courseLesson.lesson.title,
+    nodes,
+    edges,
+    availability,
+    // For the not-open/closed notice: when the lesson opens, or when it closes (the late deadline, if any).
+    availabilityDate:
+      availability === 'NOT_OPEN' ? courseLesson.openDate : (courseLesson.lateDeadline ?? courseLesson.dueDate),
+  };
 }
