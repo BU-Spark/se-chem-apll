@@ -1,7 +1,17 @@
 /** @jest-environment node */
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { assignmentView, startAttempt, finishAttempt, submitLesson, type AttemptSnapshot } from './service';
+import { getStudentCourse } from '@/lib/studentCourses';
+import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
+import {
+  assignmentView,
+  startAttempt,
+  finishAttempt,
+  submitLesson,
+  lessonSubmissionView,
+  saveCheckpoint,
+  type AttemptSnapshot,
+} from './service';
 const enabled = process.env.SUBMISSION_TEST_DATABASE_URL;
 if (
   enabled &&
@@ -75,10 +85,11 @@ suite('course submissions in PostgreSQL', () => {
     [first, second] = ids;
   });
   afterAll(() => prisma.$disconnect());
-  async function complete(assignmentId: string, wrongFirst = false) {
+  async function complete(assignmentId: string, wrongFirst = false, automatic = false) {
     const view = await assignmentView(studentId, assignmentId);
     for (const [index, node] of view.nodes.entries())
       for (const task of node.tasks) {
+        if (task.completed) continue;
         const a = await startAttempt(studentId, assignmentId, node.id, task.kind, randomUUID());
         await finishAttempt(
           studentId,
@@ -87,7 +98,8 @@ suite('course submissions in PostgreSQL', () => {
           a.questions.map((q) => ({
             questionId: q.id,
             selectedIndices: wrongFirst && index === 0 && task.kind === 'QUIZ' ? [0] : [1],
-          }))
+          })),
+          automatic
         );
       }
   }
@@ -182,7 +194,17 @@ suite('course submissions in PostgreSQL', () => {
     expect((await finishAttempt(studentId, first, a.id, [{ questionId: question.id, rawAnswer: answer }])).score).toBe(
       100
     );
-    const retry = await startAttempt(studentId, first, node.id, 'QUIZ', 'variant-new-attempt');
+    await complete(first);
+    await submitLesson(studentId, first, 'variant-submit');
+    const retry = await startAttempt(
+      studentId,
+      first,
+      node.id,
+      'QUIZ',
+      'variant-new-attempt',
+      undefined,
+      'IMPROVEMENT'
+    );
     expect(retry.id).not.toBe(a.id);
   });
   it('keeps an unfinished legacy numeric attempt usable after the relational data migration', async () => {
@@ -418,5 +440,267 @@ suite('course submissions in PostgreSQL', () => {
     });
     expect((await submitLesson(studentId, first, 'completion-only-key')).id).toBe(sub.id);
     await expect(submitLesson(studentId, first, 'new-after-close')).rejects.toThrow('not accepted');
+  });
+  async function task(
+    nodeId: string,
+    kind: 'QUIZ' | 'CHECKPOINT' | 'REVIEW',
+    passing = true,
+    automatic = true,
+    purpose: 'STANDARD' | 'IMPROVEMENT' = 'STANDARD'
+  ) {
+    const attempt = await startAttempt(studentId, first, nodeId, kind, randomUUID(), undefined, purpose);
+    const answers = attempt.questions.map((q) => ({ questionId: q.id, selectedIndices: passing ? [1] : [0] }));
+    await finishAttempt(studentId, first, attempt.id, answers, automatic);
+    return { attempt, answers };
+  }
+
+  it('automatically submits the final node, exposes the gradebook relation and keeps progress consistent', async () => {
+    await complete(first, false, true);
+    const view = await lessonSubmissionView(studentId, first);
+    expect(view.latest).toMatchObject({ rawPercent: 100, penaltyPercent: 0, finalPercent: 100 });
+    expect(view.pendingKey).toBeNull();
+    const assignment = await prisma.courseLesson.findUniqueOrThrow({ where: { id: first } });
+    const course = await getStudentCourse(studentId, assignment.courseId);
+    const stored = await prisma.courseLessonProgress.findUniqueOrThrow({
+      where: { studentId_courseLessonId: { studentId, courseLessonId: first } },
+      include: { submissions: { orderBy: { finalPercent: 'desc' }, take: 1 } },
+    });
+    expect(stored.status).toBe(course!.lessons.find((l) => l.id === first)!.status);
+    expect(stored).toMatchObject({ status: 'COMPLETED', percentComplete: 100 });
+    expect(stored.submissions[0].id).toBe(view.best!.id);
+    expect((await lessonSubmissionView(studentId, second)).latest).toBeNull();
+    const last = await prisma.nodeAttempt.findFirstOrThrow({
+      where: { progressId: stored.id },
+      orderBy: { completedAt: 'desc' },
+    });
+    // Retrying a successful completion or hand-in cannot create another receipt.
+    await Promise.all([
+      finishAttempt(studentId, first, last.id, [], true),
+      submitLesson(studentId, first, stored.submissions[0].idempotencyKey, true),
+    ]);
+    expect(await prisma.lessonSubmission.count({ where: { progressId: stored.id } })).toBe(1);
+  });
+
+  it('accepts a foundational first-pass without creating checkpoint work', async () => {
+    const nodes = await prisma.lessonNode.findMany({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });
+    await prisma.lessonNode.update({ where: { id: nodes[0].id }, data: { isRequired: true } });
+    await task(nodes[0].id, 'QUIZ');
+    expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
+    await task(nodes[1].id, 'QUIZ');
+    const view = await lessonSubmissionView(studentId, first);
+    expect(view.latest?.finalPercent).toBe(100);
+    expect(await prisma.nodeAttempt.count({ where: { courseLessonId: first, kind: 'CHECKPOINT' } })).toBe(0);
+  });
+
+  it.each([false, true])(
+    'waits for exhausted failures (foundational=%p), applies penalties and retains the best grade',
+    async (foundational) => {
+      await prisma.courseLesson.update({
+        where: { id: first },
+        data: {
+          dueDate: new Date(Date.now() - 60_000),
+          lateDeadline: new Date(Date.now() + 3600_000),
+          latePenaltyType: 'FIXED',
+          latePenaltyPercent: 10,
+        },
+      });
+      const nodes = (await assignmentView(studentId, first)).nodes;
+      await prisma.lessonNode.update({ where: { id: nodes[1].id }, data: { isRequired: foundational } });
+      await task(nodes[0].id, 'CHECKPOINT');
+      await task(nodes[0].id, 'QUIZ');
+      await task(nodes[1].id, 'QUIZ', false);
+      expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
+      await task(nodes[1].id, 'QUIZ', false);
+      if (foundational) {
+        expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
+        await task(nodes[1].id, 'QUIZ', false);
+      }
+      expect((await lessonSubmissionView(studentId, first)).latest).toMatchObject({
+        rawPercent: 50,
+        penaltyPercent: 10,
+        finalPercent: 45,
+        passed: false,
+      });
+      await task(nodes[1].id, 'QUIZ', true, true, 'IMPROVEMENT');
+      const improved = await lessonSubmissionView(studentId, first);
+      expect(improved.latest).toMatchObject({ number: 2, finalPercent: 90 });
+      await expect(task(nodes[1].id, 'QUIZ', false, true, 'IMPROVEMENT')).rejects.toThrow('One improvement');
+      expect((await lessonSubmissionView(studentId, first)).best?.id).toBe(improved.latest!.id);
+    }
+  );
+
+  it('supports checkpoint-only and review-only nodes throughout roadmap and course progress', async () => {
+    const nodes = await prisma.lessonNode.findMany({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });
+    await prisma.quizQuestion.deleteMany({ where: { nodeId: { in: nodes.map((n) => n.nodeId) } } });
+    await task(nodes[0].id, 'CHECKPOINT');
+    await task(nodes[1].id, 'REVIEW');
+    const view = await lessonSubmissionView(studentId, first);
+    expect(view.latest).toMatchObject({ gradingStatus: 'COMPLETION_ONLY', rawPercent: null, finalPercent: null });
+    const assignment = await prisma.courseLesson.findUniqueOrThrow({ where: { id: first } });
+    const roadmap = await getStudentLessonRoadmap(studentId, assignment.courseId, first);
+    expect(roadmap!.nodes.map((n) => n.status)).toEqual(['COMPLETED', 'COMPLETED']);
+    expect((await getStudentCourse(studentId, assignment.courseId))!.lessons[0]).toMatchObject({
+      status: 'COMPLETED',
+      finishedNodeCount: 2,
+    });
+  });
+
+  it('recovers already finished work with one stable key across reads and concurrent requests', async () => {
+    await complete(first);
+    const view = await lessonSubmissionView(studentId, first);
+    expect(view.pendingKey).toBeTruthy();
+    expect((await lessonSubmissionView(studentId, first)).pendingKey).toBe(view.pendingKey);
+    const [a, b] = await Promise.all([
+      submitLesson(studentId, first, view.pendingKey!, true),
+      submitLesson(studentId, first, view.pendingKey!, true),
+    ]);
+    expect(a.id).toBe(b.id);
+    expect(await prisma.lessonSubmission.count({ where: { progressId: a.progressId } })).toBe(1);
+    await prisma.courseLesson.update({
+      where: { id: first },
+      data: {
+        dueDate: new Date(0),
+        lateDeadline: new Date(1),
+        latePenaltyType: 'NONE',
+        latePenaltyPercent: 0,
+      },
+    });
+    expect((await lessonSubmissionView(studentId, first)).window).toBe('CLOSED');
+    expect((await submitLesson(studentId, first, view.pendingKey!, true)).id).toBe(a.id);
+    await expect(submitLesson(studentId, first, 'new-closed-key', true)).rejects.toThrow('not accepted');
+  });
+
+  it('never backfills closed work or submits an empty, stale or unfinished lesson', async () => {
+    let view = await lessonSubmissionView(studentId, first);
+    expect(view.pendingKey).toBeNull();
+    await expect(submitLesson(studentId, first, 'unfinished-key', true)).rejects.toThrow('Finish every');
+    await complete(first);
+    view = await lessonSubmissionView(studentId, first);
+    await prisma.courseLesson.update({
+      where: { id: first },
+      data: {
+        dueDate: new Date(0),
+        lateDeadline: new Date(1),
+        latePenaltyType: 'NONE',
+        latePenaltyPercent: 0,
+      },
+    });
+    await expect(submitLesson(studentId, first, view.pendingKey!, true)).rejects.toThrow('not accepted');
+    const completed = await prisma.nodeAttempt.findFirstOrThrow({
+      where: { courseLessonId: first, completedAt: { not: null } },
+    });
+    await finishAttempt(studentId, first, completed.id, [], true);
+    expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
+    await prisma.courseLesson.update({ where: { id: first }, data: { dueDate: null, lateDeadline: null } });
+    await prisma.lessonNode.updateMany({ where: { lessonId }, data: { passingPercent: 99 } });
+    expect((await lessonSubmissionView(studentId, first)).pendingKey).toBeNull();
+    await prisma.lessonNode.deleteMany({ where: { lessonId } });
+    expect((await lessonSubmissionView(studentId, first)).blockedReason).toContain('no nodes');
+    await expect(submitLesson(studentId, first, 'empty-key', true)).rejects.toThrow('no nodes');
+  });
+  it('reopens edited work with fresh attempt limits while retaining historical grades and course completion', async () => {
+    await complete(first, false, true);
+    const original = (await lessonSubmissionView(studentId, first)).best!;
+    const assignment = await prisma.courseLesson.findUniqueOrThrow({ where: { id: first } });
+    const node = await prisma.lessonNode.findFirstOrThrow({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });
+    await prisma.quizQuestion.updateMany({ where: { nodeId: node.nodeId }, data: { prompt: 'Updated question' } });
+    const roadmap = await getStudentLessonRoadmap(studentId, assignment.courseId, first);
+    expect(roadmap!.nodes[0]).toMatchObject({ status: 'NOT_STARTED', needsUpdatedWork: true });
+    const course = await getStudentCourse(studentId, assignment.courseId);
+    expect(course!.lessons[0]).toMatchObject({ status: 'COMPLETED', needsAttention: true });
+    await task(node.id, 'QUIZ');
+    expect((await lessonSubmissionView(studentId, first)).latest!.number).toBe(2);
+    expect((await lessonSubmissionView(studentId, first)).best!.id).toBe(original.id);
+    expect((await getStudentCourse(studentId, assignment.courseId))!.lessons[0].needsAttention).toBe(false);
+  });
+
+  it('reserves one improvement attempt concurrently and resumes it without creating another', async () => {
+    await complete(first, false, true);
+    const node = (await assignmentView(studentId, first)).nodes[0];
+    const [a, b] = await Promise.all([
+      startAttempt(studentId, first, node.id, 'QUIZ', 'improve-key-a', undefined, 'IMPROVEMENT'),
+      startAttempt(studentId, first, node.id, 'QUIZ', 'improve-key-b', undefined, 'IMPROVEMENT'),
+    ]);
+    expect(a.id).toBe(b.id);
+    expect((await startAttempt(studentId, first, node.id, 'QUIZ', 'resume-improvement', a.id, 'IMPROVEMENT')).id).toBe(
+      a.id
+    );
+    await finishAttempt(
+      studentId,
+      first,
+      a.id,
+      a.questions.map((q) => ({ questionId: q.id, selectedIndices: [0] })),
+      true
+    );
+    await expect(
+      startAttempt(studentId, first, node.id, 'QUIZ', 'second-improvement', undefined, 'IMPROVEMENT')
+    ).rejects.toThrow('One improvement');
+    const view = await lessonSubmissionView(studentId, first);
+    expect(view.latest!.finalPercent).toBeLessThan(view.best!.finalPercent!);
+  });
+
+  async function videoOnly() {
+    const nodes = await prisma.lessonNode.findMany({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });
+    await prisma.lessonNode.delete({ where: { id: nodes[1].id } });
+    await prisma.quizQuestion.deleteMany({ where: { nodeId: nodes[0].nodeId } });
+    await prisma.node.update({ where: { id: nodes[0].nodeId }, data: { videoUrl: 'https://example.com/video.mp4' } });
+    return startAttempt(studentId, first, nodes[0].id, 'CHECKPOINT', 'video-start');
+  }
+
+  it('restores the video requirement for unfinished attempts created before the draft migration', async () => {
+    const a = await videoOnly();
+    const stored = await prisma.nodeAttempt.findUniqueOrThrow({ where: { id: a.id } });
+    const snapshot = stored.snapshot as unknown as AttemptSnapshot;
+    delete snapshot.requiresVideo;
+    await prisma.nodeAttempt.update({ where: { id: a.id }, data: { snapshot: JSON.parse(JSON.stringify(snapshot)) } });
+    expect((await startAttempt(studentId, first, a.lessonNodeId, 'CHECKPOINT', 'video-start')).requiresVideo).toBe(
+      true
+    );
+    expect((await startAttempt(studentId, first, a.lessonNodeId, 'CHECKPOINT', 'resume-video')).requiresVideo).toBe(
+      true
+    );
+    expect((await assignmentView(studentId, first)).activeAttempt?.requiresVideo).toBe(true);
+  });
+
+  it.each([false, true])(
+    'finalizes video work only after answers and video acknowledgement (video first=%p)',
+    async (videoFirst) => {
+      const a = await videoOnly();
+      const answer = { questionId: a.questions[0].id, selectedIndices: [1] };
+      if (videoFirst) expect((await saveCheckpoint(studentId, first, a.id, undefined, true)).completedAt).toBeNull();
+      const saved = await saveCheckpoint(studentId, first, a.id, answer);
+      if (!videoFirst) {
+        expect(saved.completedAt).toBeNull();
+        expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
+        const resumed = await startAttempt(studentId, first, a.lessonNodeId, 'CHECKPOINT', 'resume-video');
+        expect(resumed.draftAnswers).toEqual([answer]);
+        await expect(finishAttempt(studentId, first, a.id, [answer], true)).rejects.toThrow('Finish the video');
+        await saveCheckpoint(studentId, first, a.id, undefined, true);
+      }
+      const receipt = (await lessonSubmissionView(studentId, first)).latest!;
+      expect(receipt.gradingStatus).toBe('COMPLETION_ONLY');
+      await saveCheckpoint(studentId, first, a.id, answer, true);
+      expect((await lessonSubmissionView(studentId, first)).latest!.id).toBe(receipt.id);
+    }
+  );
+
+  it('retains saved video answers when the window closes before acknowledgement', async () => {
+    const a = await videoOnly();
+    const answer = { questionId: a.questions[0].id, selectedIndices: [1] };
+    await saveCheckpoint(studentId, first, a.id, answer);
+    await prisma.courseLesson.update({
+      where: { id: first },
+      data: {
+        dueDate: new Date(0),
+        lateDeadline: new Date(1),
+        latePenaltyType: 'NONE',
+        latePenaltyPercent: 0,
+      },
+    });
+    await expect(saveCheckpoint(studentId, first, a.id, undefined, true)).rejects.toThrow('not accepted');
+    const stored = await prisma.nodeAttempt.findUniqueOrThrow({ where: { id: a.id } });
+    expect(stored.completedAt).toBeNull();
+    expect(stored.draftAnswers).toEqual([answer]);
+    expect((await lessonSubmissionView(studentId, first)).latest).toBeNull();
   });
 });
