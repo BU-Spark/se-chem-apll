@@ -407,7 +407,16 @@ model LessonSubmission {
   @@index([progressId, finalPercent, submittedAt])
 }
 
+enum AttemptPurpose {
+  STANDARD
+  IMPROVEMENT
+}
+
 model NodeAttempt {
+  purpose          AttemptPurpose @default(STANDARD)
+  draftAnswers     Json           @default("[]")
+  videoCompletedAt DateTime?
+
   id             String               @id @default(cuid())
   progressId     String
   courseLessonId String
