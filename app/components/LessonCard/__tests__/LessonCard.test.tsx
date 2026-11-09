@@ -1,25 +1,49 @@
 import { render, screen } from '@testing-library/react';
 import LessonCard from '../LessonCard';
 
+const submission = {
+  dueDate: null,
+  lateDeadline: null,
+  penalty: 'No late penalty.',
+  window: 'NOT_OPEN' as const,
+  best: null,
+};
+
 describe('LessonCard', () => {
   it('names the lesson and its status for screen readers and links to its page', () => {
-    render(<LessonCard number={2} title="Acids" status="IN_PROGRESS" isCurrent={false} href="/lesson" />);
+    render(
+      <LessonCard
+        number={2}
+        title="Acids"
+        status="IN_PROGRESS"
+        isCurrent={false}
+        href="/lesson"
+        submission={submission}
+      />
+    );
 
-    const card = screen.getByRole('link', { name: 'Lesson 2: Acids, In progress' });
+    const card = screen.getByRole('link', { name: /Lesson 2: Acids In progress/ });
     expect(card).toHaveAttribute('href', '/lesson');
     expect(card).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('Not yet open')).toBeVisible();
   });
 
   it('marks the current lesson', () => {
-    render(<LessonCard number={1} title="Atoms" status="NOT_STARTED" isCurrent href="/lesson" />);
+    render(
+      <LessonCard number={1} title="Atoms" status="NOT_STARTED" isCurrent href="/lesson" submission={submission} />
+    );
     expect(screen.getByRole('link', { name: /Lesson 1: Atoms/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('shows a checkmark only on completed lessons', () => {
-    const { rerender } = render(<LessonCard number={1} title="Atoms" status="COMPLETED" isCurrent={false} href="/l" />);
+    const { rerender } = render(
+      <LessonCard number={1} title="Atoms" status="COMPLETED" isCurrent={false} href="/l" submission={submission} />
+    );
     expect(screen.getByText('✓')).toBeInTheDocument();
 
-    rerender(<LessonCard number={1} title="Atoms" status="NOT_STARTED" isCurrent={false} href="/l" />);
+    rerender(
+      <LessonCard number={1} title="Atoms" status="NOT_STARTED" isCurrent={false} href="/l" submission={submission} />
+    );
     expect(screen.queryByText('✓')).not.toBeInTheDocument();
   });
 });

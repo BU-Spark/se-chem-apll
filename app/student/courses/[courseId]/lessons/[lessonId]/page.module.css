@@ -30,6 +30,11 @@
   margin-top: 0.5rem;
 }
 
+.submission {
+  max-width: 34rem;
+  margin: 1rem auto 0;
+}
+
 /* Wide maps scroll sideways instead of overflowing the page. A scrolling area clips what
    sticks out of it, so the padding leaves room for tooltips on the first/last nodes and below. */
 .scroller {

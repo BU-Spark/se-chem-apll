@@ -4,6 +4,7 @@ import { requireStudent } from '@/lib/auth/server';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 import { ROUTES } from '@/app/routes';
 import LessonRoadmap from '@/app/components/LessonRoadmap/LessonRoadmap';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,9 @@ export default async function StudentLessonPage({ params }: PageProps) {
       <header className={styles.header}>
         <h1 className={styles.title}>{roadmap.lessonTitle}</h1>
         <p className={styles.course}>{roadmap.courseTitle}</p>
+        <div className={styles.submission}>
+          <LessonSubmissionSummary submission={roadmap.submission} showPenalty />
+        </div>
       </header>
 
       {roadmap.nodes.length === 0 ? (

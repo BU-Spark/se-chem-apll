@@ -17,6 +17,13 @@ jest.mock('next/navigation', () => ({
 }));
 
 const params = Promise.resolve({ courseId: 'course-1' });
+const unscheduled = {
+  dueDate: null,
+  lateDeadline: null,
+  penalty: 'No late penalty.',
+  window: 'ON_TIME',
+  best: null,
+};
 
 describe('StudentCoursePage', () => {
   beforeEach(() => {
@@ -27,10 +34,36 @@ describe('StudentCoursePage', () => {
       title: 'Course #3',
       description: 'Introduction to carbon-based molecules.',
       lessons: [
-        { id: 'a', number: 1, title: 'Atoms', status: 'COMPLETED' },
-        { id: 'b', number: 2, title: 'Bonds', status: 'NOT_STARTED' },
+        {
+          id: 'a',
+          number: 1,
+          title: 'Atoms',
+          status: 'COMPLETED',
+          submission: {
+            ...unscheduled,
+            dueDate: new Date('2026-10-12T14:30:00Z'),
+            lateDeadline: new Date('2026-10-14T14:30:00Z'),
+            window: 'CLOSED',
+            best: { finalPercent: 0 },
+          },
+        },
+        { id: 'b', number: 2, title: 'Bonds', status: 'NOT_STARTED', submission: unscheduled },
       ],
     });
+  });
+
+  it('shows deadlines, submission state and grade on the course page', async () => {
+    render(await StudentCoursePage({ params }));
+
+    expect(screen.getByText('Oct 12, 2026, 2:30 PM UTC')).toBeVisible();
+    expect(screen.getByText('Oct 14, 2026, 2:30 PM UTC')).toBeVisible();
+    expect(screen.getByText('Closed')).toBeVisible();
+    expect(screen.getByText('Submitted')).toBeVisible();
+    expect(screen.getByText('Best grade: 0%')).toBeVisible();
+    expect(screen.getByText('No due date')).toBeVisible();
+    expect(screen.getByText('No late submissions')).toBeVisible();
+    expect(screen.getByText('Open for on-time submissions')).toBeVisible();
+    expect(screen.getByText('Not submitted')).toBeVisible();
   });
 
   it('shows the course, its lessons, and marks the first unfinished lesson as current', async () => {

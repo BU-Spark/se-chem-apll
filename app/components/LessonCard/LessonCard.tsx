@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { LessonStatus } from '@prisma/client';
 import { PROGRESS_LABELS } from '@/app/utils/progressStatus';
-import a11y from '@/app/styles/a11y.module.css';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
+import type { StudentLessonSubmission } from '@/lib/studentLessonSubmission';
 import styles from './LessonCard.module.css';
 
 interface LessonCardProps {
@@ -10,31 +11,24 @@ interface LessonCardProps {
   status: LessonStatus;
   isCurrent: boolean;
   href: string;
+  submission: StudentLessonSubmission;
 }
 
-// One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
-export default function LessonCard({ number, title, status, isCurrent, href }: LessonCardProps) {
-  const name = `Lesson ${number}: ${title}`;
-  const statusLabel = PROGRESS_LABELS[status];
-
+export default function LessonCard({ number, title, status, isCurrent, href, submission }: LessonCardProps) {
   return (
     <Link
       href={href}
       className={isCurrent ? `${styles.card} ${styles.current}` : styles.card}
       aria-current={isCurrent ? 'step' : undefined}
     >
-      <span className={a11y.srOnly}>
-        {name}, {statusLabel}
+      <span className={styles.title}>
+        Lesson {number}: {title}
       </span>
-      {status === 'COMPLETED' && (
-        <span className={styles.check} aria-hidden="true">
-          ✓
-        </span>
-      )}
-      <span className={styles.tooltip} aria-hidden="true">
-        <span className={styles.tooltipTitle}>{name}</span>
-        <span className={styles.tooltipStatus}>{statusLabel}</span>
+      <span className={styles.progress}>
+        {status === 'COMPLETED' && <span aria-hidden="true">✓ </span>}
+        {PROGRESS_LABELS[status]}
       </span>
+      <LessonSubmissionSummary submission={submission} />
     </Link>
   );
 }
