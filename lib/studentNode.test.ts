@@ -4,6 +4,7 @@ const mockGetStudentLessonRoadmap = jest.fn();
 const mockGetStudentCourse = jest.fn();
 const mockLessonNodeFindUnique = jest.fn();
 const mockAttemptFindMany = jest.fn();
+const mockProgressFindUnique = jest.fn();
 
 jest.mock('@/lib/studentLessonRoadmap', () => ({
   getStudentLessonRoadmap: (...args: unknown[]) => mockGetStudentLessonRoadmap(...args),
@@ -16,6 +17,7 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     lessonNode: { findUniqueOrThrow: (...args: unknown[]) => mockLessonNodeFindUnique(...args) },
     nodeAttempt: { findMany: (...args: unknown[]) => mockAttemptFindMany(...args) },
+    nodeVideoProgress: { findUnique: (...args: unknown[]) => mockProgressFindUnique(...args) },
   },
 }));
 
@@ -80,6 +82,7 @@ describe('canWatchVideo and canOpenQuiz', () => {
 describe('getStudentNode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProgressFindUnique.mockResolvedValue(null);
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
@@ -150,6 +153,7 @@ describe('getStudentNode', () => {
         { kind: 'QUESTION', id: 'cq2', at: null },
       ],
       hasVideoQuestions: true,
+      resumeAt: 0,
       coursePercent: 50,
     });
   });
@@ -226,6 +230,71 @@ describe('getStudentNode', () => {
       timeline: [],
       hasVideoQuestions: false,
       lastVideo: undefined,
+    });
+  });
+
+  it('resumes the video where the student left it this round', async () => {
+    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+    mockProgressFindUnique.mockResolvedValue({ positionSeconds: 42.5, watchedAt: null, updatedAt: at(20) });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 42.5 });
+
+    // Saved before the latest failed quiz: a new round starts the video over.
+    mockProgressFindUnique.mockResolvedValue({ positionSeconds: 42.5, watchedAt: null, updatedAt: at(5) });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 0 });
+
+    mockProgressFindUnique.mockResolvedValue(null);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 0 });
+  });
+
+  describe('a saved watch (videos without questions)', () => {
+    const noQuestions = {
+      passingPercent: 60,
+      node: { learningObjectives: [], videoUrl: 'https://youtu.be/abc', muxPlaybackId: null, checkpoints: [] },
+    };
+    const regularNode = {
+      courseTitle: 'Course #3',
+      lessonTitle: 'Lesson 2',
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED', canOpen: true }],
+      edges: [],
+      availability: 'OPEN',
+    };
+
+    it('counts as watched, so the student goes on to the quiz', async () => {
+      mockGetStudentLessonRoadmap.mockResolvedValue(regularNode);
+      mockLessonNodeFindUnique.mockResolvedValue(noQuestions);
+      mockAttemptFindMany.mockResolvedValue([]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+        screen: 'VIDEO_RESULT',
+        lastVideo: undefined,
+      });
+      expect(mockProgressFindUnique).toHaveBeenCalledWith({
+        where: {
+          studentId_courseLessonId_lessonNodeId: {
+            studentId: 'student-1',
+            courseLessonId: 'cl-1',
+            lessonNodeId: 'ln1',
+          },
+        },
+        select: { positionSeconds: true, watchedAt: true, updatedAt: true },
+      });
+    });
+
+    it('only counts a watch after the latest failed quiz', async () => {
+      mockLessonNodeFindUnique.mockResolvedValue(noQuestions);
+      mockAttemptFindMany.mockResolvedValue([quiz(30, false, 0, 3)]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'REFRESH' });
+
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(40), updatedAt: at(40) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'VIDEO_RESULT' });
+    });
+
+    it('is ignored for a video with questions, which needs its answers', async () => {
+      mockGetStudentLessonRoadmap.mockResolvedValue(regularNode);
+      mockAttemptFindMany.mockResolvedValue([]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'INTRO' });
     });
   });
 

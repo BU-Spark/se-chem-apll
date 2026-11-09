@@ -8,10 +8,12 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ courseId: string; lessonId: string; nodeId: string }>;
+  // ?restart=1 (the result page's Rewatch): start over from 0:00, with the questions.
+  searchParams: Promise<{ restart?: string }>;
 }
 
 // The node's video lesson: from a regular node's intro, after a failed quiz, and to rewatch.
-export default async function StudentNodeVideoPage({ params }: PageProps) {
+export default async function StudentNodeVideoPage({ params, searchParams }: PageProps) {
   const student = await requireStudent();
 
   const { courseId, lessonId, nodeId } = await params;
@@ -21,13 +23,19 @@ export default async function StudentNodeVideoPage({ params }: PageProps) {
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
   if (!canWatchVideo(view.screen)) redirect(nodeHref);
 
+  const restart = (await searchParams).restart === '1';
+  // This round's answers are already saved: continue from where the student stopped (or show the
+  // end if they finished), without asking the questions again.
+  const answered = view.screen === 'VIDEO_RESULT' && !restart;
+
   return (
     <QevLesson
       courseLessonId={lessonId}
       lessonNodeId={nodeId}
       nodeTitle={view.node.title}
       video={view.video}
-      timeline={view.timeline}
+      timeline={answered ? view.timeline.filter((item) => item.kind === 'NOTE') : view.timeline}
+      resumeAt={restart ? 0 : view.resumeAt}
       lessonHref={ROUTES.studentLesson(courseId, lessonId)}
       // With questions, the node page shows the video result; without, there's nothing to grade,
       // so the student goes on to the quiz.
