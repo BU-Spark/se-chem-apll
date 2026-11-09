@@ -7,7 +7,7 @@ import useAttemptApi from '@/app/hooks/useAttemptApi';
 import useRunOnce from '@/app/hooks/useRunOnce';
 import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
 import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
-import QevVideo, { END_TOLERANCE_SECONDS, type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import QevVideo, { END_TOLERANCE_SECONDS, hasEnded, type VideoControls } from '@/app/components/QevVideo/QevVideo';
 import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
@@ -87,7 +87,7 @@ export default function QevLesson({
     const timer = setInterval(() => {
       const player = controls.current;
       if (!player) return;
-      const ended = player.duration() > 0 && player.currentTime() >= player.duration() - END_TOLERANCE_SECONDS;
+      const ended = hasEnded(player);
       if (ended) setVideoEnded(true);
       if (!question) return;
       const at = questionTimes[question.id];
