@@ -10,6 +10,7 @@ import {
   renderQuestionVariant,
 } from '@/app/utils/questionVariants';
 import { gradeAnswer, lessonGrade, type AnswerInput, type QuestionSnapshot } from './grading';
+import { bestSubmissionOrder } from './bestSubmission';
 export class SubmissionError extends Error {
   constructor(
     message: string,
@@ -466,7 +467,7 @@ export async function assignmentView(studentId: string, assignmentId: string, pr
     const best = progress
       ? await tx.lessonSubmission.findFirst({
           where: { progressId: progress.id },
-          orderBy: [{ finalPercent: { sort: 'desc', nulls: 'last' } }, { submittedAt: 'asc' }, { number: 'asc' }],
+          orderBy: bestSubmissionOrder,
         })
       : null;
     return {

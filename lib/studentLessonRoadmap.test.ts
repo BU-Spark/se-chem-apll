@@ -72,8 +72,13 @@ describe('computeNodeStatuses', () => {
 
 describe('getStudentLessonRoadmap', () => {
   const courseLesson = (overrides: Record<string, unknown> = {}) => ({
+    openDate: null,
     dueDate: null,
+    lateDeadline: null,
     hideAfterDue: false,
+    latePenaltyType: 'NONE',
+    latePenaltyPercent: 0,
+    progress: [],
     course: { title: 'Course #3' },
     lesson: {
       title: 'Lesson 2',
@@ -123,6 +128,7 @@ describe('getStudentLessonRoadmap', () => {
     expect(await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now)).toEqual({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
+      submission: { dueDate: null, lateDeadline: null, window: 'ON_TIME', penalty: 'No late penalty.', best: null },
       nodes: [
         { id: 'ln1', title: 'Atoms', isFoundational: true, status: 'COMPLETED' },
         { id: 'ln2', title: 'Bonds', isFoundational: false, status: 'NOT_STARTED' },
@@ -134,6 +140,23 @@ describe('getStudentLessonRoadmap', () => {
         where: { userId: 'student-1', courseLessonId: 'cl-1', kind: { in: ['QUIZ', 'CHECKPOINT'] } },
       })
     );
+  });
+
+  it('keeps a closed lesson visible and returns the enrolled student’s submission', async () => {
+    const dueDate = new Date('2026-10-21T12:00:00Z');
+    const lateDeadline = new Date('2026-10-23T12:00:00Z');
+    mockCourseLessonFindFirst.mockResolvedValue(
+      courseLesson({ dueDate, lateDeadline, progress: [{ submissions: [{ finalPercent: 89.5 }] }] })
+    );
+
+    const roadmap = await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now);
+    expect(roadmap?.submission).toMatchObject({
+      dueDate,
+      lateDeadline,
+      window: 'CLOSED',
+      best: { finalPercent: 89.5 },
+    });
+    expect(mockCourseLessonFindFirst.mock.lastCall![0].select.progress.where).toEqual({ studentId: 'student-1' });
   });
 
   it('makes a foundational node incomplete only after three failed tries', async () => {

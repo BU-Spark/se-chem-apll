@@ -133,8 +133,12 @@ describe('getStudentCourse', () => {
   const now = new Date('2026-10-17T12:00:00Z');
   const courseLesson = (id: string, overrides: Record<string, unknown> = {}) => ({
     id,
+    openDate: null,
     dueDate: null,
+    lateDeadline: null,
     hideAfterDue: false,
+    latePenaltyType: 'NONE',
+    latePenaltyPercent: 0,
     lesson: { title: `Title ${id}`, lessonNodes: [] },
     progress: [],
     ...overrides,
@@ -149,13 +153,19 @@ describe('getStudentCourse', () => {
   });
 
   it('numbers visible lessons in order with the student status, skipping hidden ones', async () => {
+    const dueDate = new Date('2026-10-16T12:00:00Z');
+    const lateDeadline = new Date('2026-10-18T12:00:00Z');
     mockEnrollmentFindFirst.mockResolvedValue({
       course: {
         id: 'course-1',
         title: 'Chem',
         description: 'Intro',
         courseLessons: [
-          courseLesson('a', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
+          courseLesson('a', {
+            dueDate,
+            lateDeadline,
+            progress: [{ status: 'COMPLETED', attempts: [], submissions: [{ finalPercent: 0 }] }],
+          }),
           courseLesson('hidden', { hideAfterDue: true, dueDate: new Date('2026-10-01T00:00:00Z') }),
           courseLesson('b'),
         ],
@@ -167,9 +177,32 @@ describe('getStudentCourse', () => {
       title: 'Chem',
       description: 'Intro',
       lessons: [
-        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED', nodeCount: 0, finishedNodeCount: 0 },
-        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED', nodeCount: 0, finishedNodeCount: 0 },
+        {
+          id: 'a',
+          number: 1,
+          title: 'Title a',
+          status: 'COMPLETED',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          submission: { dueDate, lateDeadline, window: 'LATE', penalty: 'No late penalty.', best: { finalPercent: 0 } },
+        },
+        {
+          id: 'b',
+          number: 2,
+          title: 'Title b',
+          status: 'NOT_STARTED',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          submission: { dueDate: null, lateDeadline: null, window: 'ON_TIME', penalty: 'No late penalty.', best: null },
+        },
       ],
+    });
+    const progress = mockEnrollmentFindFirst.mock.lastCall![0].select.course.select.courseLessons.select.progress;
+    expect(progress.where).toEqual({ studentId: 'student-1' });
+    expect(progress.select.submissions).toEqual({
+      orderBy: [{ finalPercent: { sort: 'desc', nulls: 'last' } }, { submittedAt: 'asc' }, { number: 'asc' }],
+      take: 1,
+      select: { finalPercent: true },
     });
   });
 });
@@ -185,8 +218,12 @@ describe('getStudentCourse lesson status from nodes', () => {
       courseLessons: [
         {
           id: 'a',
+          openDate: null,
           dueDate: null,
+          lateDeadline: null,
           hideAfterDue: false,
+          latePenaltyType: 'NONE',
+          latePenaltyPercent: 0,
           lesson: {
             title: 'Atoms',
             lessonNodes: [
@@ -194,7 +231,7 @@ describe('getStudentCourse lesson status from nodes', () => {
               { id: 'n2', isRequired: true },
             ],
           },
-          progress: [{ status: 'IN_PROGRESS', attempts }],
+          progress: [{ status: 'IN_PROGRESS', attempts, submissions: [] }],
         },
       ],
     },
