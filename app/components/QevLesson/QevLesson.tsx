@@ -57,7 +57,8 @@ function buildStops(timeline: TimelineItem[], questions: QuizQuestion[], resumeA
 }
 
 // Saves where the student is in the video, in the background: a failed save only means resuming a
-// bit earlier next time. keepalive lets it finish while the student is leaving the page.
+// bit earlier next time. Saves can also finish out of order; at worst that moves the position back
+// by one save interval. keepalive lets it finish while the student is leaving the page.
 function saveVideoProgress(
   courseLessonId: string,
   nodeId: string,

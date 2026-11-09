@@ -323,7 +323,12 @@ describe('QevLesson', () => {
 
   describe('resuming', () => {
     it('starts where the student left, re-asks earlier questions, and skips notes already passed', async () => {
-      mockApi({ id: 'attempt-1', questions: [question('q', 'Asked at 20 seconds')] });
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const fetchMock = mockApi(
+        { id: 'attempt-1', questions: [question('q', 'Asked at 20 seconds')] },
+        { correct: true },
+        {}
+      );
       renderLesson([note('n', 10, 'Seen before'), asked('q', 20)], '/node', 30);
       expect(await screen.findByText('video from 30')).toBeInTheDocument();
       await screen.findByText(WAITING);
@@ -331,6 +336,39 @@ describe('QevLesson', () => {
       await advanceTo(30);
       expect(screen.getByText('Asked at 20 seconds')).toBeInTheDocument();
       expect(screen.queryByText('Seen before')).not.toBeInTheDocument();
+
+      // The re-asked question can be answered, the attempt saves, and the student moves on.
+      await user.click(screen.getByRole('radio', { name: /A/ }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(await screen.findByRole('status')).toHaveTextContent('Correct');
+      expect(sent(fetchMock, 2)).toEqual([
+        '/api/student/assignments/cl-1',
+        { action: 'finish', attemptId: 'attempt-1', answers: [{ questionId: 'q', selectedIndices: [0] }] },
+      ]);
+      await advanceTo(99.5);
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(mockPush).toHaveBeenCalledWith('/node');
+    });
+
+    it('keeps working when progress saves fail', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      // Progress saves fail (an error reply, then a network error); the attempt API works.
+      let failures = 0;
+      global.fetch = jest.fn(async (url: string) => {
+        if (!isProgressSave(url)) return { ok: true, json: async () => ({}) };
+        if (failures++ % 2) throw new TypeError('Failed to fetch');
+        return { ok: false, json: async () => ({ error: 'Server error' }) };
+      }) as never;
+      renderLesson([], '/quiz');
+
+      await advanceTo(12);
+      await act(async () => jest.advanceTimersByTime(5000));
+      await advanceTo(99.5);
+      expect(failures).toBeGreaterThanOrEqual(2);
+      // No error for the student, and they can still move on.
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(mockPush).toHaveBeenCalledWith('/quiz');
     });
 
     it('keeps the position until the video ends, even after the answers are saved', async () => {
