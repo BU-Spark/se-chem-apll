@@ -13,7 +13,7 @@ export default function LessonRoadmap({
 }: {
   nodes: RoadmapNodeData[];
   edges: RoadmapEdge[];
-  // Link for a node the student can open (not locked).
+  // Link for a node the student can open.
   nodeHref: (nodeId: string) => string;
 }) {
   // The team's layout runs top to bottom, so swap x and y to run left to right.
@@ -47,7 +47,7 @@ export default function LessonRoadmap({
               title={node.title}
               isFoundational={node.isFoundational}
               status={node.status}
-              href={node.status === 'LOCKED' ? undefined : nodeHref(node.id)}
+              href={node.canOpen ? nodeHref(node.id) : undefined}
             />
           </li>
         ))}

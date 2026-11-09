@@ -1,15 +1,18 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import QevVideo from '../QevVideo';
 
 const mockPlayerVars = jest.fn();
 let time = 0;
+let state = -1;
 const ytPlayer = {
   getCurrentTime: () => time,
   getDuration: () => 120,
+  getPlayerState: () => state,
   pauseVideo: jest.fn(),
   playVideo: jest.fn(),
   seekTo: jest.fn(),
+  setPlaybackRate: jest.fn(),
   loadModule: jest.fn(),
   unloadModule: jest.fn(),
   destroy: jest.fn(),
@@ -31,6 +34,7 @@ describe('QevVideo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     time = 0;
+    state = -1;
   });
 
   it("hides YouTube's own controls and keyboard shortcuts so students can't skip", () => {
@@ -52,17 +56,72 @@ describe('QevVideo', () => {
     expect(screen.getByRole('button', { name: 'Play video' })).toBeDisabled();
   });
 
-  it('shows progress that can only be watched, not dragged', async () => {
-    jest.useFakeTimers();
-    render(<QevVideo {...youTube} />);
-    time = 30;
-    await act(async () => {
-      jest.advanceTimersByTime(400);
+  // Plays the fake video up to `seconds`, so that becomes the furthest point watched.
+  async function watchUntil(seconds: number) {
+    time = seconds;
+    await act(async () => jest.advanceTimersByTime(400));
+  }
+
+  describe('going back', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('drags back to anything watched, but never past the furthest point', async () => {
+      render(<QevVideo {...youTube} />);
+      await watchUntil(30);
+      const bar = screen.getByRole('slider', { name: 'Video position' });
+      expect(bar).toHaveAttribute('aria-valuetext', '0:30 of 2:00');
+
+      fireEvent.change(bar, { target: { value: '10' } });
+      expect(ytPlayer.seekTo).toHaveBeenLastCalledWith(10, true);
+      fireEvent.change(bar, { target: { value: '90' } });
+      expect(ytPlayer.seekTo).toHaveBeenLastCalledWith(30, true);
     });
-    const bar = screen.getByRole('progressbar', { name: 'Video progress' });
-    expect(bar).toHaveAttribute('aria-valuetext', '0:30 of 2:00');
-    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    jest.useRealTimers();
+
+    it('goes back 10 seconds, not before the start', async () => {
+      render(<QevVideo {...youTube} />);
+      await watchUntil(30);
+      fireEvent.click(screen.getByRole('button', { name: 'Back 10 seconds' }));
+      expect(ytPlayer.seekTo).toHaveBeenLastCalledWith(20, true);
+
+      await watchUntil(4);
+      fireEvent.click(screen.getByRole('button', { name: 'Back 10 seconds' }));
+      expect(ytPlayer.seekTo).toHaveBeenLastCalledWith(0, true);
+    });
+
+    it("can't move while a question is open", async () => {
+      render(<QevVideo {...youTube} playLocked />);
+      await watchUntil(30);
+      expect(screen.getByRole('slider', { name: 'Video position' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Back 10 seconds' })).toBeDisabled();
+    });
+  });
+
+  it('slows down but never speeds up', async () => {
+    render(<QevVideo {...youTube} />);
+    const speed = await screen.findByRole('combobox', { name: 'Playback speed' });
+    expect([...speed.querySelectorAll('option')].map((option) => option.textContent)).toEqual(['1x', '0.75x', '0.5x']);
+    await userEvent.selectOptions(speed, '0.5');
+    expect(ytPlayer.setPlaybackRate).toHaveBeenCalledWith(0.5);
+  });
+
+  it('pauses when the student leaves the tab, until they press Play', async () => {
+    let hidden = false;
+    const hiddenSpy = jest.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
+    render(<QevVideo {...youTube} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Play video' }));
+
+    hidden = true;
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(ytPlayer.pauseVideo).toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Paused while you were away');
+
+    hidden = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    hiddenSpy.mockRestore();
   });
 
   it('turns captions on and off', async () => {
@@ -73,6 +132,18 @@ describe('QevVideo', () => {
     expect(cc).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(cc);
     expect(ytPlayer.unloadModule).toHaveBeenCalledWith('captions');
+  });
+
+  it("counts YouTube's ended state even when it still reports an old time", async () => {
+    jest.useFakeTimers();
+    const onEnded = jest.fn();
+    render(<QevVideo {...youTube} onEnded={onEnded} />);
+    time = 0.7;
+    state = 0;
+    await act(async () => jest.advanceTimersByTime(400));
+    expect(onEnded).toHaveBeenCalled();
+    expect(screen.getByRole('slider', { name: 'Video position' })).toHaveAttribute('aria-valuetext', '2:00 of 2:00');
+    jest.useRealTimers();
   });
 
   it('tells the page once the video reaches its end', async () => {
@@ -86,6 +157,23 @@ describe('QevVideo', () => {
     time = 119.5;
     await act(async () => jest.advanceTimersByTime(400));
     expect(onEnded).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('tells the page only once, even with a new callback or after rewatching the end', async () => {
+    jest.useFakeTimers();
+    const onEnded = jest.fn();
+    const { rerender } = render(<QevVideo {...youTube} onEnded={() => onEnded()} />);
+    time = 120;
+    await act(async () => jest.advanceTimersByTime(400));
+    rerender(<QevVideo {...youTube} onEnded={() => onEnded()} />);
+
+    // Go back, then watch to the end again.
+    time = 60;
+    await act(async () => jest.advanceTimersByTime(400));
+    time = 120;
+    await act(async () => jest.advanceTimersByTime(400));
+    expect(onEnded).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 });

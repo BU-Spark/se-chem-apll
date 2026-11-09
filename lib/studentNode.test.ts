@@ -83,8 +83,9 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
+      availability: 'OPEN',
     });
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
@@ -137,6 +138,7 @@ describe('getStudentNode', () => {
         title: 'Atoms',
         isFoundational: true,
         status: 'NOT_STARTED',
+        canOpen: true,
         learningObjectives: ['Balance equations.'],
       },
       screen: 'REFRESH',
@@ -171,8 +173,9 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
+      availability: 'OPEN',
     });
     mockAttemptFindMany.mockResolvedValue([]);
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'INTRO' });
@@ -182,6 +185,18 @@ describe('getStudentNode', () => {
       screen: 'VIDEO_RESULT',
       lastVideo: { correct: 4, total: 5, passed: true },
     });
+  });
+
+  it('shows an unfinished node of a closed lesson as locked, so it cannot be started', async () => {
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'Course #3',
+      lessonTitle: 'Lesson 2',
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'IN_PROGRESS', canOpen: false }],
+      edges: [],
+      availability: 'CLOSED',
+    });
+    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'LOCKED' });
   });
 
   it('shows the quiz when the node has not been tried yet', async () => {
@@ -216,8 +231,9 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE', canOpen: true }],
       edges: [],
+      availability: 'OPEN',
     });
     // Newest first, as the query orders them.
     mockAttemptFindMany.mockResolvedValue([

@@ -97,7 +97,7 @@ describe('StudentNodePage', () => {
     ).toBeInTheDocument();
   });
 
-  it('sends a locked node back to the lesson map', async () => {
+  it('sends a node it cannot open back to the lesson map', async () => {
     mockGetStudentNode.mockResolvedValue(view('LOCKED'));
     await expect(StudentNodePage({ params })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/student/courses/c1/lessons/cl1');

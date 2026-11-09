@@ -8,6 +8,9 @@ import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
 
+// Dates as "Nov 7", in Boston time (where the course runs) so a late-evening due date isn't a day off.
+const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+
 interface PageProps {
   params: Promise<{ courseId: string; lessonId: string }>;
 }
@@ -29,6 +32,14 @@ export default async function StudentLessonPage({ params }: PageProps) {
         <h1 className={styles.title}>{roadmap.lessonTitle}</h1>
         <p className={styles.course}>{roadmap.courseTitle}</p>
       </header>
+
+      {/* Not open yet or closed: the map stays visible, but unfinished nodes can't be started. */}
+      {roadmap.availability !== 'OPEN' && roadmap.availabilityDate && (
+        <p className={styles.notice}>
+          {roadmap.availability === 'CLOSED' ? 'This lesson closed on' : 'This lesson opens on'}{' '}
+          {dayFormat.format(roadmap.availabilityDate)}.
+        </p>
+      )}
 
       {roadmap.nodes.length === 0 ? (
         <p className={styles.empty}>This lesson has no nodes yet.</p>

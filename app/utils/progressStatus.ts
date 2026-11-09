@@ -20,6 +20,14 @@ export const NODE_STATUS_LABELS: Record<NodeStatus, string> = {
   INCOMPLETE: 'Incomplete',
 };
 
+// Whether a lesson accepts work right now, from its open date, due date and late deadline.
+export type LessonAvailability = 'OPEN' | 'NOT_OPEN' | 'CLOSED';
+
+export const AVAILABILITY_LABELS: Record<Exclude<LessonAvailability, 'OPEN'>, string> = {
+  NOT_OPEN: 'Not open yet',
+  CLOSED: 'Closed',
+};
+
 export function statusFromPercent(percent: number): LessonStatus {
   if (percent === 0) return 'NOT_STARTED';
   if (percent === 100) return 'COMPLETED';

@@ -118,11 +118,14 @@ export async function getStudentNode(
     courseTitle: roadmap.courseTitle,
     lessonTitle: roadmap.lessonTitle,
     node: { ...node, learningObjectives: details.node.learningObjectives },
-    screen: nodeScreen(node.status, {
-      isFoundational: node.isFoundational,
-      failedQuizzes: failedQuizzes.length,
-      watchedVideoSinceFail: Boolean(videoSinceFail),
-    }),
+    // A node the map can't open (locked, or unfinished in a closed lesson) shows as locked.
+    screen: node.canOpen
+      ? nodeScreen(node.status, {
+          isFoundational: node.isFoundational,
+          failedQuizzes: failedQuizzes.length,
+          watchedVideoSinceFail: Boolean(videoSinceFail),
+        })
+      : 'LOCKED',
     lastQuiz: scoreOf(quizzes[0]),
     // Video questions passed by the same pass mark as the node's quiz.
     lastVideo: videoScore && {

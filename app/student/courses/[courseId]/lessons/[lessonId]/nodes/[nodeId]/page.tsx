@@ -28,7 +28,7 @@ export default async function StudentNodePage({ params }: PageProps) {
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
   const videoHref = ROUTES.studentNode(courseId, lessonId, nodeId, 'video');
   const quizHref = ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz');
-  // Locked nodes can't be opened yet; send the student back to the lesson map.
+  // Nodes the map can't open (locked, or unfinished in a closed lesson) go back to the map.
   if (view.screen === 'LOCKED') redirect(lessonHref);
 
   const quizScore = { correct: view.lastQuiz?.correct ?? 0, total: view.lastQuiz?.total ?? 0 };

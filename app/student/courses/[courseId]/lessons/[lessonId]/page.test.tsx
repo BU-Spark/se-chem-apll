@@ -29,6 +29,8 @@ describe('StudentLessonPage', () => {
       lessonTitle: 'Lesson 2',
       nodes: [{ id: 'a' }, { id: 'b' }],
       edges: [],
+      availability: 'OPEN',
+      availabilityDate: null,
     });
   });
 
@@ -43,6 +45,37 @@ describe('StudentLessonPage', () => {
       '/student/courses/course-1'
     );
     expect(screen.getByTestId('roadmap')).toHaveTextContent('2 nodes');
+  });
+
+  it('shows no notice while the lesson is open', async () => {
+    render(await StudentLessonPage({ params }));
+    expect(screen.queryByText(/This lesson (closed|opens)/)).not.toBeInTheDocument();
+  });
+
+  it('says when a closed lesson closed, or when a lesson opens, in Boston time', async () => {
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'C',
+      lessonTitle: 'L',
+      nodes: [{ id: 'a' }],
+      edges: [],
+      availability: 'CLOSED',
+      // 11:59 PM in Boston on Nov 7 is already Nov 8 in UTC.
+      availabilityDate: new Date('2026-11-08T04:59:00Z'),
+    });
+    const { unmount } = render(await StudentLessonPage({ params }));
+    expect(screen.getByText('This lesson closed on Nov 7.')).toBeInTheDocument();
+    unmount();
+
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'C',
+      lessonTitle: 'L',
+      nodes: [{ id: 'a' }],
+      edges: [],
+      availability: 'NOT_OPEN',
+      availabilityDate: new Date('2026-11-10T14:00:00Z'),
+    });
+    render(await StudentLessonPage({ params }));
+    expect(screen.getByText('This lesson opens on Nov 10.')).toBeInTheDocument();
   });
 
   it('says so when the lesson has no nodes', async () => {
