@@ -114,7 +114,7 @@ export async function getStudentNode(
     }),
     prisma.nodeVideoProgress.findUnique({
       where: { studentId_courseLessonId_lessonNodeId: { studentId, courseLessonId, lessonNodeId } },
-      select: { positionSeconds: true, watchedAt: true },
+      select: { positionSeconds: true, watchedAt: true, updatedAt: true },
     }),
     getStudentCourse(studentId, courseId),
   ]);
@@ -122,6 +122,10 @@ export async function getStudentNode(
   const quizzes = attempts.filter((attempt) => attempt.kind === 'QUIZ');
   const failedQuizzes = quizzes.filter((attempt) => attempt.isPassing === false);
   const lastFailAt = failedQuizzes[0]?.completedAt;
+  const videoSinceFail = attempts.find(
+    (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
+  );
+  const videoScore = scoreOf(videoSinceFail);
   const timeline: TimelineItem[] = details.node.checkpoints.flatMap((checkpoint) =>
     checkpoint.questions.map(({ id, kind, prompt }) =>
       kind === 'NOTE'
@@ -132,11 +136,7 @@ export async function getStudentNode(
   const hasVideoQuestions = timeline.some((item) => item.kind === 'QUESTION');
   // A video without questions has no attempt, so its saved watch shows it was watched.
   const watchedAt = videoProgress?.watchedAt;
-  const watchedWithoutQuestions = !hasVideoQuestions && Boolean(watchedAt) && (!lastFailAt || watchedAt! > lastFailAt);
-  const videoSinceFail = attempts.find(
-    (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
-  );
-  const videoScore = scoreOf(videoSinceFail);
+  const watchedWithoutQuestions = !hasVideoQuestions && watchedAt != null && (!lastFailAt || watchedAt > lastFailAt);
 
   return {
     courseTitle: roadmap.courseTitle,
@@ -159,8 +159,9 @@ export async function getStudentNode(
     video: { url: details.node.videoUrl, muxPlaybackId: details.node.muxPlaybackId },
     timeline,
     hasVideoQuestions,
-    // Where the student left the video (0 to start over).
-    resumeAt: videoProgress?.positionSeconds ?? 0,
+    // Where the student left the video this round; a failed quiz since then starts it over.
+    resumeAt:
+      videoProgress && (!lastFailAt || videoProgress.updatedAt > lastFailAt) ? videoProgress.positionSeconds : 0,
     coursePercent: courseProgressPercent(course?.lessons ?? []),
   };
 }

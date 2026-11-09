@@ -417,7 +417,7 @@ model NodeVideoProgress {
   studentId       String
   courseLessonId  String
   lessonNodeId    String
-  // Where to resume; back to 0 once the video lesson is done, so a rewatch starts over.
+  // How far the student got; only used to resume if saved after their latest failed quiz.
   positionSeconds Float        @default(0)
   // The latest time a video without questions was watched to the end.
   watchedAt       DateTime?

@@ -41,9 +41,9 @@ jest.mock('@/app/components/NodeIncomplete/NodeIncomplete', () => ({
 }));
 jest.mock('@/app/components/VideoResult/VideoResult', () => ({
   __esModule: true,
-  default: ({ passed, quizHref }: { passed: boolean; quizHref: string }) => (
+  default: ({ passed, quizHref, rewatchHref }: { passed: boolean; quizHref: string; rewatchHref: string }) => (
     <div>
-      video {passed ? 'passed' : 'not passed'} then {quizHref}
+      video {passed ? 'passed' : 'not passed'} then {quizHref}, rewatch {rewatchHref}
     </div>
   ),
 }));
@@ -75,7 +75,12 @@ describe('StudentNodePage', () => {
     ['QUIZ', null, 'quiz for Atoms'],
     ['COMPLETE', { correct: 5, total: 5 }, 'complete 5/5'],
     ['REFRESH', { correct: 1, total: 5 }, 'refresh then /student/courses/c1/lessons/cl1/nodes/ln1/video'],
-    ['VIDEO_RESULT', { correct: 1, total: 5 }, 'video passed then /student/courses/c1/lessons/cl1/nodes/ln1/quiz'],
+    [
+      'VIDEO_RESULT',
+      { correct: 1, total: 5 },
+      // Rewatch starts over (with the questions) instead of resuming.
+      'video passed then /student/courses/c1/lessons/cl1/nodes/ln1/quiz, rewatch /student/courses/c1/lessons/cl1/nodes/ln1/video?restart=1',
+    ],
     ['RETRY', { correct: 1, total: 5 }, 'keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/video'],
     ['INCOMPLETE', { correct: 1, total: 5 }, 'node incomplete'],
   ])('shows the %s screen', async (screenName, lastQuiz, text) => {

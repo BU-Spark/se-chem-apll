@@ -78,7 +78,7 @@ export default async function StudentNodePage({ params }: PageProps) {
           total={view.lastVideo.total}
           coursePercent={view.coursePercent}
           lessonHref={lessonHref}
-          rewatchHref={videoHref}
+          rewatchHref={`${videoHref}?restart=1`}
           quizHref={quizHref}
         />
       );

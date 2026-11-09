@@ -41,17 +41,25 @@ const question = (id: string, prompt: string, choices = ['A', 'B']) => ({ id, pr
 const asked = (id: string, at: number | null): TimelineItem => ({ kind: 'QUESTION', id, at });
 const note = (id: string, at: number | null, prompt: string): TimelineItem => ({ kind: 'NOTE', id, at, prompt });
 
+// Attempt API calls get the queued replies in order; background progress saves just succeed.
+const isProgressSave = (url: unknown) => String(url).endsWith('/video-progress');
 function mockApi(...bodies: unknown[]) {
-  // Anything not queued below (like background progress saves) just succeeds.
-  const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
-  for (const body of bodies) fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+  const replies = [...bodies];
+  const fetchMock = jest.fn(async (url: string) => ({
+    ok: true,
+    json: async () => (isProgressSave(url) ? {} : (replies.shift() ?? {})),
+  }));
   global.fetch = fetchMock as never;
   return fetchMock;
 }
-const sent = (fetchMock: jest.Mock, call: number) => [
-  fetchMock.mock.calls[call][0],
-  JSON.parse(fetchMock.mock.calls[call][1].body),
-];
+const attemptCalls = (fetchMock: jest.Mock) => fetchMock.mock.calls.filter(([url]) => !isProgressSave(url));
+const progressSaves = (fetchMock: jest.Mock) =>
+  fetchMock.mock.calls.filter(([url]) => isProgressSave(url)).map(([, init]) => JSON.parse(init.body));
+// The nth attempt API call: [url, body].
+const sent = (fetchMock: jest.Mock, call: number) => {
+  const [url, init] = attemptCalls(fetchMock)[call];
+  return [url, JSON.parse(init.body)];
+};
 
 async function advanceTo(seconds: number) {
   time = seconds;
@@ -238,9 +246,8 @@ describe('QevLesson', () => {
       await user.click(screen.getByRole('radio', { name: /A/ }));
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByRole('status');
-      // The attempt API gets only the question (progress saves are separate).
-      const attemptCalls = fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/video-progress'));
-      expect(attemptCalls).toHaveLength(3);
+      // The attempt API gets only the question.
+      expect(attemptCalls(fetchMock)).toHaveLength(3);
       expect(sent(fetchMock, 1)[1]).toEqual({
         attemptId: 'attempt-1',
         answer: { questionId: 'q', selectedIndices: [0] },
@@ -280,12 +287,9 @@ describe('QevLesson', () => {
       await advanceTo(99.5);
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(mockPush).toHaveBeenCalledWith('/quiz');
-      // No attempt: the only call saves that the video was watched (and starts over next time).
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(sent(fetchMock, 0)).toEqual([
-        '/api/student/assignments/cl-1/video-progress',
-        { nodeId: 'ln1', positionSeconds: 0, watched: true },
-      ]);
+      // No attempt: the only save records the end and that the video was watched.
+      expect(attemptCalls(fetchMock)).toHaveLength(0);
+      expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 100, watched: true }]);
     });
   });
 
@@ -302,14 +306,10 @@ describe('QevLesson', () => {
     await advanceTo(99.9);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/quiz');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(sent(fetchMock, 0)).toEqual([
-      '/api/student/assignments/cl-1/video-progress',
-      { nodeId: 'ln1', positionSeconds: 0, watched: true },
-    ]);
+    expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 100, watched: true }]);
   });
 
-  it('starts over next time once the answers are saved, without marking a video with questions watched', async () => {
+  it('saves the end of the video right away, without marking a video with questions watched', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const fetchMock = mockApi({ id: 'attempt-1', questions: [question('end', 'At the end')] }, { correct: true }, {});
     renderLesson([asked('end', null)]);
@@ -318,10 +318,7 @@ describe('QevLesson', () => {
     await user.click(screen.getByRole('radio', { name: /A/ }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByRole('status');
-    const progressSaves = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/video-progress'));
-    expect(progressSaves.map(([, init]) => JSON.parse(init.body))).toEqual([
-      { nodeId: 'ln1', positionSeconds: 0, watched: false },
-    ]);
+    expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 100, watched: false }]);
   });
 
   describe('resuming', () => {
@@ -336,15 +333,43 @@ describe('QevLesson', () => {
       expect(screen.queryByText('Seen before')).not.toBeInTheDocument();
     });
 
+    it('keeps the position until the video ends, even after the answers are saved', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const fetchMock = mockApi(
+        { id: 'attempt-1', questions: [question('q', 'At 10 seconds')] },
+        { correct: true },
+        {}
+      );
+      const { unmount } = renderLesson([asked('q', 10)]);
+      await screen.findByText(WAITING);
+      await advanceTo(10);
+      await user.click(screen.getByRole('radio', { name: /A/ }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByText(/Finish the video to continue/);
+
+      // Leaving mid-video saves where they are, not a reset to 0.
+      await advanceTo(30);
+      unmount();
+      expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 30 }]);
+    });
+
+    it('after finishing, a refresh comes back at the end with Continue, not from the start', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      mockApi();
+      // Answers already saved, so the page passes no questions; the saved spot is the end.
+      renderLesson([], '/node', 100);
+      expect(screen.getByText('video from 100')).toBeInTheDocument();
+      await advanceTo(100);
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(mockPush).toHaveBeenCalledWith('/node');
+    });
+
     it('saves how far the student got when they leave', async () => {
       const fetchMock = mockApi({ ok: true });
       const { unmount } = renderLesson([], '/quiz');
       await advanceTo(40);
       unmount();
-      expect(sent(fetchMock, 0)).toEqual([
-        '/api/student/assignments/cl-1/video-progress',
-        { nodeId: 'ln1', positionSeconds: 40 },
-      ]);
+      expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 40 }]);
     });
 
     it('saves every few seconds while watching, only when the position moved', async () => {
@@ -352,12 +377,11 @@ describe('QevLesson', () => {
       renderLesson([], '/quiz');
       await advanceTo(12);
       await act(async () => jest.advanceTimersByTime(5000));
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(sent(fetchMock, 0)[1]).toEqual({ nodeId: 'ln1', positionSeconds: 12 });
+      expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 12 }]);
 
       // Paused at the same spot: nothing new to save.
       await act(async () => jest.advanceTimersByTime(5000));
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(progressSaves(fetchMock)).toHaveLength(1);
     });
   });
 });

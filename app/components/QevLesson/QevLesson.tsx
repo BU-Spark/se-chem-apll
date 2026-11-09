@@ -122,10 +122,9 @@ export default function QevLesson({
   // leaving, so coming back resumes there.
   const position = useRef(resumeAt);
   const savedPosition = useRef(resumeAt);
-  const progressDone = useRef(false);
   useEffect(() => {
     const save = () => {
-      if (progressDone.current || position.current <= savedPosition.current + 1) return;
+      if (position.current <= savedPosition.current + 1) return;
       savedPosition.current = position.current;
       saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: position.current });
     };
@@ -136,14 +135,15 @@ export default function QevLesson({
     };
   }, [courseLessonId, lessonNodeId]);
 
-  // Once the video lesson is done, the next visit starts over. A video without questions has no
-  // attempt, so this also records that it was watched (coming back then goes to the quiz).
-  const lessonDone = hasQuestions ? saved : videoEnded;
+  // Save the end right away. A video without questions has no attempt, so this also records that
+  // it was watched (coming back then goes to the quiz).
+  const savedEnd = useRef(false);
   useEffect(() => {
-    if (!lessonDone || progressDone.current) return;
-    progressDone.current = true;
-    saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: 0, watched: !hasQuestions });
-  }, [lessonDone, hasQuestions, courseLessonId, lessonNodeId]);
+    if (!videoEnded || savedEnd.current) return;
+    savedEnd.current = true;
+    savedPosition.current = position.current;
+    saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: position.current, watched: !hasQuestions });
+  }, [videoEnded, hasQuestions, courseLessonId, lessonNodeId]);
 
   // Wait for the attempt's questions before stopping anywhere, so the order never shifts.
   const stops = useMemo(
@@ -161,8 +161,9 @@ export default function QevLesson({
     const timer = setInterval(() => {
       const player = controls.current;
       if (!player) return;
-      position.current = Math.max(position.current, player.currentTime());
       const ended = hasEnded(player);
+      // At the end, YouTube can still report an older time, so use the full length.
+      position.current = Math.max(position.current, ended ? player.duration() : player.currentTime());
       if (ended) setVideoEnded(true);
       if (!stop) return;
       // At the end, every remaining stop opens, even one timed past the video's real length.
