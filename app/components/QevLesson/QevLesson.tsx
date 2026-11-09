@@ -39,7 +39,7 @@ function byTime(questions: QuizQuestion[], times: Record<string, number | null>)
 /**
  * The video lesson: plays the node's video and pauses when it reaches each question's time.
  * Each answer is checked right away ("Correct"/"Incorrect"), then the video continues. When the
- * last question is done, all answers are saved through the team's attempt API.
+ * answers are saved as drafts; completion waits for every answer and the video end.
  */
 export default function QevLesson({
   courseLessonId,
@@ -54,6 +54,7 @@ export default function QevLesson({
   const controls = useRef<VideoControls | null>(null);
   const hasVideo = Boolean(video.url || video.muxPlaybackId);
   const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[] } | null>(null);
+  const startKey = useRef<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
   const [answeredCount, setAnsweredCount] = useState(0);
   const [questionOpen, setQuestionOpen] = useState(!hasVideo);
@@ -67,13 +68,25 @@ export default function QevLesson({
   // Start (or resume) the video-question attempt once.
   useRunOnce(() => {
     run(async () => {
+      startKey.current ??= crypto.randomUUID();
       const started = await post({
         action: 'start',
         nodeId: lessonNodeId,
         kind: 'CHECKPOINT',
-        key: crypto.randomUUID(),
+        key: startKey.current,
       });
-      setAttempt({ id: started.id, questions: byTime(started.questions, questionTimes) });
+      const ordered = byTime(started.questions, questionTimes);
+      setAttempt({ id: started.id, questions: ordered });
+      const drafts = Object.fromEntries(
+        (started.draftAnswers ?? []).map((a: QuizAnswer & { questionId: string }) => [a.questionId, a])
+      );
+      setAnswers(drafts);
+      const firstMissing = ordered.findIndex((q) => !drafts[q.id]);
+      setAnsweredCount(firstMissing === -1 ? ordered.length : firstMissing);
+      const ended = !hasVideo || Boolean(started.videoCompletedAt);
+      setVideoEnded(ended);
+      setSaved(Boolean(started.completedAt));
+      setQuestionOpen(firstMissing !== -1 && ended);
     });
   });
 
@@ -110,32 +123,34 @@ export default function QevLesson({
     player.seekTo(question ? (questionTimes[question.id] ?? end) : end);
   }
 
-  // Check the answer, show Correct/Incorrect, and keep the video playing. After the last
-  // question, save all answers; the student continues once the video has ended.
+  // Save each answer, show Correct/Incorrect, and keep the video playing.
+  // Completion waits for both the last answer and the video end.
   const submitAnswer = () =>
     run(async () => {
-      const result = await post(
-        { attemptId: attempt!.id, answer: { questionId: question.id, ...answers[question.id] } },
-        '/check'
-      );
+      const result = await post({
+        action: 'saveCheckpoint',
+        attemptId: attempt!.id,
+        answer: { questionId: question.id, ...answers[question.id] },
+        videoEnded,
+      });
       setFeedback(result.correct);
       const next = answeredCount + 1;
       setAnsweredCount(next);
-      setQuestionOpen(!hasVideo && next < questions.length);
-      if (next === questions.length) {
-        await post({
-          action: 'finish',
-          attemptId: attempt!.id,
-          answers: questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
-        });
-        setSaved(true);
-      }
-      if (hasVideo) controls.current?.play();
+      setQuestionOpen(videoEnded && next < questions.length);
+      setSaved(Boolean(result.completedAt));
+      if (hasVideo && !videoEnded) controls.current?.play();
     });
 
-  function goToResult() {
-    router.push(doneHref);
-    router.refresh();
+  async function goToResult() {
+    await run(async () => {
+      if (!saved) {
+        const result = await post({ action: 'saveCheckpoint', attemptId: attempt!.id, videoEnded: true });
+        if (!result.completedAt) throw new Error('Save every answer before completing the video lesson.');
+        setSaved(true);
+      }
+      router.push(doneHref);
+      router.refresh();
+    });
   }
 
   return (
@@ -160,8 +175,8 @@ export default function QevLesson({
           ) : (
             attempt && (
               <p className={styles.waiting}>
-                {saved
-                  ? 'All questions answered. Finish the video to continue.'
+                {answeredCount === questions.length
+                  ? 'All answers saved. Finish the video to continue.'
                   : 'Watch the video. Questions will appear here.'}
               </p>
             )
@@ -199,9 +214,9 @@ export default function QevLesson({
             Continue
           </button>
         )}
-        {saved && videoEnded && (
-          <button type="button" className={buttons.primary} onClick={goToResult}>
-            Continue
+        {attempt && answeredCount === questions.length && videoEnded && (
+          <button type="button" className={buttons.primary} disabled={busy} onClick={goToResult}>
+            {busy ? 'Saving…' : error ? 'Retry completing video lesson' : 'Continue'}
           </button>
         )}
         {error && !attempt && (

@@ -1,5 +1,9 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import WatchVideo from '../WatchVideo';
+
+const mockPush = jest.fn();
+const mockRefresh = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush, refresh: mockRefresh }) }));
 
 let endVideo: () => void = () => {};
 jest.mock('@/app/components/QevVideo/QevVideo', () => ({
@@ -27,5 +31,31 @@ describe('WatchVideo', () => {
   it('lets the student continue right away when the node has no video', () => {
     render(<WatchVideo {...props} video={{ url: null, muxPlaybackId: null }} />);
     expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/quiz');
+  });
+});
+
+it('records review completion and requests automatic submission before navigating', async () => {
+  global.crypto.randomUUID = () => '00000000-0000-4000-8000-000000000000';
+  const fetchMock = jest
+    .fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'review-1' }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'review-1' }) });
+  global.fetch = fetchMock;
+  render(
+    <WatchVideo
+      {...props}
+      video={{ url: null, muxPlaybackId: null }}
+      review={{ courseLessonId: 'cl', lessonNodeId: 'ln', doneHref: '/done' }}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mark reviewed' }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/done'));
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ action: 'start', kind: 'REVIEW', nodeId: 'ln' });
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+    action: 'finish',
+    attemptId: 'review-1',
+    answers: [],
+    submitWhenReady: true,
+    videoEnded: true,
   });
 });

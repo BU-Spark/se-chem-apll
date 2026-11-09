@@ -34,6 +34,7 @@ type View = {
   }[];
 };
 type Task = {
+  requiresVideo?: boolean;
   id: string;
   lessonNodeId: string;
   nodeTitle: string;
@@ -58,6 +59,7 @@ export default function AssignmentWork({ initial }: { initial: View }) {
   const [answers, setAnswers] = useState<Record<string, { selectedIndices?: number[]; rawAnswer?: string }>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [videoEnded, setVideoEnded] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const pending = useRef<{ signature: string; key: string } | null>(null);
   const url = `/api/student/assignments/${view.id}`;
@@ -125,6 +127,7 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                 onClick={() =>
                   run(async () => {
                     setAnswers({});
+                    setVideoEnded(false);
                     const next = await post({
                       action: 'start',
                       nodeId: node.id,
@@ -175,6 +178,7 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                 run(async () => {
                   const result = await post({
                     action: 'finish',
+                    videoEnded,
                     attemptId: task.id,
                     answers: task.questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
                   });
@@ -225,7 +229,13 @@ export default function AssignmentWork({ initial }: { initial: View }) {
                 </fieldset>
               ))}
               {!task.questions.length && <p>Confirm that you have reviewed this node’s material.</p>}
-              <button disabled={busy || !open} type="submit">
+              {task.requiresVideo && (
+                <label>
+                  <input type="checkbox" checked={videoEnded} onChange={(e) => setVideoEnded(e.target.checked)} /> I
+                  have finished watching the video.
+                </label>
+              )}
+              <button disabled={busy || !open || (task.requiresVideo && !videoEnded)} type="submit">
                 {task.kind === 'REVIEW' ? 'Mark reviewed' : 'Save answers'}
               </button>
             </form>

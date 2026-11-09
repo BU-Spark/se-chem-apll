@@ -31,6 +31,13 @@ export default async function StudentNodePage({ params }: PageProps) {
   // Locked nodes can't be opened yet; send the student back to the lesson map.
   if (view.screen === 'LOCKED') redirect(lessonHref);
 
+  const improvement = {
+    improvementHref:
+      view.node.openForWork && view.node.prerequisitesReady && (view.node.canImprove || view.node.improvementAttemptId)
+        ? `${quizHref}?improve=1`
+        : undefined,
+    resumingImprovement: !!view.node.improvementAttemptId,
+  };
   const quizScore = { correct: view.lastQuiz?.correct ?? 0, total: view.lastQuiz?.total ?? 0 };
 
   switch (view.screen) {
@@ -44,7 +51,9 @@ export default async function StudentNodePage({ params }: PageProps) {
         />
       );
     case 'COMPLETE':
-      return <NodeComplete lessonHref={lessonHref} {...quizScore} coursePercent={view.coursePercent} />;
+      return (
+        <NodeComplete {...improvement} lessonHref={lessonHref} {...quizScore} coursePercent={view.coursePercent} />
+      );
     case 'REFRESH':
       return (
         <RefreshKnowledge
@@ -66,7 +75,9 @@ export default async function StudentNodePage({ params }: PageProps) {
         />
       );
     case 'INCOMPLETE':
-      return <NodeIncomplete {...quizScore} coursePercent={view.coursePercent} lessonHref={lessonHref} />;
+      return (
+        <NodeIncomplete {...improvement} {...quizScore} coursePercent={view.coursePercent} lessonHref={lessonHref} />
+      );
     case 'VIDEO_RESULT':
       return (
         <VideoResult

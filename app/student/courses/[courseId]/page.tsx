@@ -45,6 +45,7 @@ export default async function StudentCoursePage({ params }: PageProps) {
               number={lesson.number}
               title={lesson.title}
               status={lesson.status}
+              needsAttention={lesson.needsAttention}
               isCurrent={lesson.id === currentLesson?.id}
               href={ROUTES.studentLesson(course.id, lesson.id)}
             />

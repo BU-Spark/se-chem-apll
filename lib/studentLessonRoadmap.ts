@@ -1,14 +1,23 @@
 import type { NodeStatus } from '@/app/utils/progressStatus';
 import { prisma } from '@/lib/prisma';
-import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
+import { nodeKey, workNodeInclude } from '@/lib/submissions/content';
+import { evaluateWork } from '@/lib/submissions/workState';
+import { isLessonHidden, submissionStatus } from '@/app/utils/lessonSubmissionPolicy';
 import { asStudent } from '@/lib/studentCourses';
-import { quizOutcomes, toOutcomeNode } from '@/lib/nodeOutcomes';
+import { toOutcomeNode } from '@/lib/nodeOutcomes';
 
 export interface RoadmapNode {
   id: string;
   title: string;
   isFoundational: boolean;
   status: NodeStatus;
+  needsUpdatedWork: boolean;
+  canImprove: boolean;
+  improvementAttemptId: string | null;
+  needsCheckpoint: boolean;
+  currentContentKey: string;
+  prerequisitesReady: boolean;
+  openForWork: boolean;
 }
 
 export interface RoadmapEdge {
@@ -58,6 +67,11 @@ export async function getStudentLessonRoadmap(
       course: { enrollments: { some: asStudent(studentId) } },
     },
     select: {
+      openDate: true,
+      lateDeadline: true,
+      latePenaltyType: true,
+      latePenaltyPercent: true,
+      progress: { where: { studentId }, select: { submissions: { take: 1, select: { id: true } } } },
       dueDate: true,
       hideAfterDue: true,
       course: { select: { title: true } },
@@ -67,7 +81,7 @@ export async function getStudentLessonRoadmap(
           lessonNodes: {
             where: { node: { isDraft: false } },
             orderBy: { sortOrder: 'asc' },
-            select: { id: true, isRequired: true, node: { select: { title: true } } },
+            include: workNodeInclude,
           },
           lessonNodeEdges: { select: { sourceId: true, targetId: true } },
         },
@@ -76,26 +90,42 @@ export async function getStudentLessonRoadmap(
   });
   if (!courseLesson || isLessonHidden(courseLesson, now)) return null;
 
-  // Every quiz and video-question try, finished or not.
+  // Every quiz, video-question or review attempt, finished or not.
   const attempts = await prisma.nodeAttempt.findMany({
-    where: { userId: studentId, courseLessonId, kind: { in: ['QUIZ', 'CHECKPOINT'] } },
-    select: { lessonNodeId: true, kind: true, isPassing: true, completedAt: true },
+    where: { userId: studentId, courseLessonId, kind: { in: ['QUIZ', 'CHECKPOINT', 'REVIEW'] } },
+    select: {
+      id: true,
+      purpose: true,
+      contentKey: true,
+      lessonNodeId: true,
+      kind: true,
+      isPassing: true,
+      completedAt: true,
+    },
   });
-  const quizzes = attempts.filter((attempt) => attempt.kind === 'QUIZ' && attempt.completedAt);
-  const startedIds = new Set(attempts.flatMap((attempt) => attempt.lessonNodeId ?? []));
 
   const { lessonNodes, lessonNodeEdges } = courseLesson.lesson;
   const nodeIds = new Set(lessonNodes.map((lessonNode) => lessonNode.id));
   // Skip arrows to or from draft nodes, which students don't see.
   const edges = lessonNodeEdges.filter((edge) => nodeIds.has(edge.sourceId) && nodeIds.has(edge.targetId));
-  const { completedIds, incompleteIds } = quizOutcomes(lessonNodes.map(toOutcomeNode), quizzes);
-  const statuses = computeNodeStatuses([...nodeIds], edges, completedIds, incompleteIds, startedIds);
-
-  const nodes: RoadmapNode[] = lessonNodes.map((lessonNode) => ({
-    ...toOutcomeNode(lessonNode),
-    title: lessonNode.node.title,
-    status: statuses[lessonNode.id],
-  }));
+  const evaluation = evaluateWork(lessonNodes, attempts, Boolean(courseLesson.progress[0]?.submissions.length), edges);
+  const openForWork = ['ON_TIME', 'LATE'].includes(submissionStatus(courseLesson, now));
+  const nodes: RoadmapNode[] = lessonNodes.map((lessonNode) => {
+    const state = evaluation.states.find((s) => s.id === lessonNode.id)!;
+    return {
+      ...toOutcomeNode(lessonNode),
+      title: lessonNode.node.title,
+      status:
+        state.outcome ?? (!state.prerequisitesReady ? 'LOCKED' : state.current.length ? 'IN_PROGRESS' : 'NOT_STARTED'),
+      needsUpdatedWork: state.needsUpdatedWork,
+      canImprove: openForWork && state.canImprove,
+      improvementAttemptId: state.improvementAttemptId,
+      needsCheckpoint: state.needsCheckpoint,
+      currentContentKey: nodeKey(lessonNode),
+      prerequisitesReady: state.prerequisitesReady,
+      openForWork,
+    };
+  });
 
   return { courseTitle: courseLesson.course.title, lessonTitle: courseLesson.lesson.title, nodes, edges };
 }

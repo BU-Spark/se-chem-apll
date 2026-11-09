@@ -10,10 +10,11 @@ interface LessonCardProps {
   status: LessonStatus;
   isCurrent: boolean;
   href: string;
+  needsAttention?: boolean;
 }
 
 // One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
-export default function LessonCard({ number, title, status, isCurrent, href }: LessonCardProps) {
+export default function LessonCard({ number, title, status, isCurrent, href, needsAttention }: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
   const statusLabel = PROGRESS_LABELS[status];
 
@@ -25,6 +26,7 @@ export default function LessonCard({ number, title, status, isCurrent, href }: L
     >
       <span className={a11y.srOnly}>
         {name}, {statusLabel}
+        {needsAttention ? ', updated or unfinished work' : ''}
       </span>
       {status === 'COMPLETED' && (
         <span className={styles.check} aria-hidden="true">
@@ -33,7 +35,7 @@ export default function LessonCard({ number, title, status, isCurrent, href }: L
       )}
       <span className={styles.tooltip} aria-hidden="true">
         <span className={styles.tooltipTitle}>{name}</span>
-        <span className={styles.tooltipStatus}>{statusLabel}</span>
+        <span className={styles.tooltipStatus}>{needsAttention ? 'Updated or unfinished work' : statusLabel}</span>
       </span>
     </Link>
   );

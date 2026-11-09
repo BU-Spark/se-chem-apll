@@ -31,6 +31,7 @@ export default async function StudentNodeVideoPage({ params }: PageProps) {
         nodeTitle={view.node.title}
         video={view.video}
         lessonHref={lessonHref}
+        review={!view.hasQuiz ? { courseLessonId: lessonId, lessonNodeId: nodeId, doneHref: nodeHref } : undefined}
         quizHref={ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')}
       />
     );

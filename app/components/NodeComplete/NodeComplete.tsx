@@ -6,13 +6,22 @@ import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 
 interface NodeCompleteProps {
   lessonHref: string;
+  improvementHref?: string;
+  resumingImprovement?: boolean;
   correct: number;
   total: number;
   coursePercent: number;
 }
 
 // Shown after passing a node's quiz (and when reopening a completed node).
-export default function NodeComplete({ lessonHref, correct, total, coursePercent }: NodeCompleteProps) {
+export default function NodeComplete({
+  lessonHref,
+  correct,
+  total,
+  coursePercent,
+  improvementHref,
+  resumingImprovement,
+}: NodeCompleteProps) {
   return (
     <NodeScreenFrame closeHref={lessonHref}>
       <h1 className={screen.title}>Node Complete</h1>
@@ -21,6 +30,17 @@ export default function NodeComplete({ lessonHref, correct, total, coursePercent
       <p className={screen.text}>
         You&rsquo;ve completed this node. Take a moment to celebrate your progress, then keep moving forward.
       </p>
+      {improvementHref && (
+        <div>
+          <p>
+            One improvement attempt is available for this version of the node. Finishing it resubmits your lesson with
+            the current late penalty. Your highest final grade is retained.
+          </p>
+          <Link href={improvementHref} className={buttons.primary}>
+            {resumingImprovement ? 'Resume improvement attempt' : 'Improve grade'}
+          </Link>
+        </div>
+      )}
       <Link href={lessonHref} className={buttons.primary}>
         Return to Lesson
       </Link>

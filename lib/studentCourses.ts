@@ -1,7 +1,12 @@
 import type { LessonStatus } from '@prisma/client';
+import { workNodeInclude } from '@/lib/submissions/content';
+import { evaluateWork } from '@/lib/submissions/workState';
+import type { WorkAttempt } from '@/lib/submissions/workState';
+import type { WorkNode } from '@/lib/submissions/content';
+// Historical completion and current work are separate.
 import { prisma } from '@/lib/prisma';
 import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
-import { countFinishedNodes, toOutcomeNode, type FinishedQuiz } from '@/lib/nodeOutcomes';
+import { countFinishedNodes, toOutcomeNode } from '@/lib/nodeOutcomes';
 
 export const asStudent = (studentId: string) => ({ studentId, role: 'STUDENT' as const });
 
@@ -13,10 +18,11 @@ export interface StudentLesson {
   // Nodes in the lesson, and how many of them the student finished (completed or incomplete).
   nodeCount: number;
   finishedNodeCount: number;
+  needsAttention?: boolean;
 }
 
 // The course lessons a student can see (no drafts), in order, with the student's progress:
-// their stored status, the lesson's visible nodes, and their finished quizzes.
+// their stored status, the lesson's visible nodes, and their completed attempts.
 const visibleLessonsQuery = (studentId: string) => ({
   where: { lesson: { isDraft: false } },
   orderBy: { sortOrder: 'asc' as const },
@@ -27,16 +33,27 @@ const visibleLessonsQuery = (studentId: string) => ({
     lesson: {
       select: {
         title: true,
-        lessonNodes: { where: { node: { isDraft: false } }, select: { id: true, isRequired: true } },
+        lessonNodes: {
+          where: { node: { isDraft: false } },
+          include: workNodeInclude,
+        },
       },
     },
     progress: {
       where: { studentId },
       select: {
         status: true,
+        submissions: { take: 1, select: { id: true } },
         attempts: {
-          where: { kind: 'QUIZ' as const, completedAt: { not: null } },
-          select: { lessonNodeId: true, isPassing: true },
+          select: {
+            id: true,
+            contentKey: true,
+            purpose: true,
+            completedAt: true,
+            lessonNodeId: true,
+            isPassing: true,
+            kind: true,
+          },
         },
       },
     },
@@ -52,21 +69,30 @@ type CourseLessonRow = {
   id: string;
   dueDate: Date | null;
   hideAfterDue: boolean;
-  lesson: { title: string; lessonNodes: { id: string; isRequired: boolean }[] };
-  progress: { status: LessonStatus; attempts: FinishedQuiz[] }[];
+  lesson: { title: string; lessonNodes: WorkNode[] };
+  progress: { status: LessonStatus; attempts: WorkAttempt[]; submissions: { id: string }[] }[];
 };
 
 /**
- * The student's status and finished nodes for one lesson. Lessons aren't handed in from the node
- * pages, so finishing every node also counts as completed; a handed-in lesson counts every node.
+ * Work completion is independent of hand-in state. Terminal nodes count as completed,
+ * and a previously handed-in lesson retains its stored completed status.
  */
 function lessonProgress({ lesson, progress }: CourseLessonRow) {
   const nodeCount = lesson.lessonNodes.length;
   const stored = progress[0];
-  const finished = stored ? countFinishedNodes(lesson.lessonNodes.map(toOutcomeNode), stored.attempts) : 0;
+  const finished = stored
+    ? countFinishedNodes(
+        lesson.lessonNodes.map(toOutcomeNode),
+        stored.attempts.filter((a) => a.completedAt)
+      )
+    : 0;
   const status: LessonStatus =
     nodeCount > 0 && finished === nodeCount ? 'COMPLETED' : (stored?.status ?? 'NOT_STARTED');
-  return { status, nodeCount, finishedNodeCount: status === 'COMPLETED' ? nodeCount : finished };
+  const evaluation = evaluateWork(lesson.lessonNodes, stored?.attempts ?? [], Boolean(stored?.submissions.length));
+  const needsAttention =
+    evaluation.states.some((s) => s.needsUpdatedWork || s.improvementAttemptId) ||
+    (evaluation.ready && !!stored && stored.submissions.length === 0);
+  return { status, nodeCount, finishedNodeCount: status === 'COMPLETED' ? nodeCount : finished, needsAttention };
 }
 
 // Drops lessons hidden after their due date and numbers the rest with the student's progress.
@@ -138,5 +164,10 @@ export async function getStudentCourse(studentId: string, courseId: string, now 
 
 // The lesson to continue: the first one not completed, or the last one if all are done.
 export function findCurrentLesson(lessons: StudentLesson[]) {
-  return lessons.find((lesson) => lesson.status !== 'COMPLETED') ?? lessons.at(-1) ?? null;
+  return (
+    lessons.find((lesson) => lesson.needsAttention) ??
+    lessons.find((lesson) => lesson.status !== 'COMPLETED') ??
+    lessons.at(-1) ??
+    null
+  );
 }

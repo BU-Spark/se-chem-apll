@@ -11,7 +11,7 @@ export default function LessonRoadmap({
   edges,
   nodeHref,
 }: {
-  nodes: RoadmapNodeData[];
+  nodes: Pick<RoadmapNodeData, 'id' | 'title' | 'isFoundational' | 'status'>[];
   edges: RoadmapEdge[];
   // Link for a node the student can open (not locked).
   nodeHref: (nodeId: string) => string;

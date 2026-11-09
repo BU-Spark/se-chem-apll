@@ -79,6 +79,7 @@ export async function getStudentNode(
         node: {
           select: {
             learningObjectives: true,
+            quizQuestions: { take: 1, select: { id: true } },
             videoUrl: true,
             muxPlaybackId: true,
             checkpoints: {
@@ -97,7 +98,8 @@ export async function getStudentNode(
         userId: studentId,
         courseLessonId,
         lessonNodeId,
-        kind: { in: ['QUIZ', 'CHECKPOINT'] },
+        contentKey: node.currentContentKey,
+        kind: { in: ['QUIZ', 'CHECKPOINT', 'REVIEW'] },
         completedAt: { not: null },
       },
       orderBy: { completedAt: 'desc' },
@@ -114,15 +116,22 @@ export async function getStudentNode(
   );
   const videoScore = scoreOf(videoSinceFail);
 
+  const hasQuiz = details.node.quizQuestions?.length !== 0;
   return {
+    hasQuiz,
     courseTitle: roadmap.courseTitle,
     lessonTitle: roadmap.lessonTitle,
     node: { ...node, learningObjectives: details.node.learningObjectives },
-    screen: nodeScreen(node.status, {
-      isFoundational: node.isFoundational,
-      failedQuizzes: failedQuizzes.length,
-      watchedVideoSinceFail: Boolean(videoSinceFail),
-    }),
+    screen:
+      node.needsCheckpoint &&
+      !['LOCKED', 'COMPLETED', 'INCOMPLETE'].includes(node.status) &&
+      quizzes.some((a) => a.isPassing)
+        ? 'INTRO'
+        : nodeScreen(node.status, {
+            isFoundational: hasQuiz && node.isFoundational,
+            failedQuizzes: failedQuizzes.length,
+            watchedVideoSinceFail: Boolean(videoSinceFail),
+          }),
     lastQuiz: scoreOf(quizzes[0]),
     // Video questions passed by the same pass mark as the node's quiz.
     lastVideo: videoScore && {

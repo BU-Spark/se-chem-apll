@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { workNode, workAttempt } from '@/test/mocks/work';
 import {
   courseProgressPercent,
   findCurrentLesson,
@@ -11,11 +13,36 @@ const mockEnrollmentFindMany = jest.fn();
 const mockEnrollmentFindFirst = jest.fn();
 const mockContactFindMany = jest.fn();
 
+// Older course fixtures describe only outcomes; fill the content identity required by the readers.
+const hydrateCourse = (course: any) => ({
+  ...course,
+  courseLessons: course.courseLessons.map((cl: any) => {
+    const nodes = cl.lesson.lessonNodes.map((n: any) => ({ ...workNode(n.id, n.id, n.isRequired), ...n }));
+    return {
+      ...cl,
+      lesson: { ...cl.lesson, lessonNodes: nodes },
+      progress: cl.progress.map((p: any) => ({
+        ...p,
+        submissions: p.status === 'COMPLETED' ? [{ id: 'submission' }] : [],
+        attempts: p.attempts.map((a: any, i: number) =>
+          workAttempt(
+            nodes.find((n: any) => n.id === a.lessonNodeId),
+            { ...a, id: `attempt-${i}` }
+          )
+        ),
+      })),
+    };
+  }),
+});
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     enrollment: {
-      findMany: (...args: unknown[]) => mockEnrollmentFindMany(...args),
-      findFirst: (...args: unknown[]) => mockEnrollmentFindFirst(...args),
+      findMany: async (...args: unknown[]) =>
+        (await mockEnrollmentFindMany(...args)).map((e: any) => ({ course: hydrateCourse(e.course) })),
+      findFirst: async (...args: unknown[]) => {
+        const e = await mockEnrollmentFindFirst(...args);
+        return e ? { course: hydrateCourse(e.course) } : null;
+      },
     },
     courseContact: { findMany: (...args: unknown[]) => mockContactFindMany(...args) },
   },
@@ -167,8 +194,24 @@ describe('getStudentCourse', () => {
       title: 'Chem',
       description: 'Intro',
       lessons: [
-        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED', nodeCount: 0, finishedNodeCount: 0 },
-        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED', nodeCount: 0, finishedNodeCount: 0 },
+        {
+          id: 'a',
+          number: 1,
+          title: 'Title a',
+          status: 'COMPLETED',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          needsAttention: false,
+        },
+        {
+          id: 'b',
+          number: 2,
+          title: 'Title b',
+          status: 'NOT_STARTED',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          needsAttention: false,
+        },
       ],
     });
   });

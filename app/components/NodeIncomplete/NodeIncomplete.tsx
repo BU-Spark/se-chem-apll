@@ -9,16 +9,36 @@ interface NodeIncompleteProps {
   total: number;
   coursePercent: number;
   lessonHref: string;
+  improvementHref?: string;
+  resumingImprovement?: boolean;
 }
 
 // After every quiz try is used up: the node is incomplete, but the student can move on.
-export default function NodeIncomplete({ correct, total, coursePercent, lessonHref }: NodeIncompleteProps) {
+export default function NodeIncomplete({
+  correct,
+  total,
+  coursePercent,
+  lessonHref,
+  improvementHref,
+  resumingImprovement,
+}: NodeIncompleteProps) {
   return (
     <NodeScreenFrame closeHref={lessonHref}>
       <h1 className={screen.title}>Node Incomplete</h1>
       <NodeProgressSummary correct={correct} total={total} coursePercent={coursePercent} />
       <p className={screen.lead}>A Step Back Before Moving Forward</p>
       <p className={screen.text}>Reach out to your instructor for further help.</p>
+      {improvementHref && (
+        <div>
+          <p>
+            One improvement attempt is available for this version of the node. Finishing it resubmits your lesson with
+            the current late penalty. Your highest final grade is retained.
+          </p>
+          <Link href={improvementHref} className={buttons.primary}>
+            {resumingImprovement ? 'Resume improvement attempt' : 'Improve grade'}
+          </Link>
+        </div>
+      )}
       <Link href={lessonHref} className={buttons.primary}>
         Return to Lesson
       </Link>
