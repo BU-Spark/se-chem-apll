@@ -47,6 +47,7 @@ model User {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   enrollments          Enrollment[]
+  courseJoinRateLimit  CourseJoinRateLimit?
   courseLessonProgress CourseLessonProgress[]
   lessonNodeAttempts   NodeAttempt[]
   nodeResponses        NodeResponse[]
@@ -106,9 +107,25 @@ model Course {
   enrollments      Enrollment[]
   courseLessons    CourseLesson[]
   contacts         CourseContact[]
+  joinCode         CourseJoinCode?
 
   @@unique([code, section])
   @@index([createdByClerkId])
+}
+
+model CourseJoinCode {
+  courseId String @id
+  code     String @unique @db.VarChar(8)
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model CourseJoinRateLimit {
+  studentId       String   @id
+  windowExpiresAt DateTime @db.Timestamptz(3)
+  attempts        Int
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model CourseContact {

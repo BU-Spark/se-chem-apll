@@ -1,5 +1,9 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useRouter } from 'next/navigation';
 import StudentHomePage from './page';
+
+jest.mock('next/navigation', () => ({ useRouter: jest.fn() }));
 
 const mockRequireStudent = jest.fn();
 const mockGetEnrolledCourses = jest.fn();
@@ -47,11 +51,43 @@ describe('StudentHomePage', () => {
     expect(screen.queryByText(/not enrolled/)).not.toBeInTheDocument();
   });
 
-  it('tells a student with no courses, and still shows the placeholder invite', async () => {
+  it('lets a student with no courses join using a code', async () => {
     mockGetEnrolledCourses.mockResolvedValue([]);
     render(await StudentHomePage());
 
     expect(screen.getByText(/not enrolled in any courses yet/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/student/coming-soon');
+    expect(screen.getByRole('textbox', { name: 'Eight-letter code from your instructor' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Join course' })).toBeEnabled();
+  });
+
+  it('shows a rejected code and opens the course after a successful retry', async () => {
+    const originalFetch = global.fetch;
+    const request = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Check your code.' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ courseId: 'joined' }) });
+    const router = { push: jest.fn(), refresh: jest.fn() };
+    jest.mocked(useRouter).mockReturnValue(router as unknown as ReturnType<typeof useRouter>);
+    global.fetch = request;
+    try {
+      const user = userEvent.setup();
+      render(await StudentHomePage());
+      const input = screen.getByRole('textbox', { name: 'Eight-letter code from your instructor' });
+      const button = screen.getByRole('button', { name: 'Join course' });
+      await user.type(input, 'aaaaaaaa');
+      await user.click(button);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Check your code.');
+      await user.clear(input);
+      await user.type(input, 'abcdefgh');
+      await user.click(button);
+
+      expect(request).toHaveBeenLastCalledWith(
+        '/api/student/courses/join',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ code: 'abcdefgh' }) })
+      );
+      await waitFor(() => expect(router.push).toHaveBeenCalledWith('/student/courses/joined'));
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });

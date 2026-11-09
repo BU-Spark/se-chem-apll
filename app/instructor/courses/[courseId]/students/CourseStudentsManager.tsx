@@ -4,6 +4,7 @@ import CourseTabs from '@/app/components/CourseTabs';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import type { User, Enrollment, Lesson, LessonNode, Node } from '@prisma/client';
+import CourseJoinCodeControls from './CourseJoinCodeControls';
 import styles from './page.module.css';
 
 type EnrollmentWithStudent = Enrollment & { student: User };
@@ -50,6 +51,7 @@ interface Props {
   courseTitle: string;
   courseCode: string;
   courseSection: string | null;
+  initialJoinCode?: string | null;
   initialEnrollments: EnrollmentWithStudent[];
   lessons: LessonWithNodes[];
 }
@@ -59,6 +61,7 @@ export default function CourseStudentsManager({
   courseTitle,
   courseCode,
   courseSection,
+  initialJoinCode,
   initialEnrollments,
   lessons,
 }: Props) {
@@ -196,6 +199,8 @@ export default function CourseStudentsManager({
       </div>
 
       <CourseTabs courseId={courseId} active="students" />
+
+      {initialJoinCode !== undefined && <CourseJoinCodeControls courseId={courseId} initialCode={initialJoinCode} />}
 
       {/* Course content summary */}
       {lessons.length > 0 && (

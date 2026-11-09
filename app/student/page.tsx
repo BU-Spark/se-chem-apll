@@ -2,7 +2,7 @@ import { requireStudent } from '@/lib/auth/server';
 import { getEnrolledCourses } from '@/lib/studentCourses';
 import { ROUTES } from '@/app/routes';
 import CourseCard from '@/app/components/CourseCard/CourseCard';
-import CourseInviteCard from '@/app/components/CourseInviteCard/CourseInviteCard';
+import JoinCourseForm from './JoinCourseForm';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +19,7 @@ export default async function StudentHomePage() {
         <p className={styles.subtitle}>My courses</p>
       </header>
 
+      <JoinCourseForm />
       {courses.length === 0 && <p className={styles.empty}>You&rsquo;re not enrolled in any courses yet.</p>}
 
       <ul className={styles.cards}>
@@ -32,15 +33,6 @@ export default async function StudentHomePage() {
             />
           </li>
         ))}
-        {/* Placeholder until course invitations exist in the backend. */}
-        <li>
-          <CourseInviteCard
-            courseTitle="Chemistry 101"
-            section="Section A"
-            professor="Professor Jane Smith"
-            joinHref={ROUTES.comingSoon}
-          />
-        </li>
       </ul>
     </div>
   );
