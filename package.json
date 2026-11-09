@@ -14,7 +14,8 @@
     "prepare": "husky",
     "db:seed": "prisma db seed",
     "db:verify-migrations": "node scripts/verify-migrations.cjs",
-    "admin:grant": "node scripts/grant-admin.cjs"
+    "admin:grant": "node scripts/grant-admin.cjs",
+    "test:browser": "playwright test"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -54,6 +55,7 @@
     "@eslint/compat": "^1.4.0",
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.37.0",
+    "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
