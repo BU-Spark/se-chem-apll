@@ -20,6 +20,7 @@ export interface StudentLesson {
   title: string;
   status: LessonStatus;
   availability: LessonAvailability;
+  dueDate: Date | null;
   // Nodes in the lesson, and how many of them the student finished (completed or incomplete).
   nodeCount: number;
   finishedNodeCount: number;
@@ -88,6 +89,7 @@ function toStudentLessons(courseLessons: CourseLessonRow[], now: Date): StudentL
       number: index + 1,
       title: courseLesson.lesson.title,
       availability: lessonAvailability(courseLesson, now),
+      dueDate: courseLesson.dueDate,
       ...lessonProgress(courseLesson),
     }));
 }
@@ -99,19 +101,40 @@ export function courseProgressPercent(lessons: StudentLesson[]) {
   return total === 0 ? 0 : Math.round((finished / total) * 100);
 }
 
-// Courses the student is enrolled in as a student, oldest enrollment first, with their progress.
-export async function getEnrolledCourses(studentId: string, now = new Date()) {
-  const enrollments = await prisma.enrollment.findMany({
+// The courses the student is enrolled in as a student, oldest enrollment first, with their lessons.
+const enrolledCoursesWithLessons = (studentId: string) =>
+  prisma.enrollment.findMany({
     where: asStudent(studentId),
-    select: {
-      course: courseWithLessonsQuery(studentId),
-    },
+    select: { course: courseWithLessonsQuery(studentId) },
     orderBy: { createdAt: 'asc' },
   });
+
+// The student's courses with how far through each one they are (for the home page).
+export async function getEnrolledCourses(studentId: string, now = new Date()) {
+  const enrollments = await enrolledCoursesWithLessons(studentId);
   return enrollments.map(({ course: { courseLessons, ...course } }) => ({
     ...course,
     progressPercent: courseProgressPercent(toStudentLessons(courseLessons, now)),
   }));
+}
+
+/**
+ * What the student still has to do: unfinished lessons they can work on now, across all their
+ * courses, due soonest first (no due date last). Completed, past-due and not-yet-open lessons are
+ * left out.
+ */
+export async function getLessonsToDo(studentId: string, now = new Date()) {
+  const enrollments = await enrolledCoursesWithLessons(studentId);
+  return enrollments
+    .flatMap(({ course }) =>
+      toStudentLessons(course.courseLessons, now).map((lesson) => ({
+        ...lesson,
+        courseId: course.id,
+        courseTitle: course.title,
+      }))
+    )
+    .filter((lesson) => lesson.status !== 'COMPLETED' && lesson.availability === 'OPEN')
+    .sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity));
 }
 
 // Keep contacts course-specific: one instructor can have different hours in each course.
