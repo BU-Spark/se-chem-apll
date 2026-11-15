@@ -79,6 +79,7 @@ type StoredAttempt = {
 };
 let mockAssignment = assignment();
 let mockAttempts: StoredAttempt[] = [];
+let mockHasSubmission = false;
 const mockTx = {
   $queryRaw: jest.fn(),
   courseLesson: { findUnique: jest.fn(async () => mockAssignment) },
@@ -87,7 +88,7 @@ const mockTx = {
     findUnique: jest.fn(async () => ({ id: 'progress' })),
     update: jest.fn(),
   },
-  lessonSubmission: { findFirst: jest.fn(async () => null) },
+  lessonSubmission: { findFirst: jest.fn(async () => (mockHasSubmission ? { id: 'submitted' } : null)) },
   nodeAttempt: {
     findUnique: jest.fn(
       async ({ where }: { where: { progressId_idempotencyKey: { idempotencyKey: string } } }) =>
@@ -127,6 +128,7 @@ const mockTx = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockAttempts = [];
+  mockHasSubmission = false;
   mockAssignment = assignment();
   mockRandomInt.mockReturnValue(1);
 });
@@ -171,7 +173,16 @@ it('grades the saved variant and draws again only after the previous attempt is 
   });
   expect((await assignmentView('student', 'assignment')).activeAttempt).toBeNull();
   mockRandomInt.mockReturnValue(0);
-  const retry = await startAttempt('student', 'assignment', 'lesson-node', 'QUIZ', 'retry-key');
+  mockHasSubmission = true;
+  const retry = await startAttempt(
+    'student',
+    'assignment',
+    'lesson-node',
+    'QUIZ',
+    'retry-key',
+    undefined,
+    'IMPROVEMENT'
+  );
   expect(retry.id).not.toBe(first.id);
   expect(retry.questions[0].prompt).toContain('NaCl');
   expect(

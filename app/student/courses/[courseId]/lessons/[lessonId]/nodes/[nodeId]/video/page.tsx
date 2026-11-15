@@ -23,7 +23,7 @@ export default async function StudentNodeVideoPage({ params, searchParams }: Pag
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
   if (!canWatchVideo(view.screen)) redirect(nodeHref);
 
-  const restart = (await searchParams).restart === '1';
+  const restart = (await searchParams)?.restart === '1';
   // This round's answers are already saved: continue from where the student stopped (or show the
   // end if they finished), without asking the questions again.
   const answered = view.screen === 'VIDEO_RESULT' && !restart;
@@ -37,9 +37,10 @@ export default async function StudentNodeVideoPage({ params, searchParams }: Pag
       timeline={answered ? view.timeline.filter((item) => item.kind === 'NOTE') : view.timeline}
       resumeAt={restart ? 0 : view.resumeAt}
       lessonHref={ROUTES.studentLesson(courseId, lessonId)}
-      // With questions, the node page shows the video result; without, there's nothing to grade,
-      // so the student goes on to the quiz.
-      doneHref={view.hasVideoQuestions ? nodeHref : ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')}
+      markReviewed={!view.hasVideoQuestions && !view.hasQuiz}
+      doneHref={
+        view.hasVideoQuestions || !view.hasQuiz ? nodeHref : ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz')
+      }
     />
   );
 }

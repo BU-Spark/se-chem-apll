@@ -93,6 +93,7 @@ describe('getStudentNode', () => {
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
+        quizQuestions: [{ id: 'q1' }],
         learningObjectives: ['Balance equations.'],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
@@ -134,6 +135,7 @@ describe('getStudentNode', () => {
     mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
 
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toEqual({
+      hasQuiz: true,
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
       node: {
@@ -224,6 +226,7 @@ describe('getStudentNode', () => {
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
+        quizQuestions: [{ id: 'q1' }],
         learningObjectives: [],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
@@ -255,7 +258,13 @@ describe('getStudentNode', () => {
   describe('a saved watch (videos without questions)', () => {
     const noQuestions = {
       passingPercent: 60,
-      node: { learningObjectives: [], videoUrl: 'https://youtu.be/abc', muxPlaybackId: null, checkpoints: [] },
+      node: {
+        quizQuestions: [{ id: 'q1' }],
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [],
+      },
     };
     const regularNode = {
       courseTitle: 'Course #3',
@@ -308,6 +317,7 @@ describe('getStudentNode', () => {
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
+        quizQuestions: [{ id: 'q1' }],
         learningObjectives: [],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
@@ -337,6 +347,7 @@ describe('getStudentNode', () => {
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
+        quizQuestions: [{ id: 'q1' }],
         learningObjectives: [],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
@@ -398,6 +409,19 @@ describe('getStudentNode', () => {
       lastQuiz: { correct: 0, total: 0 },
       // No questions to get wrong, so the video counts as passed (no division by zero).
       lastVideo: { correct: 0, total: 0, passed: true },
+    });
+  });
+
+  it('opens the video path for a foundational node with no quiz', async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: { quizQuestions: [], learningObjectives: [], videoUrl: null, muxPlaybackId: null, checkpoints: [] },
+    });
+    mockAttemptFindMany.mockResolvedValue([]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      hasQuiz: false,
+      screen: 'INTRO',
+      hasVideoQuestions: false,
     });
   });
 

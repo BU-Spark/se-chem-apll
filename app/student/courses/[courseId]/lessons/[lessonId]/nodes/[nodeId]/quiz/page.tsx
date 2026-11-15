@@ -7,12 +7,13 @@ import NodeQuiz from '@/app/components/NodeQuiz/NodeQuiz';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
+  searchParams?: Promise<{ improve?: string }>;
   params: Promise<{ courseId: string; lessonId: string; nodeId: string }>;
 }
 
 // The node's quiz after the video lesson (or, for nodes without video questions, after watching
 // the video), and a regular node's retry.
-export default async function StudentNodeQuizPage({ params }: PageProps) {
+export default async function StudentNodeQuizPage({ params, searchParams }: PageProps) {
   const student = await requireStudent();
 
   const { courseId, lessonId, nodeId } = await params;
@@ -20,7 +21,16 @@ export default async function StudentNodeQuizPage({ params }: PageProps) {
   if (!view) notFound();
 
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
-  if (!canOpenQuiz(view.screen, view.hasVideoQuestions, view.node.isFoundational)) redirect(nodeHref);
+  if (!view.hasQuiz) redirect(nodeHref);
+  const improve = (await searchParams)?.improve === '1';
+  if (improve) {
+    if (
+      !view.node.openForWork ||
+      !view.node.prerequisitesReady ||
+      (!view.node.canImprove && !view.node.improvementAttemptId)
+    )
+      redirect(nodeHref);
+  } else if (!canOpenQuiz(view.screen, view.hasVideoQuestions, view.node.isFoundational)) redirect(nodeHref);
 
   return (
     <NodeQuiz
@@ -29,6 +39,8 @@ export default async function StudentNodeQuizPage({ params }: PageProps) {
       nodeTitle={view.node.title}
       lessonHref={ROUTES.studentLesson(courseId, lessonId)}
       doneHref={nodeHref}
+      purpose={improve ? 'IMPROVEMENT' : 'STANDARD'}
+      attemptId={improve ? (view.node.improvementAttemptId ?? undefined) : undefined}
       startImmediately
     />
   );

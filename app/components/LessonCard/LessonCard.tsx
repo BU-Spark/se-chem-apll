@@ -12,10 +12,19 @@ interface LessonCardProps {
   availability?: LessonAvailability;
   isCurrent: boolean;
   href: string;
+  needsAttention?: boolean;
 }
 
 // One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
-export default function LessonCard({ number, title, status, availability = 'OPEN', isCurrent, href }: LessonCardProps) {
+export default function LessonCard({
+  number,
+  title,
+  status,
+  availability = 'OPEN',
+  isCurrent,
+  href,
+  needsAttention,
+}: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
   const statusLabel =
     availability === 'OPEN'
@@ -30,6 +39,7 @@ export default function LessonCard({ number, title, status, availability = 'OPEN
     >
       <span className={a11y.srOnly}>
         {name}, {statusLabel}
+        {needsAttention ? ', updated or unfinished work' : ''}
       </span>
       {status === 'COMPLETED' && (
         <span className={styles.check} aria-hidden="true">
@@ -38,7 +48,9 @@ export default function LessonCard({ number, title, status, availability = 'OPEN
       )}
       <span className={styles.tooltip} aria-hidden="true">
         <span className={styles.tooltipTitle}>{name}</span>
-        <span className={styles.tooltipStatus}>{statusLabel}</span>
+        <span className={styles.tooltipStatus}>
+          {needsAttention && availability === 'OPEN' ? 'Updated or unfinished work' : statusLabel}
+        </span>
       </span>
     </Link>
   );

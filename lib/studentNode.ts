@@ -97,6 +97,7 @@ export async function getStudentNode(
         node: {
           select: {
             learningObjectives: true,
+            quizQuestions: { take: 1, select: { id: true } },
             videoUrl: true,
             muxPlaybackId: true,
             checkpoints: {
@@ -115,7 +116,8 @@ export async function getStudentNode(
         userId: studentId,
         courseLessonId,
         lessonNodeId,
-        kind: { in: ['QUIZ', 'CHECKPOINT'] },
+        contentKey: node.currentContentKey,
+        kind: { in: ['QUIZ', 'CHECKPOINT', 'REVIEW'] },
         completedAt: { not: null },
       },
       orderBy: { completedAt: 'desc' },
@@ -147,18 +149,27 @@ export async function getStudentNode(
   const watchedAt = videoProgress?.watchedAt;
   const watchedWithoutQuestions = !hasVideoQuestions && watchedAt != null && (!lastFailAt || watchedAt > lastFailAt);
 
+  const hasQuiz = details.node.quizQuestions.length > 0;
+
   // Nodes the map can't open show as locked; past due, every node shows the review screen.
   let screen: NodeScreen;
   if (!node.canOpen) screen = 'LOCKED';
   else if (roadmap.availability === 'CLOSED') screen = 'CLOSED';
+  else if (
+    node.needsCheckpoint &&
+    !['LOCKED', 'COMPLETED', 'INCOMPLETE'].includes(node.status) &&
+    quizzes.some((attempt) => attempt.isPassing)
+  )
+    screen = 'INTRO';
   else
     screen = nodeScreen(node.status, {
-      isFoundational: node.isFoundational,
+      isFoundational: hasQuiz && node.isFoundational,
       failedQuizzes: failedQuizzes.length,
-      watchedVideoSinceFail: Boolean(videoSinceFail) || watchedWithoutQuestions,
+      watchedVideoSinceFail: Boolean(videoSinceFail) || (hasQuiz && watchedWithoutQuestions),
     });
 
   return {
+    hasQuiz,
     courseTitle: roadmap.courseTitle,
     lessonTitle: roadmap.lessonTitle,
     node: { ...node, learningObjectives: details.node.learningObjectives },

@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { apiAccess } from '@/lib/auth/api';
-import { assignmentView, startAttempt, finishAttempt, submitLesson, SubmissionError } from '@/lib/submissions/service';
+import {
+  assignmentView,
+  startAttempt,
+  finishAttempt,
+  saveCheckpoint,
+  submitLesson,
+  SubmissionError,
+} from '@/lib/submissions/service';
 type Context = { params: Promise<{ assignmentId: string }> };
 export async function GET(request: Request, { params }: Context) {
   const { user: student, error } = await apiAccess('student');
@@ -46,7 +53,28 @@ export async function POST(request: Request, { params }: Context) {
         (a: unknown) => a && typeof a === 'object' && 'questionId' in a && typeof a.questionId === 'string'
       )
     )
-      return NextResponse.json(await finishAttempt(student.id, assignmentId, body.attemptId, body.answers));
+      return NextResponse.json(
+        await finishAttempt(
+          student.id,
+          assignmentId,
+          body.attemptId,
+          body.answers,
+          body.submitWhenReady === true,
+          body.videoEnded === true
+        )
+      );
+    if (
+      body.action === 'saveCheckpoint' &&
+      typeof body.attemptId === 'string' &&
+      (body.answer === undefined ||
+        (body.answer && typeof body.answer === 'object' && typeof body.answer.questionId === 'string'))
+    ) {
+      return NextResponse.json(
+        await saveCheckpoint(student.id, assignmentId, body.attemptId, body.answer, body.videoEnded === true)
+      );
+    }
+    if (body.purpose !== undefined && !['STANDARD', 'IMPROVEMENT'].includes(body.purpose))
+      throw new SubmissionError('Invalid attempt purpose.', 400);
     if (typeof body.key !== 'string' || body.key.length < 8 || body.key.length > 100)
       throw new SubmissionError('A valid request key is required.', 400);
     if (
@@ -56,8 +84,18 @@ export async function POST(request: Request, { params }: Context) {
       ['QUIZ', 'CHECKPOINT', 'REVIEW'].includes(body.kind)
     )
       return NextResponse.json(
-        await startAttempt(student.id, assignmentId, body.nodeId, body.kind, body.key, body.attemptId)
+        await startAttempt(
+          student.id,
+          assignmentId,
+          body.nodeId,
+          body.kind,
+          body.key,
+          body.attemptId,
+          body.purpose ?? 'STANDARD'
+        )
       );
+    if (body.action === 'submitRoadmap')
+      return NextResponse.json(await submitLesson(student.id, assignmentId, body.key, true));
     if (body.action === 'submit') return NextResponse.json(await submitLesson(student.id, assignmentId, body.key));
     throw new SubmissionError('Invalid action.', 400);
   } catch (e) {
