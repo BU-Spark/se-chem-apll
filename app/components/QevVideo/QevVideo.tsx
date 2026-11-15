@@ -28,6 +28,8 @@ interface QevVideoProps {
   playLocked?: boolean;
   // Called once the video reaches its end.
   onEnded?: () => void;
+  // Where to start, in seconds (to resume where the student left); counts as already watched.
+  startAt?: number;
 }
 
 // YouTube without its own controls or keyboard shortcuts, so students can't skip ahead.
@@ -108,16 +110,23 @@ const formatTime = (seconds: number) =>
  * only goes back (to anything already watched, never past the furthest point), Back 10 seconds,
  * slower speeds, and captions. It pauses when the student leaves the tab.
  */
-export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked = false, onEnded }: QevVideoProps) {
+export default function QevVideo({
+  videoUrl,
+  muxPlaybackId,
+  onReady,
+  playLocked = false,
+  onEnded,
+  startAt = 0,
+}: QevVideoProps) {
   const youTubeId = videoUrl ? parseYouTubeId(videoUrl) : null;
   const controlsRef = useRef<VideoControls | null>(null);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [captions, setCaptions] = useState(false);
-  const [progress, setProgress] = useState({ time: 0, duration: 0 });
+  const [progress, setProgress] = useState({ time: startAt, duration: 0 });
   const [ended, setEnded] = useState(false);
   // The furthest point watched: the student can go back to anything before it, never past it.
-  const [furthest, setFurthest] = useState(0);
+  const [furthest, setFurthest] = useState(startAt);
   const [speed, setSpeed] = useState(1);
   const [pausedAway, setPausedAway] = useState(false);
 
@@ -136,11 +145,16 @@ export default function QevVideo({ videoUrl, muxPlaybackId, onReady, playLocked 
           setPlaying(false);
         },
       };
+      // Jumping in a video that hasn't started makes YouTube play it, so pause it again.
+      if (startAt > 0) {
+        controls.seekTo(startAt);
+        controls.pause();
+      }
       controlsRef.current = tracked;
       setReady(true);
       onReady?.(tracked);
     },
-    [onReady]
+    [onReady, startAt]
   );
 
   // Keep the progress bar moving, and notice when the video reaches its end.

@@ -97,6 +97,24 @@ describe('QevVideo', () => {
     });
   });
 
+  it('starts where the student left, which counts as already watched', async () => {
+    jest.useFakeTimers();
+    render(<QevVideo {...youTube} startAt={30} />);
+    await act(async () => jest.advanceTimersByTime(0));
+    expect(ytPlayer.seekTo).toHaveBeenCalledWith(30, true);
+    // ...and stays paused until the student presses Play.
+    expect(ytPlayer.pauseVideo).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Play video' })).toBeInTheDocument();
+
+    // Seeking back works from there, but not past it.
+    time = 30;
+    await act(async () => jest.advanceTimersByTime(400));
+    const bar = screen.getByRole('slider', { name: 'Video position' });
+    fireEvent.change(bar, { target: { value: '90' } });
+    expect(ytPlayer.seekTo).toHaveBeenLastCalledWith(30, true);
+    jest.useRealTimers();
+  });
+
   it('slows down but never speeds up', async () => {
     render(<QevVideo {...youTube} />);
     const speed = await screen.findByRole('combobox', { name: 'Playback speed' });
