@@ -1,9 +1,9 @@
-import type { NodeStatus } from '@/app/utils/progressStatus';
+import type { LessonAvailability, NodeStatus } from '@/app/utils/progressStatus';
 import { prisma } from '@/lib/prisma';
 import { nodeKey, workNodeInclude } from '@/lib/submissions/content';
 import { evaluateWork } from '@/lib/submissions/workState';
-import { isLessonHidden, submissionStatus } from '@/app/utils/lessonSubmissionPolicy';
-import { asStudent } from '@/lib/studentCourses';
+import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
+import { asStudent, lessonAvailability } from '@/lib/studentCourses';
 import { toOutcomeNode } from '@/lib/nodeOutcomes';
 
 export interface RoadmapNode {
@@ -18,6 +18,8 @@ export interface RoadmapNode {
   currentContentKey: string;
   prerequisitesReady: boolean;
   openForWork: boolean;
+  // The student can open the node page (not locked ones; in a past-due lesson, every node, to review).
+  canOpen: boolean;
 }
 
 export interface RoadmapEdge {
@@ -50,6 +52,16 @@ export function computeNodeStatuses(
 }
 
 /**
+ * Whether a node's page can be opened. Past due, every node opens for review (videos and
+ * resources, no quiz). Before the open date, only finished ones. Otherwise, any unlocked node.
+ */
+export function canOpenNode(status: NodeStatus, availability: LessonAvailability) {
+  if (availability === 'CLOSED') return true;
+  if (status === 'LOCKED') return false;
+  return availability === 'OPEN' || status === 'COMPLETED' || status === 'INCOMPLETE';
+}
+
+/**
  * One lesson of a course as a node map for the student, or null when the student isn't
  * enrolled, or the lesson is a draft, hidden after its due date, or not in this course.
  */
@@ -68,11 +80,11 @@ export async function getStudentLessonRoadmap(
     },
     select: {
       openDate: true,
-      lateDeadline: true,
       latePenaltyType: true,
       latePenaltyPercent: true,
       progress: { where: { studentId }, select: { submissions: { take: 1, select: { id: true } } } },
       dueDate: true,
+      lateDeadline: true,
       hideAfterDue: true,
       course: { select: { title: true } },
       lesson: {
@@ -109,14 +121,17 @@ export async function getStudentLessonRoadmap(
   // Skip arrows to or from draft nodes, which students don't see.
   const edges = lessonNodeEdges.filter((edge) => nodeIds.has(edge.sourceId) && nodeIds.has(edge.targetId));
   const evaluation = evaluateWork(lessonNodes, attempts, Boolean(courseLesson.progress[0]?.submissions.length), edges);
-  const openForWork = ['ON_TIME', 'LATE'].includes(submissionStatus(courseLesson, now));
+  const availability = lessonAvailability(courseLesson, now);
+  const openForWork = availability === 'OPEN';
   const nodes: RoadmapNode[] = lessonNodes.map((lessonNode) => {
     const state = evaluation.states.find((s) => s.id === lessonNode.id)!;
+    const status =
+      state.outcome ?? (!state.prerequisitesReady ? 'LOCKED' : state.current.length ? 'IN_PROGRESS' : 'NOT_STARTED');
     return {
       ...toOutcomeNode(lessonNode),
       title: lessonNode.node.title,
-      status:
-        state.outcome ?? (!state.prerequisitesReady ? 'LOCKED' : state.current.length ? 'IN_PROGRESS' : 'NOT_STARTED'),
+      status,
+      canOpen: canOpenNode(status, availability),
       needsUpdatedWork: state.needsUpdatedWork,
       canImprove: openForWork && state.canImprove,
       improvementAttemptId: state.improvementAttemptId,
@@ -127,5 +142,14 @@ export async function getStudentLessonRoadmap(
     };
   });
 
-  return { courseTitle: courseLesson.course.title, lessonTitle: courseLesson.lesson.title, nodes, edges };
+  return {
+    courseTitle: courseLesson.course.title,
+    lessonTitle: courseLesson.lesson.title,
+    nodes,
+    edges,
+    availability,
+    // For the not-open/closed notice: when the lesson opens, or when it closes (the late deadline, if any).
+    availabilityDate:
+      availability === 'NOT_OPEN' ? courseLesson.openDate : (courseLesson.lateDeadline ?? courseLesson.dueDate),
+  };
 }

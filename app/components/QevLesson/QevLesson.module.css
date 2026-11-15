@@ -23,6 +23,18 @@
   margin-top: 1rem;
 }
 
+/* A note from the instructor: read, then Continue. Never answered or graded. */
+.note {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  background: var(--apll-sand);
+}
+
+.noteLabel {
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
 .videoColumn {
   display: flex;
   flex-direction: column;

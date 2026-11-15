@@ -10,6 +10,9 @@ import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
 
+// Dates as "Nov 7", in Boston time (where the course runs) so a late-evening due date isn't a day off.
+const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+
 interface PageProps {
   params: Promise<{ courseId: string; lessonId: string }>;
 }
@@ -33,7 +36,16 @@ export default async function StudentLessonPage({ params }: PageProps) {
         <p className={styles.course}>{roadmap.courseTitle}</p>
       </header>
 
-      {roadmap.nodes.some((node) => node.needsUpdatedWork) && (
+      {/* Past due: every node opens for review, without the quiz. Not open yet: nothing to start. */}
+      {roadmap.availability !== 'OPEN' && roadmap.availabilityDate && (
+        <p className={styles.notice}>
+          {roadmap.availability === 'CLOSED'
+            ? `This lesson closed on ${dayFormat.format(roadmap.availabilityDate)}. You can still review its nodes.`
+            : `This lesson opens on ${dayFormat.format(roadmap.availabilityDate)}.`}
+        </p>
+      )}
+
+      {roadmap.availability === 'OPEN' && roadmap.nodes.some((node) => node.needsUpdatedWork) && (
         <section aria-label="Updated work">
           <h2>Updated work required</h2>
           <p>Your earlier grades are retained. Complete the updated nodes to submit again.</p>
