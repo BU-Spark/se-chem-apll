@@ -33,11 +33,12 @@ export default async function StudentLessonPage({ params }: PageProps) {
         <p className={styles.course}>{roadmap.courseTitle}</p>
       </header>
 
-      {/* Not open yet or closed: the map stays visible, but unfinished nodes can't be started. */}
+      {/* Past due: every node opens for review, without the quiz. Not open yet: nothing to start. */}
       {roadmap.availability !== 'OPEN' && roadmap.availabilityDate && (
         <p className={styles.notice}>
-          {roadmap.availability === 'CLOSED' ? 'This lesson closed on' : 'This lesson opens on'}{' '}
-          {dayFormat.format(roadmap.availabilityDate)}.
+          {roadmap.availability === 'CLOSED'
+            ? `This lesson closed on ${dayFormat.format(roadmap.availabilityDate)}. You can still review its nodes.`
+            : `This lesson opens on ${dayFormat.format(roadmap.availabilityDate)}.`}
         </p>
       )}
 

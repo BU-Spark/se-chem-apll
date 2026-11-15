@@ -71,15 +71,21 @@ describe('computeNodeStatuses', () => {
 });
 
 describe('canOpenNode', () => {
-  it('opens unlocked nodes while the lesson is open, and only finished ones otherwise', () => {
+  it('opens unlocked nodes while the lesson is open', () => {
     expect(canOpenNode('NOT_STARTED', 'OPEN')).toBe(true);
     expect(canOpenNode('LOCKED', 'OPEN')).toBe(false);
-    for (const availability of ['CLOSED', 'NOT_OPEN'] as const) {
-      expect(canOpenNode('NOT_STARTED', availability)).toBe(false);
-      expect(canOpenNode('IN_PROGRESS', availability)).toBe(false);
-      expect(canOpenNode('COMPLETED', availability)).toBe(true);
-      expect(canOpenNode('INCOMPLETE', availability)).toBe(true);
+  });
+
+  it('opens every node of a past-due lesson for review, even locked ones', () => {
+    for (const status of ['LOCKED', 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'INCOMPLETE'] as const) {
+      expect(canOpenNode(status, 'CLOSED')).toBe(true);
     }
+  });
+
+  it('before the open date, opens only finished nodes', () => {
+    expect(canOpenNode('NOT_STARTED', 'NOT_OPEN')).toBe(false);
+    expect(canOpenNode('LOCKED', 'NOT_OPEN')).toBe(false);
+    expect(canOpenNode('COMPLETED', 'NOT_OPEN')).toBe(true);
   });
 });
 
@@ -173,13 +179,13 @@ describe('getStudentLessonRoadmap', () => {
     expect((await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now))!.nodes[0].status).toBe('IN_PROGRESS');
   });
 
-  it('marks a closed lesson, with its close date, and only lets finished nodes open', async () => {
+  it('marks a closed lesson, with its close date, and lets every node open for review', async () => {
     const due = new Date('2026-10-20T00:00:00Z');
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson({ dueDate: due, lateDeadline: null }));
     mockAttemptFindMany.mockResolvedValue([quiz('ln1', true)]);
     const roadmap = await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now);
     expect(roadmap).toMatchObject({ availability: 'CLOSED', availabilityDate: due });
-    expect(roadmap!.nodes.map((node) => node.canOpen)).toEqual([true, false]);
+    expect(roadmap!.nodes.map((node) => node.canOpen)).toEqual([true, true]);
   });
 
   it('uses the late deadline as the close date when there is one', async () => {

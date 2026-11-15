@@ -3,7 +3,16 @@ import { prisma } from '@/lib/prisma';
 import { courseProgressPercent, getStudentCourse } from '@/lib/studentCourses';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 
-export type NodeScreen = 'LOCKED' | 'COMPLETE' | 'INCOMPLETE' | 'INTRO' | 'QUIZ' | 'REFRESH' | 'RETRY' | 'VIDEO_RESULT';
+export type NodeScreen =
+  | 'LOCKED'
+  | 'CLOSED'
+  | 'COMPLETE'
+  | 'INCOMPLETE'
+  | 'INTRO'
+  | 'QUIZ'
+  | 'REFRESH'
+  | 'RETRY'
+  | 'VIDEO_RESULT';
 
 export interface NodeHistory {
   isFoundational: boolean;
@@ -114,18 +123,22 @@ export async function getStudentNode(
   );
   const videoScore = scoreOf(videoSinceFail);
 
+  // Nodes the map can't open show as locked; past due, every node shows the review screen.
+  let screen: NodeScreen;
+  if (!node.canOpen) screen = 'LOCKED';
+  else if (roadmap.availability === 'CLOSED') screen = 'CLOSED';
+  else
+    screen = nodeScreen(node.status, {
+      isFoundational: node.isFoundational,
+      failedQuizzes: failedQuizzes.length,
+      watchedVideoSinceFail: Boolean(videoSinceFail),
+    });
+
   return {
     courseTitle: roadmap.courseTitle,
     lessonTitle: roadmap.lessonTitle,
     node: { ...node, learningObjectives: details.node.learningObjectives },
-    // A node the map can't open (locked, or unfinished in a closed lesson) shows as locked.
-    screen: node.canOpen
-      ? nodeScreen(node.status, {
-          isFoundational: node.isFoundational,
-          failedQuizzes: failedQuizzes.length,
-          watchedVideoSinceFail: Boolean(videoSinceFail),
-        })
-      : 'LOCKED',
+    screen,
     lastQuiz: scoreOf(quizzes[0]),
     // Video questions passed by the same pass mark as the node's quiz.
     lastVideo: videoScore && {

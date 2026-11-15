@@ -39,6 +39,10 @@ jest.mock('@/app/components/NodeIncomplete/NodeIncomplete', () => ({
   __esModule: true,
   default: () => <div>node incomplete</div>,
 }));
+jest.mock('@/app/components/NodeClosed/NodeClosed', () => ({
+  __esModule: true,
+  default: ({ videoUrl }: { videoUrl: string | null }) => <div>node closed, review {videoUrl}</div>,
+}));
 jest.mock('@/app/components/VideoResult/VideoResult', () => ({
   __esModule: true,
   default: ({ passed, quizHref }: { passed: boolean; quizHref: string }) => (
@@ -62,6 +66,7 @@ const view = (
   screen: screenName,
   lastQuiz,
   lastVideo: { correct: 4, total: 5, passed: true },
+  video: { url: 'https://youtu.be/abc', muxPlaybackId: null },
   coursePercent: 10,
 });
 
@@ -78,6 +83,7 @@ describe('StudentNodePage', () => {
     ['VIDEO_RESULT', { correct: 1, total: 5 }, 'video passed then /student/courses/c1/lessons/cl1/nodes/ln1/quiz'],
     ['RETRY', { correct: 1, total: 5 }, 'keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/video'],
     ['INCOMPLETE', { correct: 1, total: 5 }, 'node incomplete'],
+    ['CLOSED', { correct: 1, total: 5 }, 'node closed, review https://youtu.be/abc'],
   ])('shows the %s screen', async (screenName, lastQuiz, text) => {
     mockGetStudentNode.mockResolvedValue(view(screenName, lastQuiz));
     render(await StudentNodePage({ params }));

@@ -187,17 +187,23 @@ describe('getStudentNode', () => {
     });
   });
 
-  it('shows an unfinished node of a closed lesson as locked, so it cannot be started', async () => {
-    mockGetStudentLessonRoadmap.mockResolvedValue({
-      courseTitle: 'Course #3',
-      lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'IN_PROGRESS', canOpen: false }],
-      edges: [],
-      availability: 'CLOSED',
-    });
-    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
-    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'LOCKED' });
-  });
+  it.each(['LOCKED', 'IN_PROGRESS', 'COMPLETED'])(
+    'shows a %s node of a past-due lesson the review screen, never the quiz or video lesson',
+    async (status) => {
+      mockGetStudentLessonRoadmap.mockResolvedValue({
+        courseTitle: 'Course #3',
+        lessonTitle: 'Lesson 2',
+        nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status, canOpen: true }],
+        edges: [],
+        availability: 'CLOSED',
+      });
+      mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+      const view = await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1');
+      expect(view).toMatchObject({ screen: 'CLOSED' });
+      expect(canWatchVideo(view!.screen)).toBe(false);
+      expect(canOpenQuiz(view!.screen, false, false)).toBe(false);
+    }
+  );
 
   it('shows the quiz when the node has not been tried yet', async () => {
     mockAttemptFindMany.mockResolvedValue([]);

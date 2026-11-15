@@ -9,7 +9,7 @@ export interface RoadmapNode {
   title: string;
   isFoundational: boolean;
   status: NodeStatus;
-  // The student can open the node page (locked nodes can't; in a closed lesson, only finished ones).
+  // The student can open the node page (not locked ones; in a past-due lesson, every node, to review).
   canOpen: boolean;
 }
 
@@ -42,9 +42,12 @@ export function computeNodeStatuses(
   return statuses;
 }
 
-// Whether a node's page can be opened: not locked, and while the lesson isn't open, only to see
-// the result of a finished node.
+/**
+ * Whether a node's page can be opened. Past due, every node opens for review (videos and
+ * resources, no quiz). Before the open date, only finished ones. Otherwise, any unlocked node.
+ */
 export function canOpenNode(status: NodeStatus, availability: LessonAvailability) {
+  if (availability === 'CLOSED') return true;
   if (status === 'LOCKED') return false;
   return availability === 'OPEN' || status === 'COMPLETED' || status === 'INCOMPLETE';
 }

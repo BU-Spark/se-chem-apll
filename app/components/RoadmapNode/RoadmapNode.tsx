@@ -7,7 +7,7 @@ interface RoadmapNodeProps {
   title: string;
   isFoundational: boolean;
   status: NodeStatus;
-  // Where the node opens. Without one (locked, or a closed lesson) the node is unavailable:
+  // Where the node opens. Without one (locked, or before the lesson opens) the node is unavailable:
   // it can still be focused to read its tooltip, but does nothing.
   href?: string;
 }

@@ -63,7 +63,7 @@ describe('StudentLessonPage', () => {
       availabilityDate: new Date('2026-11-08T04:59:00Z'),
     });
     const { unmount } = render(await StudentLessonPage({ params }));
-    expect(screen.getByText('This lesson closed on Nov 7.')).toBeInTheDocument();
+    expect(screen.getByText('This lesson closed on Nov 7. You can still review its nodes.')).toBeInTheDocument();
     unmount();
 
     mockGetStudentLessonRoadmap.mockResolvedValue({
