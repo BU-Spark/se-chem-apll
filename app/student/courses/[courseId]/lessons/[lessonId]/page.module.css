@@ -32,6 +32,13 @@
 
 /* Wide maps scroll sideways instead of overflowing the page. A scrolling area clips what
    sticks out of it, so the padding leaves room for tooltips on the first/last nodes and below. */
+.notice {
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--apll-sand);
+  font-weight: 600;
+}
+
 .scroller {
   max-width: 100%;
   overflow-x: auto;

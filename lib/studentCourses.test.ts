@@ -4,6 +4,7 @@ import {
   getEnrolledCourses,
   getStudentCourse,
   getStudentInstructors,
+  lessonAvailability,
   type StudentLesson,
 } from './studentCourses';
 
@@ -71,6 +72,7 @@ describe('courseProgressPercent', () => {
     number: 1,
     title: '',
     status: 'IN_PROGRESS',
+    availability: 'OPEN',
     nodeCount,
     finishedNodeCount,
   });
@@ -167,8 +169,24 @@ describe('getStudentCourse', () => {
       title: 'Chem',
       description: 'Intro',
       lessons: [
-        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED', nodeCount: 0, finishedNodeCount: 0 },
-        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED', nodeCount: 0, finishedNodeCount: 0 },
+        {
+          id: 'a',
+          number: 1,
+          title: 'Title a',
+          status: 'COMPLETED',
+          availability: 'OPEN',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+        },
+        {
+          id: 'b',
+          number: 2,
+          title: 'Title b',
+          status: 'NOT_STARTED',
+          availability: 'OPEN',
+          nodeCount: 0,
+          finishedNodeCount: 0,
+        },
       ],
     });
   });
@@ -220,12 +238,34 @@ describe('getStudentCourse lesson status from nodes', () => {
   });
 });
 
+describe('lessonAvailability', () => {
+  const dates = { openDate: null, dueDate: null, lateDeadline: null, hideAfterDue: false };
+  const now = new Date('2026-11-08T12:00:00Z');
+
+  it('is open without dates, and while on time or late', () => {
+    expect(lessonAvailability(dates, now)).toBe('OPEN');
+    expect(lessonAvailability({ ...dates, dueDate: new Date('2026-11-10') }, now)).toBe('OPEN');
+    expect(
+      lessonAvailability({ ...dates, dueDate: new Date('2026-11-07'), lateDeadline: new Date('2026-11-09') }, now)
+    ).toBe('OPEN');
+  });
+
+  it('is not open before the open date, and closed after the due date or late deadline', () => {
+    expect(lessonAvailability({ ...dates, openDate: new Date('2026-11-10') }, now)).toBe('NOT_OPEN');
+    expect(lessonAvailability({ ...dates, dueDate: new Date('2026-11-07') }, now)).toBe('CLOSED');
+    expect(
+      lessonAvailability({ ...dates, dueDate: new Date('2026-11-01'), lateDeadline: new Date('2026-11-07') }, now)
+    ).toBe('CLOSED');
+  });
+});
+
 describe('findCurrentLesson', () => {
   const lesson = (id: string, status: StudentLesson['status']): StudentLesson => ({
     id,
     number: 1,
     title: id,
     status,
+    availability: 'OPEN',
     nodeCount: 1,
     finishedNodeCount: status === 'COMPLETED' ? 1 : 0,
   });

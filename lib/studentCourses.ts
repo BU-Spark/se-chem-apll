@@ -1,15 +1,25 @@
 import type { LessonStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
+import { isLessonHidden, submissionStatus, type LessonPolicy } from '@/app/utils/lessonSubmissionPolicy';
+import type { LessonAvailability } from '@/app/utils/progressStatus';
 import { countFinishedNodes, toOutcomeNode, type FinishedQuiz } from '@/lib/nodeOutcomes';
 
 export const asStudent = (studentId: string) => ({ studentId, role: 'STUDENT' as const });
+
+type LessonDates = Pick<LessonPolicy, 'openDate' | 'dueDate' | 'lateDeadline' | 'hideAfterDue'>;
+
+// Whether students can work on a lesson now, by the same rule the attempt API uses.
+export function lessonAvailability(dates: LessonDates, now: Date): LessonAvailability {
+  const status = submissionStatus(dates, now);
+  return status === 'NOT_OPEN' || status === 'CLOSED' ? status : 'OPEN';
+}
 
 export interface StudentLesson {
   id: string;
   number: number;
   title: string;
   status: LessonStatus;
+  availability: LessonAvailability;
   // Nodes in the lesson, and how many of them the student finished (completed or incomplete).
   nodeCount: number;
   finishedNodeCount: number;
@@ -22,7 +32,9 @@ const visibleLessonsQuery = (studentId: string) => ({
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
+    openDate: true,
     dueDate: true,
+    lateDeadline: true,
     hideAfterDue: true,
     lesson: {
       select: {
@@ -48,10 +60,8 @@ const courseWithLessonsQuery = (studentId: string) => ({
   select: { id: true, title: true, description: true, courseLessons: visibleLessonsQuery(studentId) },
 });
 
-type CourseLessonRow = {
+type CourseLessonRow = LessonDates & {
   id: string;
-  dueDate: Date | null;
-  hideAfterDue: boolean;
   lesson: { title: string; lessonNodes: { id: string; isRequired: boolean }[] };
   progress: { status: LessonStatus; attempts: FinishedQuiz[] }[];
 };
@@ -77,6 +87,7 @@ function toStudentLessons(courseLessons: CourseLessonRow[], now: Date): StudentL
       id: courseLesson.id,
       number: index + 1,
       title: courseLesson.lesson.title,
+      availability: lessonAvailability(courseLesson, now),
       ...lessonProgress(courseLesson),
     }));
 }
