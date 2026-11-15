@@ -25,8 +25,10 @@ declare global {
 export type YTPlayer = {
   getCurrentTime: () => number;
   getDuration: () => number;
+  getPlayerState: () => number;
   pauseVideo: () => void;
   playVideo: () => void;
+  setPlaybackRate: (rate: number) => void;
   // Show or hide captions ('captions' module).
   loadModule: (module: string) => void;
   unloadModule: (module: string) => void;

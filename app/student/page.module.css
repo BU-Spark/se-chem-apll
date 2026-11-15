@@ -34,3 +34,24 @@
 .empty {
   color: var(--apll-text);
 }
+
+.join {
+  width: min(100%, 24rem);
+  color: var(--apll-text);
+}
+
+.joinFields {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.joinFields input {
+  min-width: 0;
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  font: inherit;
+  text-transform: uppercase;
+}

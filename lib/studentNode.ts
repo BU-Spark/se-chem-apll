@@ -3,7 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { courseProgressPercent, getStudentCourse } from '@/lib/studentCourses';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 
-export type NodeScreen = 'LOCKED' | 'COMPLETE' | 'INCOMPLETE' | 'INTRO' | 'QUIZ' | 'REFRESH' | 'RETRY' | 'VIDEO_RESULT';
+export type NodeScreen =
+  | 'LOCKED'
+  | 'CLOSED'
+  | 'COMPLETE'
+  | 'INCOMPLETE'
+  | 'INTRO'
+  | 'QUIZ'
+  | 'REFRESH'
+  | 'RETRY'
+  | 'VIDEO_RESULT';
+
+/**
+ * One pause in a node's video, in the instructor's order. A question's content comes from the
+ * student's attempt; a note carries its text and is only shown, never answered or graded.
+ * at: seconds into the video, or null for after the video ends.
+ */
+export type TimelineItem =
+  | { kind: 'QUESTION'; id: string; at: number | null }
+  | { kind: 'NOTE'; id: string; at: number | null; prompt: string };
 
 export interface NodeHistory {
   isFoundational: boolean;
@@ -43,7 +61,7 @@ export const canWatchVideo = (screen: NodeScreen) =>
 /**
  * The quiz page opens after the video lesson. A regular node's retry goes straight back to it.
  * A video without questions leaves no record, so the server can't check it was watched: the
- * video page only shows Continue once the video ends (WatchVideo).
+ * video lesson only shows Continue once the video ends.
  */
 export const canOpenQuiz = (screen: NodeScreen, hasVideoQuestions: boolean, isFoundational: boolean) =>
   screen === 'VIDEO_RESULT' || (screen === 'RETRY' && !isFoundational) || (canWatchVideo(screen) && !hasVideoQuestions);
@@ -70,7 +88,7 @@ export async function getStudentNode(
   const node = roadmap?.nodes.find((roadmapNode) => roadmapNode.id === lessonNodeId);
   if (!roadmap || !node) return null;
 
-  const [details, attempts, course] = await Promise.all([
+  const [details, attempts, videoProgress, course] = await Promise.all([
     // The roadmap above already found this node, so it exists.
     prisma.lessonNode.findUniqueOrThrow({
       where: { id: lessonNodeId },
@@ -85,7 +103,7 @@ export async function getStudentNode(
               orderBy: { sortOrder: 'asc' },
               select: {
                 timeOffsetSeconds: true,
-                questions: { where: { kind: 'QUESTION' }, select: { id: true } },
+                questions: { orderBy: { sortOrder: 'asc' }, select: { id: true, kind: true, prompt: true } },
               },
             },
           },
@@ -103,6 +121,10 @@ export async function getStudentNode(
       orderBy: { completedAt: 'desc' },
       select: { kind: true, isPassing: true, completedAt: true, responses: { select: { isCorrect: true } } },
     }),
+    prisma.nodeVideoProgress.findUnique({
+      where: { studentId_courseLessonId_lessonNodeId: { studentId, courseLessonId, lessonNodeId } },
+      select: { positionSeconds: true, watchedAt: true, updatedAt: true },
+    }),
     getStudentCourse(studentId, courseId),
   ]);
 
@@ -113,16 +135,34 @@ export async function getStudentNode(
     (attempt) => attempt.kind === 'CHECKPOINT' && (!lastFailAt || attempt.completedAt! > lastFailAt)
   );
   const videoScore = scoreOf(videoSinceFail);
+  const timeline: TimelineItem[] = details.node.checkpoints.flatMap((checkpoint) =>
+    checkpoint.questions.map(({ id, kind, prompt }) =>
+      kind === 'NOTE'
+        ? { kind, id, at: checkpoint.timeOffsetSeconds, prompt }
+        : { kind, id, at: checkpoint.timeOffsetSeconds }
+    )
+  );
+  const hasVideoQuestions = timeline.some((item) => item.kind === 'QUESTION');
+  // A video without questions has no attempt, so its saved watch shows it was watched.
+  const watchedAt = videoProgress?.watchedAt;
+  const watchedWithoutQuestions = !hasVideoQuestions && watchedAt != null && (!lastFailAt || watchedAt > lastFailAt);
+
+  // Nodes the map can't open show as locked; past due, every node shows the review screen.
+  let screen: NodeScreen;
+  if (!node.canOpen) screen = 'LOCKED';
+  else if (roadmap.availability === 'CLOSED') screen = 'CLOSED';
+  else
+    screen = nodeScreen(node.status, {
+      isFoundational: node.isFoundational,
+      failedQuizzes: failedQuizzes.length,
+      watchedVideoSinceFail: Boolean(videoSinceFail) || watchedWithoutQuestions,
+    });
 
   return {
     courseTitle: roadmap.courseTitle,
     lessonTitle: roadmap.lessonTitle,
     node: { ...node, learningObjectives: details.node.learningObjectives },
-    screen: nodeScreen(node.status, {
-      isFoundational: node.isFoundational,
-      failedQuizzes: failedQuizzes.length,
-      watchedVideoSinceFail: Boolean(videoSinceFail),
-    }),
+    screen,
     lastQuiz: scoreOf(quizzes[0]),
     // Video questions passed by the same pass mark as the node's quiz.
     lastVideo: videoScore && {
@@ -130,13 +170,11 @@ export async function getStudentNode(
       passed: videoScore.total === 0 || (100 * videoScore.correct) / videoScore.total >= details.passingPercent,
     },
     video: { url: details.node.videoUrl, muxPlaybackId: details.node.muxPlaybackId },
-    // When each video question appears, in seconds; null means after the video ends.
-    questionTimes: Object.fromEntries(
-      details.node.checkpoints.flatMap((checkpoint) =>
-        checkpoint.questions.map((question) => [question.id, checkpoint.timeOffsetSeconds])
-      )
-    ) as Record<string, number | null>,
-    hasVideoQuestions: details.node.checkpoints.some((checkpoint) => checkpoint.questions.length > 0),
+    timeline,
+    hasVideoQuestions,
+    // Where the student left the video this round; a failed quiz since then starts it over.
+    resumeAt:
+      videoProgress && (!lastFailAt || videoProgress.updatedAt > lastFailAt) ? videoProgress.positionSeconds : 0,
     coursePercent: courseProgressPercent(course?.lessons ?? []),
   };
 }

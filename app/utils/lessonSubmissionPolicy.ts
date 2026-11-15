@@ -80,7 +80,10 @@ export function isLessonHidden(policy: Pick<LessonPolicy, 'hideAfterDue' | 'dueD
 }
 
 /** Call with server submission time and the specific course assignment when submissions are implemented. */
-export function submissionStatus(policy: LessonPolicy, submittedAt: Date): 'NOT_OPEN' | 'ON_TIME' | 'LATE' | 'CLOSED' {
+export function submissionStatus(
+  policy: Pick<LessonPolicy, 'openDate' | 'dueDate' | 'lateDeadline' | 'hideAfterDue'>,
+  submittedAt: Date
+): 'NOT_OPEN' | 'ON_TIME' | 'LATE' | 'CLOSED' {
   if (!Number.isFinite(submittedAt.getTime())) throw new Error('Submission time must be valid.');
   if (policy.openDate && submittedAt < policy.openDate) return 'NOT_OPEN';
   if (!policy.dueDate || submittedAt <= policy.dueDate) return 'ON_TIME';

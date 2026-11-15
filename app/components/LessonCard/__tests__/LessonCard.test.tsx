@@ -28,6 +28,34 @@ describe('LessonCard', () => {
     expect(screen.getByText('Not yet open')).toBeVisible();
   });
 
+  it('adds "Closed" or "Not open yet" to the status', () => {
+    const { rerender } = render(
+      <LessonCard
+        number={1}
+        title="Atoms"
+        status="NOT_STARTED"
+        availability="CLOSED"
+        isCurrent={false}
+        href="/l"
+        submission={submission}
+      />
+    );
+    expect(screen.getByRole('link', { name: /Lesson 1: Atoms Not started · Closed/ })).toBeInTheDocument();
+
+    rerender(
+      <LessonCard
+        number={1}
+        title="Atoms"
+        status="NOT_STARTED"
+        availability="NOT_OPEN"
+        isCurrent={false}
+        href="/l"
+        submission={submission}
+      />
+    );
+    expect(screen.getByRole('link', { name: /Lesson 1: Atoms Not started · Not open yet/ })).toBeInTheDocument();
+  });
+
   it('marks the current lesson', () => {
     render(
       <LessonCard number={1} title="Atoms" status="NOT_STARTED" isCurrent href="/lesson" submission={submission} />

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { apiAccess, contentScope } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 
@@ -75,12 +76,19 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'This student is already enrolled in the course' }, { status: 409 });
   }
 
-  const enrollment = await prisma.enrollment.create({
-    data: { studentId: student.id, courseId, role: 'STUDENT' },
-    include: { student: true },
-  });
-
-  return NextResponse.json(enrollment, { status: 201 });
+  try {
+    const enrollment = await prisma.enrollment.create({
+      data: { studentId: student.id, courseId, role: 'STUDENT' },
+      include: { student: true },
+    });
+    return NextResponse.json(enrollment, { status: 201 });
+  } catch (error) {
+    // A student can also join with a code between the duplicate check and the insert.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: 'This student is already enrolled in the course' }, { status: 409 });
+    }
+    throw error;
+  }
 }
 
 // DELETE /api/instructor/courses/[courseId]/enrollments
