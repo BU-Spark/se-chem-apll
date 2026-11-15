@@ -24,10 +24,11 @@ describe('StudentBottomNav', () => {
 
   it('highlights the current page instead of linking it', () => {
     mockPathname = '/student/profile';
-    render(<StudentBottomNav />);
+    const { container } = render(<StudentBottomNav />);
 
     expect(screen.queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
-    expect(screen.getByText('Profile').parentElement).toHaveAttribute('aria-current', 'page');
+    // Whatever element is marked as the current page, however the label is nested inside it.
+    expect(container.querySelector('[aria-current="page"]')).toHaveTextContent('Profile');
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/student');
   });
 

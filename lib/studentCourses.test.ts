@@ -311,8 +311,25 @@ describe('getLessonsToDo', () => {
     expect(lessons[0]).toMatchObject({ courseId: 'c2', dueDate: new Date('2026-11-20T00:00:00Z') });
   });
 
-  it('is empty when everything is done', async () => {
+  it('returns an empty list when the student has no enrollments', async () => {
     mockEnrollmentFindMany.mockResolvedValue([]);
+    expect(await getLessonsToDo('student-1', now)).toEqual([]);
+  });
+
+  it('returns an empty list when every lesson is completed or past due', async () => {
+    mockEnrollmentFindMany.mockResolvedValue([
+      {
+        course: {
+          id: 'c1',
+          title: 'Chem 101',
+          description: null,
+          courseLessons: [
+            courseLesson('done', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
+            courseLesson('past-due', { dueDate: new Date('2026-11-01T00:00:00Z') }),
+          ],
+        },
+      },
+    ]);
     expect(await getLessonsToDo('student-1', now)).toEqual([]);
   });
 });

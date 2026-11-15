@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import StudentLessonsPage from './page';
 
 const mockGetLessonsToDo = jest.fn();
@@ -28,13 +28,13 @@ describe('StudentLessonsPage', () => {
 
     expect(mockGetLessonsToDo).toHaveBeenCalledWith('student-1');
     expect(screen.getByRole('heading', { name: 'Lessons' })).toBeInTheDocument();
-    const links = screen.getAllByRole('link');
+    const links = within(screen.getByRole('list')).getAllByRole('link');
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/student/courses/c1/lessons/a',
       '/student/courses/c1/lessons/b',
     ]);
-    expect(links[0]).toHaveTextContent('AtomsChem 101Due Nov 20 · In progress');
-    expect(links[1]).toHaveTextContent('No due date · Not started');
+    for (const text of ['Atoms', 'Chem 101', 'Due Nov 20', 'In progress']) expect(links[0]).toHaveTextContent(text);
+    for (const text of ['Bonds', 'No due date', 'Not started']) expect(links[1]).toHaveTextContent(text);
   });
 
   it('says so when there is nothing left to do', async () => {
