@@ -23,13 +23,14 @@ export const CHECKPOINT_CSV_HEADERS = [
 ] as const;
 export const CHECKPOINT_CSV_MAX_BYTES = 2 * 1024 * 1024;
 export const CHECKPOINT_CSV_MAX_ROWS = 5000;
-export type CheckpointCsvResult = { checkpoints: FormCheckpoint[]; errors: CsvRowError[] };
+export type CheckpointCsvResult = { checkpoints: FormCheckpoint[]; errors: CsvRowError[]; warnings: CsvRowError[] };
 
 export function csvToCheckpoints(text: string): CheckpointCsvResult {
   const errors: CsvRowError[] = [];
+  const warnings: CsvRowError[] = [];
   const fail = (row: number, message: string) => errors.push({ row, message: `Record ${row}: ${message}` });
   if (new Blob([text]).size > CHECKPOINT_CSV_MAX_BYTES)
-    return { checkpoints: [], errors: [{ row: 1, message: 'The file limit is 2 MB.' }] };
+    return { checkpoints: [], errors: [{ row: 1, message: 'The file limit is 2 MB.' }], warnings };
   const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
   parsed.errors.forEach((error) => fail((error.row ?? 0) + 1, error.message));
   const [headers = [], ...rows] = parsed.data;
@@ -47,7 +48,7 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
   });
   if (!rows.length) fail(1, 'The file must contain at least one item.');
   if (rows.length > CHECKPOINT_CSV_MAX_ROWS) fail(1, `The limit is ${CHECKPOINT_CSV_MAX_ROWS} records.`);
-  if (errors.length) return { checkpoints: [], errors };
+  if (errors.length) return { checkpoints: [], errors, warnings };
   const groups = new Map<
     string,
     { checkpoint: FormCheckpoint; order: number; items: Map<number, FormCheckpoint['questions'][number]>; row: number }
@@ -74,10 +75,6 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
       fail(record, `${key}: checkpoint_order and item_order must be positive integers.`);
       return;
     }
-    if (seconds && !integer(seconds, 0)) {
-      fail(record, `${key}: checkpoint_seconds must be a non-negative whole number or blank.`);
-      return;
-    }
     let group = groups.get(key);
     if (!group) {
       group = {
@@ -96,7 +93,12 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
     }
     if (group.order !== Number(groupOrder)) fail(record, `${key}: conflicting checkpoint_order.`);
     if (group.items.has(Number(itemOrder))) fail(record, `${key}: duplicate item_order ${itemOrder}.`);
-    if (seconds) {
+    if (seconds && !integer(seconds, 0)) {
+      warnings.push({
+        row: record,
+        message: `Record ${record}: Ignored an invalid timestamp for ${key}. Use a non-negative whole number of seconds or assign a time after importing.`,
+      });
+    } else if (seconds) {
       if (group.checkpoint.timeOffsetSeconds !== null && group.checkpoint.timeOffsetSeconds !== Number(seconds))
         fail(record, `${key}: conflicting checkpoint_seconds.`);
       group.checkpoint.timeOffsetSeconds = Number(seconds);
@@ -152,7 +154,7 @@ export function csvToCheckpoints(text: string): CheckpointCsvResult {
         questions: [...group.items.entries()].sort(([a], [b]) => a - b).map(([, item]) => item),
       };
     });
-  return { checkpoints: errors.length ? [] : checkpoints, errors };
+  return { checkpoints: errors.length ? [] : checkpoints, errors, warnings };
 }
 
 export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
@@ -203,6 +205,7 @@ export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
   const csv = Papa.unparse(rows, { newline: '\n' });
   const roundTrip = csvToCheckpoints(csv);
   if (roundTrip.errors.length) throw new Error(roundTrip.errors[0].message);
+  if (roundTrip.warnings.length) throw new Error(roundTrip.warnings[0].message);
   return csv;
 }
 
