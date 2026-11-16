@@ -6,6 +6,8 @@ export type QuestionSnapshot = {
   prompt: string;
   options: unknown;
   correctIndices: number[];
+  feedbackCorrect?: string | null;
+  feedbackIncorrect?: string | null;
   variantId?: string;
   variantValues?: Record<string, string>;
 };
