@@ -279,17 +279,20 @@ export async function startAttempt(
       passingPercent: node.passingPercent,
       kind,
       questions: questions.map((q) => {
+        const { id, prompt, options, correctIndices, feedbackCorrect, feedbackIncorrect } = q;
         const variants = quizVariantOptions(q);
         if (variants) {
           if (kind !== 'QUIZ') throw new SubmissionError('Checkpoint variants are not supported.', 409);
-          const error = validateQuizVariants(q.prompt, variants);
+          const error = validateQuizVariants(prompt, variants);
           if (error) throw new SubmissionError(`Invalid question variants. ${error}`, 409);
           return {
-            id: q.id,
-            ...resolveQuizVariant(q.prompt, variants, randomInt(variants.variants.length)),
+            id,
+            ...resolveQuizVariant(prompt, variants, randomInt(variants.variants.length)),
+            feedbackCorrect,
+            feedbackIncorrect,
           };
         }
-        return { id: q.id, prompt: q.prompt, options: q.options, correctIndices: q.correctIndices };
+        return { id, prompt, options, correctIndices, feedbackCorrect, feedbackIncorrect };
       }),
     };
     return publicAttempt(
