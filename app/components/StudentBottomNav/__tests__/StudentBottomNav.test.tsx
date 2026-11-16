@@ -13,21 +13,22 @@ describe('StudentBottomNav', () => {
     expect(screen.getByText('Home').parentElement).toHaveAttribute('aria-current', 'page');
   });
 
-  it('links Profile and Settings to their pages and Lessons to the coming soon page', () => {
+  it('links Lessons, Profile and Settings to their pages', () => {
     mockPathname = '/student';
     render(<StudentBottomNav />);
 
     expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/student/profile');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/student/settings');
-    expect(screen.getByRole('link', { name: 'Lessons' })).toHaveAttribute('href', '/student/coming-soon');
+    expect(screen.getByRole('link', { name: 'Lessons' })).toHaveAttribute('href', '/student/lessons');
   });
 
   it('highlights the current page instead of linking it', () => {
     mockPathname = '/student/profile';
-    render(<StudentBottomNav />);
+    const { container } = render(<StudentBottomNav />);
 
     expect(screen.queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
-    expect(screen.getByText('Profile').parentElement).toHaveAttribute('aria-current', 'page');
+    // Whatever element is marked as the current page, however the label is nested inside it.
+    expect(container.querySelector('[aria-current="page"]')).toHaveTextContent('Profile');
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/student');
   });
 
