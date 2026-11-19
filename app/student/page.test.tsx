@@ -32,12 +32,18 @@ describe('StudentHomePage', () => {
     ]);
   });
 
-  it("greets the student and loads the student's courses", async () => {
+  it("greets the student by first name and loads the student's courses", async () => {
     render(await StudentHomePage());
 
-    expect(screen.getByRole('heading', { name: 'Welcome Student' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome, Student' })).toBeInTheDocument();
     expect(screen.getByText('My courses')).toBeInTheDocument();
     expect(mockGetEnrolledCourses).toHaveBeenCalledWith('student-1');
+  });
+
+  it('greets by email when the student has no name', async () => {
+    mockRequireStudent.mockResolvedValue({ id: 'student-1', name: null, email: 'student@example.com' });
+    render(await StudentHomePage());
+    expect(screen.getByRole('heading', { name: 'Welcome, student@example.com' })).toBeInTheDocument();
   });
 
   it("shows each course card with its progress, linked to that course's page", async () => {
