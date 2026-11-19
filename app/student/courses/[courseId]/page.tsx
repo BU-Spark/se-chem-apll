@@ -48,6 +48,7 @@ export default async function StudentCoursePage({ params }: PageProps) {
               availability={lesson.availability}
               isCurrent={lesson.id === currentLesson?.id}
               href={ROUTES.studentLesson(course.id, lesson.id)}
+              submission={lesson.submission}
             />
           ))}
         </nav>

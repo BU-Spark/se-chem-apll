@@ -25,12 +25,10 @@
 }
 
 .lessons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: 1.25rem;
-  /* Room below the row for the current lesson's tooltip. */
-  padding-bottom: 6rem;
+  width: min(100%, 60rem);
 }
 
 .empty {

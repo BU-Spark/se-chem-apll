@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { isLessonHidden, submissionStatus, type LessonPolicy } from '@/app/utils/lessonSubmissionPolicy';
 import type { LessonAvailability } from '@/app/utils/progressStatus';
 import { countFinishedNodes, toOutcomeNode, type FinishedQuiz } from '@/lib/nodeOutcomes';
+import { bestSubmissionSelect, lessonPolicySelect, studentLessonSubmission } from '@/lib/studentLessonSubmission';
 
 export const asStudent = (studentId: string) => ({ studentId, role: 'STUDENT' as const });
 
@@ -61,8 +62,7 @@ const courseWithLessonsQuery = (studentId: string) => ({
   select: { id: true, title: true, description: true, courseLessons: visibleLessonsQuery(studentId) },
 });
 
-type CourseLessonRow = LessonDates & {
-  id: string;
+type CourseLessonRow = {
   lesson: { title: string; lessonNodes: { id: string; isRequired: boolean }[] };
   progress: { status: LessonStatus; attempts: FinishedQuiz[] }[];
 };
@@ -95,7 +95,7 @@ function toStudentLessons(courseLessons: CourseLessonRow[], now: Date): StudentL
 }
 
 // Finished nodes out of all nodes in the course's lessons, as a whole percentage (0 without nodes).
-export function courseProgressPercent(lessons: StudentLesson[]) {
+export function courseProgressPercent(lessons: Pick<StudentLesson, 'nodeCount' | 'finishedNodeCount'>[]) {
   const total = lessons.reduce((sum, lesson) => sum + lesson.nodeCount, 0);
   const finished = lessons.reduce((sum, lesson) => sum + lesson.finishedNodeCount, 0);
   return total === 0 ? 0 : Math.round((finished / total) * 100);
@@ -114,7 +114,9 @@ export async function getEnrolledCourses(studentId: string, now = new Date()) {
   const enrollments = await enrolledCoursesWithLessons(studentId);
   return enrollments.map(({ course: { courseLessons, ...course } }) => ({
     ...course,
-    progressPercent: courseProgressPercent(toStudentLessons(courseLessons, now)),
+    progressPercent: courseProgressPercent(
+      courseLessons.filter((courseLesson) => !isLessonHidden(courseLesson, now)).map(lessonProgress)
+    ),
   }));
 }
 
@@ -158,16 +160,43 @@ export async function getStudentInstructors(studentId: string) {
  * the student's status for each. Returns null when the student isn't enrolled as a student.
  */
 export async function getStudentCourse(studentId: string, courseId: string, now = new Date()) {
+  const { select: courseSelect } = courseWithLessonsQuery(studentId);
+  const { select: lessonSelect } = courseSelect.courseLessons;
   const enrollment = await prisma.enrollment.findFirst({
     where: { ...asStudent(studentId), courseId },
     select: {
-      course: courseWithLessonsQuery(studentId),
+      course: {
+        select: {
+          ...courseSelect,
+          courseLessons: {
+            ...courseSelect.courseLessons,
+            select: {
+              ...lessonSelect,
+              ...lessonPolicySelect,
+              progress: {
+                ...lessonSelect.progress,
+                select: { ...lessonSelect.progress.select, submissions: bestSubmissionSelect },
+              },
+            },
+          },
+        },
+      },
     },
   });
   if (!enrollment) return null;
 
   const { courseLessons, ...course } = enrollment.course;
-  return { ...course, lessons: toStudentLessons(courseLessons, now) };
+  const lessons = courseLessons
+    .filter((courseLesson) => !isLessonHidden(courseLesson, now))
+    .map((courseLesson, index) => ({
+      id: courseLesson.id,
+      number: index + 1,
+      title: courseLesson.lesson.title,
+      availability: lessonAvailability(courseLesson, now),
+      ...lessonProgress(courseLesson),
+      submission: studentLessonSubmission(courseLesson, courseLesson.progress[0]?.submissions[0] ?? null, now),
+    }));
+  return { ...course, lessons };
 }
 
 // The lesson to continue: the first one not completed, or the last one if all are done.

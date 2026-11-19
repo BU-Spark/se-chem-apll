@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { LessonStatus } from '@prisma/client';
 import { AVAILABILITY_LABELS, PROGRESS_LABELS, type LessonAvailability } from '@/app/utils/progressStatus';
-import a11y from '@/app/styles/a11y.module.css';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
+import type { StudentLessonSubmission } from '@/lib/studentLessonSubmission';
 import styles from './LessonCard.module.css';
 
 interface LessonCardProps {
@@ -12,10 +13,18 @@ interface LessonCardProps {
   availability?: LessonAvailability;
   isCurrent: boolean;
   href: string;
+  submission: StudentLessonSubmission;
 }
 
-// One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
-export default function LessonCard({ number, title, status, availability = 'OPEN', isCurrent, href }: LessonCardProps) {
+export default function LessonCard({
+  number,
+  title,
+  status,
+  availability = 'OPEN',
+  isCurrent,
+  href,
+  submission,
+}: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
   const statusLabel =
     availability === 'OPEN'
@@ -28,18 +37,12 @@ export default function LessonCard({ number, title, status, availability = 'OPEN
       className={isCurrent ? `${styles.card} ${styles.current}` : styles.card}
       aria-current={isCurrent ? 'step' : undefined}
     >
-      <span className={a11y.srOnly}>
-        {name}, {statusLabel}
+      <span className={styles.title}>{name}</span>
+      <span className={styles.progress}>
+        {status === 'COMPLETED' && <span aria-hidden="true">✓ </span>}
+        {statusLabel}
       </span>
-      {status === 'COMPLETED' && (
-        <span className={styles.check} aria-hidden="true">
-          ✓
-        </span>
-      )}
-      <span className={styles.tooltip} aria-hidden="true">
-        <span className={styles.tooltipTitle}>{name}</span>
-        <span className={styles.tooltipStatus}>{statusLabel}</span>
-      </span>
+      <LessonSubmissionSummary submission={submission} />
     </Link>
   );
 }

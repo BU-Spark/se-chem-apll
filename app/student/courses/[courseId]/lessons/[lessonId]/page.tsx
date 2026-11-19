@@ -4,6 +4,7 @@ import { requireStudent } from '@/lib/auth/server';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 import { ROUTES } from '@/app/routes';
 import LessonRoadmap from '@/app/components/LessonRoadmap/LessonRoadmap';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
 import { formatDay } from '@/app/utils/dates';
 import styles from './page.module.css';
 
@@ -29,6 +30,9 @@ export default async function StudentLessonPage({ params }: PageProps) {
       <header className={styles.header}>
         <h1 className={styles.title}>{roadmap.lessonTitle}</h1>
         <p className={styles.course}>{roadmap.courseTitle}</p>
+        <div className={styles.submission}>
+          <LessonSubmissionSummary submission={roadmap.submission} showPenalty />
+        </div>
       </header>
 
       {/* Past due: every node opens for review, without the quiz. Not open yet: nothing to start. */}

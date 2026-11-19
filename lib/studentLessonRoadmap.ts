@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { isLessonHidden } from '@/app/utils/lessonSubmissionPolicy';
 import { asStudent, lessonAvailability } from '@/lib/studentCourses';
 import { quizOutcomes, toOutcomeNode } from '@/lib/nodeOutcomes';
+import { bestSubmissionSelect, lessonPolicySelect, studentLessonSubmission } from '@/lib/studentLessonSubmission';
 
 export interface RoadmapNode {
   id: string;
@@ -70,10 +71,8 @@ export async function getStudentLessonRoadmap(
       course: { enrollments: { some: asStudent(studentId) } },
     },
     select: {
-      openDate: true,
-      dueDate: true,
-      lateDeadline: true,
-      hideAfterDue: true,
+      ...lessonPolicySelect,
+      progress: { where: { studentId }, select: { submissions: bestSubmissionSelect } },
       course: { select: { title: true } },
       lesson: {
         select: {
@@ -116,6 +115,7 @@ export async function getStudentLessonRoadmap(
   return {
     courseTitle: courseLesson.course.title,
     lessonTitle: courseLesson.lesson.title,
+    submission: studentLessonSubmission(courseLesson, courseLesson.progress[0]?.submissions[0] ?? null, now),
     nodes,
     edges,
     availability,
