@@ -187,7 +187,7 @@ describe('getStudentCourse', () => {
           title: 'Title a',
           status: 'COMPLETED',
           availability: 'OPEN',
-          dueDate: null,
+          dueDate,
           nodeCount: 0,
           finishedNodeCount: 0,
           submission: { dueDate, lateDeadline, window: 'LATE', penalty: 'No late penalty.', best: { finalPercent: 0 } },
