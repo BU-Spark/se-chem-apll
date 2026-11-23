@@ -26,13 +26,22 @@ export const CHECKPOINT_CSV_MAX_ROWS = 5000;
 export type CheckpointCsvResult = { checkpoints: FormCheckpoint[]; errors: CsvRowError[] };
 
 export function csvToCheckpoints(text: string): CheckpointCsvResult {
-  const errors: CsvRowError[] = [];
-  const fail = (row: number, message: string) => errors.push({ row, message: `Record ${row}: ${message}` });
   if (new Blob([text]).size > CHECKPOINT_CSV_MAX_BYTES)
     return { checkpoints: [], errors: [{ row: 1, message: 'The file limit is 2 MB.' }] };
   const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
-  parsed.errors.forEach((error) => fail((error.row ?? 0) + 1, error.message));
-  const [headers = [], ...rows] = parsed.data;
+  return rowsToCheckpoints(
+    parsed.data,
+    parsed.errors.map((error) => ({
+      row: (error.row ?? 0) + 1,
+      message: `Record ${(error.row ?? 0) + 1}: ${error.message}`,
+    }))
+  );
+}
+
+export function rowsToCheckpoints(data: string[][], parseErrors: CsvRowError[] = []): CheckpointCsvResult {
+  const errors: CsvRowError[] = [...parseErrors];
+  const fail = (row: number, message: string) => errors.push({ row, message: `Record ${row}: ${message}` });
+  const [headers = [], ...rows] = data;
   const map = new Map<string, number>();
   headers.forEach((header, index) => {
     const key = header.trim().toLowerCase();

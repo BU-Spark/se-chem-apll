@@ -849,7 +849,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
             <div className={styles.checkpointToolbar}>
               <button type="button" className={styles.addQuestionBtn} onClick={() => setShowCheckpointImport(true)}>
-                Import CSV
+                Import CSV / Excel
               </button>
               <button
                 type="button"

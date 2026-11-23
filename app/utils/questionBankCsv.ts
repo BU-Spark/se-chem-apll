@@ -418,7 +418,11 @@ export function csvToQuestions(text: string, maxRows = 5000): CsvImportResult {
       })),
     };
   }
-  const rows = parsed.data;
+  return rowsToQuestions(parsed.data, maxRows);
+}
+
+export function rowsToQuestions(rows: string[][], maxRows = 5000): CsvImportResult {
+  if (!rows.length) return { questions: [], errors: [{ row: 1, message: 'CSV is empty.' }] };
   if (rows.length - 1 > maxRows) {
     return {
       questions: [],

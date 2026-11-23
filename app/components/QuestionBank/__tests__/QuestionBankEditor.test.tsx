@@ -799,7 +799,7 @@ describe('QuestionBankEditor', () => {
     const user = userEvent.setup();
     render(<Harness initial={[validMcQuestion('q1', 'Existing')]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Import CSV / Excel' }));
     await user.click(screen.getByRole('button', { name: 'Mock import' }));
 
     const questions = harnessQuestions();

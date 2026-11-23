@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import {
   appendCheckpoints,
   csvToCheckpoints,
+  rowsToCheckpoints,
   CHECKPOINT_CSV_MAX_BYTES,
   type CheckpointCsvResult,
 } from '@/app/utils/checkpointCsv';
+import { SPREADSHEET_ACCEPT, isXlsxFile, xlsxToRows } from '@/app/utils/spreadsheetImport';
 import CheckpointGroupPreview from './CheckpointGroupPreview';
 import type { FormCheckpoint } from './types';
 import styles from '../QuestionBank/QuestionBank.module.css';
@@ -48,7 +50,7 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
         className={`${styles.dialog} ${layout.dialog}`}
         role="dialog"
         aria-modal="true"
-        aria-label="Import checkpoints from CSV"
+        aria-label="Import checkpoints from CSV or Excel"
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.stopPropagation();
@@ -74,7 +76,7 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
         }}
       >
         <header className={`${styles.dialogHeader} ${layout.header}`}>
-          <h3 className={styles.dialogTitle}>Import checkpoints from CSV</h3>
+          <h3 className={styles.dialogTitle}>Import checkpoints from CSV or Excel</h3>
           <button
             type="button"
             className={`${styles.dialogCloseBtn} ${layout.close}`}
@@ -86,6 +88,7 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
         </header>
         <div className={`${styles.dialogBody} ${layout.body}`}>
           <p className={layout.description}>Review your checkpoint groups. You can assign missing timestamps next.</p>
+          <p>Excel files use the first worksheet and preserve subscript and superscript formatting.</p>
           <div className={layout.fileRow}>
             <button
               ref={chooseFileButton}
@@ -93,18 +96,18 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
               className={styles.toolbarBtn}
               onClick={() => fileInput.current?.click()}
             >
-              {fileName ? 'Change file' : 'Choose CSV'}
+              {fileName ? 'Change file' : 'Choose CSV or Excel'}
             </button>
             <span className={layout.fileName} title={fileName}>
-              {fileName || 'No CSV selected'}
+              {fileName || 'No file selected'}
             </span>
           </div>
           <input
             ref={fileInput}
             hidden
-            aria-label="Choose checkpoint CSV file"
+            aria-label="Choose checkpoint CSV or Excel file"
             type="file"
-            accept=".csv,text/csv"
+            accept={SPREADSHEET_ACCEPT}
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -117,8 +120,10 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
               setReading(true);
               try {
                 if (file.size > CHECKPOINT_CSV_MAX_BYTES) throw new Error('The file limit is 2 MB.');
-                const text = await file.text();
-                if (current === generation.current) setResult(csvToCheckpoints(text));
+                const parsed = isXlsxFile(file)
+                  ? rowsToCheckpoints(await xlsxToRows(await file.arrayBuffer()))
+                  : csvToCheckpoints(await file.text());
+                if (current === generation.current) setResult(parsed);
               } catch (e) {
                 if (current === generation.current) setError((e as Error).message);
               } finally {
@@ -126,7 +131,7 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
               }
             }}
           />
-          {reading && <p role="status">Reading CSV…</p>}
+          {reading && <p role="status">Reading file…</p>}
           {error && (
             <p className={layout.error} role="alert">
               {error}
