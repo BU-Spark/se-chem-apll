@@ -42,7 +42,8 @@ describe('nodeScreen', () => {
     ['LOCKED', 0, false, 'LOCKED'],
     ['NOT_STARTED', 0, false, 'INTRO'],
     ['NOT_STARTED', 0, true, 'VIDEO_RESULT'],
-    ['NOT_STARTED', 1, true, 'RETRY'],
+    ['NOT_STARTED', 1, false, 'RETRY'],
+    ['NOT_STARTED', 1, true, 'VIDEO_RESULT'],
     ['COMPLETED', 0, true, 'COMPLETE'],
     ['INCOMPLETE', 2, true, 'INCOMPLETE'],
   ] as const)(
@@ -64,18 +65,17 @@ describe('canWatchVideo and canOpenQuiz', () => {
   });
 
   it('opens the quiz after the video lesson, or right away when the video has no questions', () => {
-    expect(canOpenQuiz('VIDEO_RESULT', true, true)).toBe(true);
-    expect(canOpenQuiz('REFRESH', true, true)).toBe(false);
-    expect(canOpenQuiz('REFRESH', false, true)).toBe(true);
-    expect(canOpenQuiz('INTRO', true, false)).toBe(false);
-    expect(canOpenQuiz('INTRO', false, false)).toBe(true);
-    expect(canOpenQuiz('QUIZ', false, true)).toBe(false);
-    expect(canOpenQuiz('INCOMPLETE', false, true)).toBe(false);
+    expect(canOpenQuiz('VIDEO_RESULT', true)).toBe(true);
+    expect(canOpenQuiz('REFRESH', true)).toBe(false);
+    expect(canOpenQuiz('REFRESH', false)).toBe(true);
+    expect(canOpenQuiz('INTRO', true)).toBe(false);
+    expect(canOpenQuiz('INTRO', false)).toBe(true);
+    expect(canOpenQuiz('QUIZ', false)).toBe(false);
+    expect(canOpenQuiz('INCOMPLETE', false)).toBe(false);
   });
 
-  it("sends a regular node's retry straight to the quiz, and a foundational one through the video", () => {
-    expect(canOpenQuiz('RETRY', true, false)).toBe(true);
-    expect(canOpenQuiz('RETRY', true, true)).toBe(false);
+  it('sends every retry back through the video lesson before the quiz', () => {
+    expect(canOpenQuiz('RETRY', true)).toBe(false);
   });
 });
 
@@ -208,7 +208,7 @@ describe('getStudentNode', () => {
       const view = await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1');
       expect(view).toMatchObject({ screen: 'CLOSED' });
       expect(canWatchVideo(view!.screen)).toBe(false);
-      expect(canOpenQuiz(view!.screen, false, false)).toBe(false);
+      expect(canOpenQuiz(view!.screen, false)).toBe(false);
     }
   );
 

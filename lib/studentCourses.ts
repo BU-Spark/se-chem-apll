@@ -62,7 +62,8 @@ const courseWithLessonsQuery = (studentId: string) => ({
   select: { id: true, title: true, description: true, courseLessons: visibleLessonsQuery(studentId) },
 });
 
-type CourseLessonRow = {
+type CourseLessonRow = LessonDates & {
+  id: string;
   lesson: { title: string; lessonNodes: { id: string; isRequired: boolean }[] };
   progress: { status: LessonStatus; attempts: FinishedQuiz[] }[];
 };
@@ -193,6 +194,7 @@ export async function getStudentCourse(studentId: string, courseId: string, now 
       number: index + 1,
       title: courseLesson.lesson.title,
       availability: lessonAvailability(courseLesson, now),
+      dueDate: courseLesson.dueDate,
       ...lessonProgress(courseLesson),
       submission: studentLessonSubmission(courseLesson, courseLesson.progress[0]?.submissions[0] ?? null, now),
     }));

@@ -13,7 +13,7 @@ interface KeepMovingForwardProps {
   retryHref: string;
 }
 
-// After the quiz is failed a second time (after the video): one more try is left.
+// After a failed quiz that came after the video lesson: one more try is left.
 export default function KeepMovingForward({
   correct,
   total,

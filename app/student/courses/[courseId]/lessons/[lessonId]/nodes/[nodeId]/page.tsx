@@ -62,8 +62,7 @@ export default async function StudentNodePage({ params }: PageProps) {
           {...quizScore}
           coursePercent={view.coursePercent}
           lessonHref={lessonHref}
-          // Foundational nodes retry through the video lesson; regular nodes go straight to the quiz.
-          retryHref={view.node.isFoundational ? videoHref : quizHref}
+          retryHref={videoHref}
         />
       );
     case 'CLOSED':

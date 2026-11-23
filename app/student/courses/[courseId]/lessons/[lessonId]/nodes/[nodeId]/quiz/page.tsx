@@ -20,7 +20,7 @@ export default async function StudentNodeQuizPage({ params }: PageProps) {
   if (!view) notFound();
 
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
-  if (!canOpenQuiz(view.screen, view.hasVideoQuestions, view.node.isFoundational)) redirect(nodeHref);
+  if (!canOpenQuiz(view.screen, view.hasVideoQuestions)) redirect(nodeHref);
 
   return (
     <NodeQuiz
