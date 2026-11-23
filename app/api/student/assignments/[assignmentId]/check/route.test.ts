@@ -83,19 +83,31 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
     expect(await (await check({ questionId: 'q1', notSure: true })).json()).toMatchObject({ correct: false });
   });
 
-  it("adds the instructor's feedback for the result, or null when there is none", async () => {
-    mockFeedbackFindUnique.mockResolvedValue({ feedbackCorrect: 'B is **right**.', feedbackIncorrect: '  ' });
+  it("adds the instructor's feedback that matches the result", async () => {
+    mockFeedbackFindUnique.mockResolvedValue({ feedbackCorrect: 'B is **right**.', feedbackIncorrect: 'Try again.' });
     expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
       correct: true,
       explanation: 'B is **right**.',
     });
     expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
       correct: false,
-      explanation: null,
+      explanation: 'Try again.',
     });
     expect(mockFeedbackFindUnique).toHaveBeenCalledWith({
       where: { id: 'q1' },
       select: { feedbackCorrect: true, feedbackIncorrect: true },
+    });
+  });
+
+  it('returns a null explanation when the feedback is blank or missing', async () => {
+    mockFeedbackFindUnique.mockResolvedValue({ feedbackCorrect: null, feedbackIncorrect: '  ' });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
+      correct: true,
+      explanation: null,
+    });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+      correct: false,
+      explanation: null,
     });
 
     mockFeedbackFindUnique.mockResolvedValue(null);
