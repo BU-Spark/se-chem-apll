@@ -24,8 +24,9 @@ function isAnswerInput(answer: unknown): answer is AnswerInput {
 
 /**
  * Checks one answer of the student's unfinished video-lesson (checkpoint) attempt, so the video
- * can say "Correct" or "Incorrect" right away. Read-only: nothing is saved here; the whole
- * attempt is still graded and saved by the assignment route's "finish" action.
+ * can say "Correct" or "Incorrect" right away, with the instructor's explanation. Read-only:
+ * nothing is saved here; the whole attempt is still graded and saved by the assignment route's
+ * "finish" action.
  * Checks aren't limited, so a student could try every choice: fine, because video questions
  * are practice and don't count toward the course grade (quiz attempts can't be checked here).
  */
@@ -59,9 +60,18 @@ export async function POST(request: Request, { params }: Context) {
   if (!question) return NextResponse.json({ error: 'Question not found.' }, { status: 404 });
 
   // Grading errors become a 400 with their message, the same as the "finish" action.
+  let correct: boolean;
   try {
-    return NextResponse.json({ correct: gradeAnswer(question, answer) });
+    correct = gradeAnswer(question, answer);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
+
+  // The instructor's feedback for this result, if they wrote any.
+  const feedback = await prisma.checkpointQuestion.findUnique({
+    where: { id: question.id },
+    select: { feedbackCorrect: true, feedbackIncorrect: true },
+  });
+  const explanation = (correct ? feedback?.feedbackCorrect : feedback?.feedbackIncorrect)?.trim() || null;
+  return NextResponse.json({ correct, explanation });
 }

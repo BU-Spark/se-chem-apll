@@ -97,7 +97,8 @@ export default function QevLesson({
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
   const [stopIndex, setStopIndex] = useState(0);
   const [stopOpen, setStopOpen] = useState(!hasVideo);
-  const [feedback, setFeedback] = useState<boolean | null>(null);
+  // The checked answer's result, shown until Continue.
+  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string | null } | null>(null);
   // Without a video there's nothing to wait for.
   const [videoEnded, setVideoEnded] = useState(!hasVideo);
   // All answers saved (nothing to save without questions); the student can move on once the
@@ -170,7 +171,6 @@ export default function QevLesson({
       // At the end, every remaining stop opens, even one timed past the video's real length.
       if (ended || (stop.at != null && player.currentTime() >= stop.at)) {
         player.pause();
-        setFeedback(null);
         setStopOpen(true);
       }
     }, POLL_MS);
@@ -186,29 +186,26 @@ export default function QevLesson({
     player.seekTo(stop?.at ?? end);
   }
 
-  // Move past the current stop: after the video has ended the next stop opens right away,
-  // otherwise the video keeps playing until it gets there.
+  // Move past the current stop (the student clicked Continue): after the video has ended the next
+  // stop opens right away, otherwise the video plays on until it gets there.
   function nextStop() {
     const next = stopIndex + 1;
     const afterVideo = !hasVideo || videoEnded;
+    setFeedback(null);
     setStopIndex(next);
     setStopOpen(afterVideo && next < stops!.length);
     if (!afterVideo) controls.current?.play();
   }
 
-  function continueAfterNote() {
-    setFeedback(null);
-    nextStop();
-  }
-
-  // Check the answer and show Correct/Incorrect. After the last question, save all answers.
+  // Check the answer and show Correct/Incorrect; the video stays paused until Continue. After the
+  // last question, save all answers.
   const submitAnswer = (question: QuizQuestion) =>
     run(async () => {
       const result = await post(
         { attemptId: attempt!.id, answer: { questionId: question.id, ...answers[question.id] } },
         '/check'
       );
-      setFeedback(result.correct);
+      setFeedback({ correct: result.correct, explanation: result.explanation });
       if (questionsDone + 1 === questionCount) {
         await post({
           action: 'finish',
@@ -217,7 +214,6 @@ export default function QevLesson({
         });
         setSaved(true);
       }
-      nextStop();
     });
 
   function goToResult() {
@@ -226,6 +222,8 @@ export default function QevLesson({
   }
 
   const openStop = stopOpen ? stop : undefined;
+  // A question waiting for its answer; once checked (and for a note) Continue moves on.
+  const answering = openStop?.kind === 'QUESTION' && feedback === null;
   // Every pause handled, answers saved and the video over: the student can move on.
   const done = Boolean(stops) && !stop && saved && videoEnded;
 
@@ -245,6 +243,7 @@ export default function QevLesson({
               key={openStop.question.id}
               question={openStop.question}
               answer={answers[openStop.question.id]}
+              disabled={feedback !== null}
               onSelect={(selectedIndices) =>
                 setAnswers((prev) => ({ ...prev, [openStop.question.id]: { selectedIndices } }))
               }
@@ -283,8 +282,8 @@ export default function QevLesson({
       )}
 
       <footer className={styles.footer}>
-        {feedback !== null && <FeedbackBanner correct={feedback} />}
-        {openStop?.kind === 'QUESTION' && (
+        {feedback && <FeedbackBanner {...feedback} />}
+        {answering && (
           <button
             type="button"
             className={buttons.primary}
@@ -294,8 +293,8 @@ export default function QevLesson({
             Continue
           </button>
         )}
-        {openStop?.kind === 'NOTE' && (
-          <button type="button" className={buttons.primary} onClick={continueAfterNote}>
+        {openStop && !answering && (
+          <button type="button" className={buttons.primary} onClick={nextStop}>
             Continue
           </button>
         )}
