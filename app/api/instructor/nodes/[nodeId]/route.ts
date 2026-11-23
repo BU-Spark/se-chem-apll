@@ -1,6 +1,9 @@
+import { nodeLibraryScope } from '@/lib/workspaces/permissions';
+import { assertContentPermission } from '@/lib/workspaces/access';
+import { authErrorResponse } from '@/lib/workspaces/http';
 import { saveCheckpoints, CheckpointSaveConflict } from '@/app/utils/saveCheckpoints';
 import { NextRequest, NextResponse } from 'next/server';
-import { apiAccess, contentScope } from '@/lib/auth/api';
+import { apiAccess } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import {
@@ -18,14 +21,14 @@ interface RouteContext {
 
 // GET /api/instructor/nodes/[nodeId]
 export async function GET(_req: NextRequest, { params }: RouteContext) {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   const { nodeId } = await params;
   const node = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      ...contentScope(user),
+      ...nodeLibraryScope(user),
     },
     include: nodeInclude,
   });
@@ -43,7 +46,7 @@ function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
 
 // PATCH /api/instructor/nodes/[nodeId] — replace provided collections only
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   const { nodeId } = await params;
@@ -70,11 +73,16 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const owned = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      ...contentScope(user),
+      ...nodeLibraryScope(user),
     },
     include: nodeInclude,
   });
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  try {
+    await assertContentPermission(user, owned, 'content.edit');
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 
   if (isDraft !== undefined && typeof isDraft !== 'boolean') {
     return NextResponse.json({ error: 'isDraft must be a boolean' }, { status: 422 });
@@ -179,23 +187,30 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
 // DELETE /api/instructor/nodes/[nodeId]
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   const { nodeId } = await params;
   const existing = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      ...contentScope(user),
+      ...nodeLibraryScope(user),
     },
-    select: { id: true },
+    select: { id: true, workspaceId: true },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  try {
+    await assertContentPermission(user, existing, 'content.delete');
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.lessonNode.deleteMany({ where: { nodeId } });
-    await tx.node.delete({ where: { id: nodeId } });
-  });
+  if (await prisma.lessonNode.count({ where: { nodeId } }))
+    return NextResponse.json(
+      { error: 'Nodes used by a lesson cannot be deleted. Remove the references first.' },
+      { status: 409 }
+    );
+  await prisma.node.delete({ where: { id: nodeId } });
 
   return new NextResponse(null, { status: 204 });
 }
