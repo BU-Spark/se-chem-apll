@@ -130,6 +130,7 @@ describe('NewNodePage', () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
     await goToCheckpoints(user);
+    expect(screen.getByRole('button', { name: 'Download sample XLSX' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Import CSV / Excel' }));
     const text = sampleCheckpointCsv();
     const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });

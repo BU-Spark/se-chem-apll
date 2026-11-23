@@ -36,8 +36,9 @@ export const QUESTION_CSV_HEADERS = [...REQUIRED_QUESTION_CSV_HEADERS, ...OPTION
 export const QUIZ_CSV_HEADERS = ['question_key', 'variant_key', ...QUESTION_CSV_HEADERS] as const;
 
 const SAMPLE_VARIABLES = ['compound', 'mass', 'category', 'example'];
-const SAMPLE_HEADERS = [...QUIZ_CSV_HEADERS, ...SAMPLE_VARIABLES.map((name) => `var:${name}`)];
-const sampleRow = (cells: Record<string, string>): string[] => SAMPLE_HEADERS.map((header) => cells[header] ?? '');
+export const SAMPLE_QUESTION_BANK_HEADERS = [...QUIZ_CSV_HEADERS, ...SAMPLE_VARIABLES.map((name) => `var:${name}`)];
+const sampleRow = (cells: Record<string, string>): string[] =>
+  SAMPLE_QUESTION_BANK_HEADERS.map((header) => cells[header] ?? '');
 
 export const SAMPLE_QUESTION_BANK_CSV_ROWS: string[][] = [
   sampleRow({
@@ -236,7 +237,7 @@ export function questionsToCsv(questions: AuthoringQuestion[]): string {
 }
 
 export function sampleQuestionBankCsv(): string {
-  return Papa.unparse([SAMPLE_HEADERS, ...SAMPLE_QUESTION_BANK_CSV_ROWS], { newline: '\n' });
+  return Papa.unparse([SAMPLE_QUESTION_BANK_HEADERS, ...SAMPLE_QUESTION_BANK_CSV_ROWS], { newline: '\n' });
 }
 
 // ---------------------------------------------------------------------------

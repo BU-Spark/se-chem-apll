@@ -8,6 +8,7 @@ import {
   type CsvImportResult,
 } from '@/app/utils/questionBankCsv';
 import { SPREADSHEET_ACCEPT, isXlsxFile, xlsxToRows } from '@/app/utils/spreadsheetImport';
+import SampleXlsxButton from './SampleXlsxButton';
 import { downloadCsvFile } from '@/app/utils/csv';
 import type { AuthoringQuestion } from './types';
 import styles from './QuestionBank.module.css';
@@ -136,6 +137,7 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
             >
               Download sample CSV
             </button>
+            <SampleXlsxButton kind="quiz" className={styles.toolbarBtn} />
           </div>
 
           {reading && <p role="status">Reading file…</p>}

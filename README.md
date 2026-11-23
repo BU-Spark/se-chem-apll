@@ -134,8 +134,9 @@ Most projects will require the use of other technologies. Below are a few guides
 
 ## Checkpoint CSV authoring
 
-The node editor's **Checkpoints** step supports CSV and Excel (`.xlsx`) import, CSV export, and a downloadable CSV sample. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Quiz questions use the separate variant-aware format documented below.
+The node editor's **Checkpoints** step supports CSV and Excel (`.xlsx`) import, CSV export, and downloadable CSV and XLSX samples. Author content before choosing a video: checkpoint timestamps may stay blank in drafts and must be assigned before publication. Quiz questions use the separate variant-aware format documented below.
 
+**Download sample XLSX** is available next to each CSV sample download (in the checkpoint toolbar and quiz import dialog). Start with the XLSX sample when authoring in Excel: it demonstrates real subscript/superscript chemistry formatting alongside Markdown and LaTeX, and uses Text-formatted columns to preserve entries such as `1,2`. Replace the example rows with your content while keeping the header row. The first worksheet is ready to upload directly; checkpoint samples include a note and quiz samples include variants.
 
 Both checkpoint and quiz import dialogs accept `.csv` and `.xlsx` with the same headers and validation. Excel imports read only the first worksheet, skip blank rows like CSV, and preserve subscript/superscript formatting as `<sub>`/`<sup>` in prompts, choices, feedback, and quiz variable values. Other Excel styling (bold, color, etc.) is discarded. Markdown and LaTeX/mhchem remain supported; typed HTML tags in Excel content are imported as literal text. Headers, keys, and answer/control fields remain literal text without formatting markup.
 

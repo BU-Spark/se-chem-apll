@@ -26,6 +26,7 @@ it('imports XLSX through the quiz dialog and renders chemistry in author and stu
   const onImport = jest.fn();
   const { unmount } = render(<CsvImportDialog existingCount={0} onImport={onImport} onClose={jest.fn()} />);
   expect(screen.getByLabelText('Choose CSV or Excel file')).toHaveAttribute('accept', expect.stringContaining('.xlsx'));
+  expect(screen.getByRole('button', { name: 'Download sample XLSX' })).toBeInTheDocument();
   upload('Choose CSV or Excel file');
   await screen.findByText('3 valid questions');
   fireEvent.click(screen.getByRole('button', { name: 'Import 3 questions' }));
