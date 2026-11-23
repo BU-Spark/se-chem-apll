@@ -33,10 +33,10 @@ export interface NodeHistory {
 /**
  * Which screen a student sees for a node. Completed and incomplete come from the node's status,
  * which counts the allowed quiz tries.
- * Foundational: quiz (knowledge check) → pass: complete · 1st fail: refresh → video → video result
- * → quiz → 2nd fail: "keep moving forward" → video → video result → quiz → 3rd fail: incomplete.
  * Regular: intro → video → video result → quiz → pass: complete · 1st fail: "keep moving forward"
- * → quiz again → 2nd fail: incomplete.
+ * → video → video result → quiz → 2nd fail: incomplete.
+ * Foundational: the same, after a knowledge check quiz first → pass: complete · fail: "refresh
+ * your knowledge" (in place of the intro) → video → … → 3rd fail: incomplete.
  */
 export function nodeScreen(
   status: NodeStatus,
@@ -45,13 +45,11 @@ export function nodeScreen(
   if (status === 'LOCKED') return 'LOCKED';
   if (status === 'COMPLETED') return 'COMPLETE';
   if (status === 'INCOMPLETE') return 'INCOMPLETE';
-  if (!isFoundational) {
-    if (failedQuizzes > 0) return 'RETRY';
-    return watchedVideoSinceFail ? 'VIDEO_RESULT' : 'INTRO';
-  }
-  if (failedQuizzes === 0) return 'QUIZ';
+  if (isFoundational && failedQuizzes === 0) return 'QUIZ';
   if (watchedVideoSinceFail) return 'VIDEO_RESULT';
-  return failedQuizzes === 1 ? 'REFRESH' : 'RETRY';
+  if (failedQuizzes === 0) return 'INTRO';
+  if (isFoundational && failedQuizzes === 1) return 'REFRESH';
+  return 'RETRY';
 }
 
 // The video lesson opens from the intro or after a failed quiz, and stays open to rewatch.
@@ -59,12 +57,12 @@ export const canWatchVideo = (screen: NodeScreen) =>
   screen === 'INTRO' || screen === 'REFRESH' || screen === 'RETRY' || screen === 'VIDEO_RESULT';
 
 /**
- * The quiz page opens after the video lesson. A regular node's retry goes straight back to it.
- * A video without questions leaves no record, so the server can't check it was watched: the
- * video lesson only shows Continue once the video ends.
+ * The quiz page opens after the video lesson, every time. A video without questions leaves no
+ * record, so the server can't check it was watched: the video lesson only shows Continue once the
+ * video ends.
  */
-export const canOpenQuiz = (screen: NodeScreen, hasVideoQuestions: boolean, isFoundational: boolean) =>
-  screen === 'VIDEO_RESULT' || (screen === 'RETRY' && !isFoundational) || (canWatchVideo(screen) && !hasVideoQuestions);
+export const canOpenQuiz = (screen: NodeScreen, hasVideoQuestions: boolean) =>
+  screen === 'VIDEO_RESULT' || (canWatchVideo(screen) && !hasVideoQuestions);
 
 type ScoredAttempt = { completedAt: Date | null; responses: { isCorrect: boolean | null }[] };
 
