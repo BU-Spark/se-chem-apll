@@ -1,3 +1,4 @@
+import { lessonLibraryScope, workspaceAllows } from '@/lib/workspaces/permissions';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import styles from '../../components/InstructorGrid/grid.module.css';
@@ -12,9 +13,11 @@ export default async function LessonsPage({ searchParams }: { searchParams?: Pro
   const filters = readLessonFilters((await searchParams) ?? {});
   const [lessons, courses] = await Promise.all([
     prisma.lesson.findMany({
-      where: {},
+      where: lessonLibraryScope(user),
       select: {
         createdByClerkId: true,
+        workspaceId: true,
+        workspace: { select: { name: true, members: { where: { userId: user.id }, select: { role: true } } } },
         id: true,
         title: true,
         summary: true,
@@ -51,8 +54,9 @@ export default async function LessonsPage({ searchParams }: { searchParams?: Pro
           ...item,
           canEdit:
             user.platformRole === 'ADMIN' ||
-            item.createdByClerkId === null ||
-            item.createdByClerkId === user.clerkUserId,
+            (item.workspaceId
+              ? workspaceAllows(item.workspace?.members[0]?.role ?? null, 'content.edit')
+              : item.createdByClerkId === null || item.createdByClerkId === user.clerkUserId),
         }))}
         courses={courses}
         initialFilters={filters}

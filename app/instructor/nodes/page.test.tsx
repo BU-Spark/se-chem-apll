@@ -1,3 +1,4 @@
+import { nodeLibraryScope, lessonLibraryScope } from '@/lib/workspaces/permissions';
 import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
   getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
@@ -71,20 +72,24 @@ describe('NodesPage', () => {
       })
     );
   });
-  it('allows global node browsing while restricting lesson management metadata', async () => {
+  it('scopes node browsing and lesson metadata to personal and workspace permissions', async () => {
     await NodesPage({});
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        where: nodeLibraryScope(appUser({ clerkUserId: 'instructor-1' })),
         select: expect.objectContaining({
           lessonNodes: {
-            where: { lesson: { createdByClerkId: 'instructor-1' } },
+            where: { lesson: lessonLibraryScope(appUser({ clerkUserId: 'instructor-1' }), 'content.edit', false) },
             select: { lesson: { select: { id: true, title: true } } },
           },
         }),
       })
     );
-    expect(mockLessons).toHaveBeenCalledWith(expect.objectContaining({ where: { createdByClerkId: 'instructor-1' } }));
+    expect(mockLessons).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: lessonLibraryScope(appUser({ clerkUserId: 'instructor-1' }), 'content.edit', false),
+      })
+    );
   });
   it('passes URL filters and authorized metadata to the client grid', async () => {
     render(

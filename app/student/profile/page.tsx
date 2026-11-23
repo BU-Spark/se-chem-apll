@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireStudent } from '@/lib/auth/server';
 import { getStudentInstructors } from '@/lib/studentCourses';
 import CenteredPage from '@/app/components/CenteredPage/CenteredPage';
@@ -13,6 +14,9 @@ export default async function StudentProfilePage() {
 
   return (
     <CenteredPage title="Profile">
+      <p>
+        <Link href="/workspaces">My workspaces</Link>
+      </p>
       <InfoCard label="Student">
         <InfoField label="Student" lines={[student.name ?? '—']} />
         <InfoField label="Email" lines={[student.email]} />

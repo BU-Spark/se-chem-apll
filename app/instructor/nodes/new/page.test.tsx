@@ -1,7 +1,8 @@
 import { sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import NewNodePage from './page';
+import NodeForm from '@/app/components/NodeForm/NodeForm';
+const NewNodePage = () => <NodeForm mode="create" />;
 
 const push = jest.fn();
 
@@ -397,5 +398,13 @@ describe('NewNodePage', () => {
       })
     );
     expect(push).toHaveBeenCalledWith('/instructor/nodes');
+  });
+  it('creates workspace content and returns to that workspace after saving a draft', async () => {
+    const user = userEvent.setup();
+    render(<NodeForm mode="create" workspaceId="chem" returnTo="/workspaces/chem" />);
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body).workspaceId).toBe('chem');
+    expect(push).toHaveBeenCalledWith('/workspaces/chem');
   });
 });

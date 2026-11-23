@@ -1,5 +1,7 @@
 'use client';
 
+import DeleteContentButton from '@/app/components/InstructorGrid/DeleteContentButton';
+
 import selectStyles from '@/app/components/Select/Select.module.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -51,12 +53,19 @@ export default function NodesGrid({
   nodes,
   lessons,
   initialFilters,
+  syncUrl = true,
+  workspaceId,
+  allowDelete = false,
 }: {
   nodes: NodeListItem[];
   lessons: { id: string; title: string; isDraft: boolean }[];
   initialFilters: NodeFilters;
+  syncUrl?: boolean;
+  workspaceId?: string;
+  allowDelete?: boolean;
 }) {
   const [filters, setFilters] = useState(() => currentNodeFilters(initialFilters));
+  const [actionError, setActionError] = useState('');
   const [visibleCount, setVisibleCount] = useState(nodes.length);
   const [api, setApi] = useState<GridApi<NodeGridRow> | null>(null);
   const [selectedLessons, setSelectedLessons] = useState<NodeGridRow | null>(null);
@@ -79,6 +88,7 @@ export default function NodesGrid({
   const update = useCallback((patch: Partial<NodeFilters>) => setFilters((current) => ({ ...current, ...patch })), []);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const restore = () => {
       const params = new URLSearchParams(window.location.search);
       const restored = readNodeFilters({ ...Object.fromEntries(params), tag: params.getAll('tag') });
@@ -86,13 +96,14 @@ export default function NodesGrid({
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, []);
+  }, [syncUrl]);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const url = nodeFilterUrl(filters);
     if (`${window.location.pathname}${window.location.search}` !== url)
       window.history.replaceState(window.history.state, '', url);
-  }, [filters]);
+  }, [filters, syncUrl]);
 
   useEffect(() => {
     if (!api) return;
@@ -159,14 +170,24 @@ export default function NodesGrid({
           data ? (
             <EditorTitle
               href={
-                data.canEdit === false
-                  ? `/instructor/copy?mode=nodes&nodeId=${data.id}`
-                  : `/instructor/nodes/${data.id}/edit`
+                data.workspaceId
+                  ? `/workspaces/${data.workspaceId}/nodes/${data.id}`
+                  : data.canEdit === false
+                    ? `/instructor/copy?mode=nodes&nodeId=${data.id}`
+                    : `/instructor/nodes/${data.id}/edit`
               }
               title={data.title}
-              destination={data.canEdit === false ? 'copy workflow' : 'editor'}
+              destination={data.canEdit === false ? (data.workspaceId ? 'viewer' : 'copy workflow') : 'editor'}
             />
           ) : null,
+      },
+      {
+        colId: 'workspace',
+        headerName: 'Library',
+        hide: Boolean(workspaceId),
+        valueGetter: ({ data }) => data?.workspace?.name ?? 'Personal / seed',
+        filter: 'agTextColumnFilter',
+        width: 180,
       },
       {
         field: 'isDraft',
@@ -190,8 +211,10 @@ export default function NodesGrid({
       },
       {
         colId: 'usage',
-        headerName: 'Used in my lessons',
-        headerTooltip: 'Whether this node is used in any of your lessons.',
+        headerName: workspaceId ? 'Used in workspace lessons' : 'Used in my lessons',
+        headerTooltip: workspaceId
+          ? 'Whether this node is used in any lesson in this workspace.'
+          : 'Whether this node is used in any of your lessons.',
         filter: UsageFilter,
         floatingFilterComponent: UsageFloatingFilter,
         width: 200,
@@ -229,8 +252,24 @@ export default function NodesGrid({
         tooltipValueGetter: ({ value }) => updatedTooltip(value),
       },
       { colId: 'createdAt', field: 'createdTimestamp', hide: true },
+      ...(allowDelete
+        ? [
+            {
+              colId: 'actions',
+              headerName: 'Actions',
+              width: 100,
+              sortable: false,
+              filter: false,
+              floatingFilter: false,
+              cellRenderer: ({ data }: ICellRendererParams<NodeGridRow>) =>
+                data ? (
+                  <DeleteContentButton kind="nodes" id={data.id} title={data.title} onError={setActionError} />
+                ) : null,
+            },
+          ]
+        : []),
     ],
-    []
+    [allowDelete, workspaceId]
   );
   const defaultColDef = useMemo<ColDef<NodeGridRow>>(
     () => ({
@@ -246,6 +285,11 @@ export default function NodesGrid({
 
   return (
     <>
+      {actionError && (
+        <p className={styles.actionError} role="alert">
+          {actionError}
+        </p>
+      )}
       <div className={styles.filters}>
         <div className={styles.filterRow}>
           <label className={styles.draftToggle}>
@@ -258,7 +302,7 @@ export default function NodesGrid({
             Drafts only
           </label>
           <label className={styles.filterField}>
-            <span className={styles.srOnly}>My lesson</span>
+            <span className={styles.srOnly}>{workspaceId ? 'Workspace lesson' : 'My lesson'}</span>
             <select
               className={`${selectStyles.control} ${selectStyles.compact}`}
               value={filters.lesson}
@@ -330,7 +374,14 @@ export default function NodesGrid({
         <h2 id="node-lessons-title">Lessons using {selectedLessons?.title}</h2>
         <div className={styles.lessonLinks}>
           {selectedLessons?.lessons.map((lesson) => (
-            <Link key={lesson.id} href={`/instructor/lessons/${lesson.id}/edit`}>
+            <Link
+              key={lesson.id}
+              href={
+                workspaceId
+                  ? `/workspaces/${workspaceId}/lessons/${lesson.id}`
+                  : `/instructor/lessons/${lesson.id}/edit`
+              }
+            >
               {lesson.title || 'Untitled lesson'}
             </Link>
           ))}

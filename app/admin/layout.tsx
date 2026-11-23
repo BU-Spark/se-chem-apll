@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
 import { requireAdmin } from '@/lib/auth/server';
-import styles from '../instructor/layout.module.css';
+import styles from '../components/InstructorShell/shell.module.css';
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
   return (

@@ -1,3 +1,4 @@
+import { nodeLibraryScope, lessonLibraryScope } from '@/lib/workspaces/permissions';
 import { prisma } from '@/lib/prisma';
 import { requireInstructor, contentScope } from '@/lib/auth/server';
 import CopyForm from './CopyForm';
@@ -11,8 +12,9 @@ export default async function CopyPage({
 }) {
   const user = await requireInstructor();
   const params = await searchParams;
-  const [courses, lessons, nodes, destinations, destinationLessons] = await Promise.all([
+  const [courses, lessons, nodes, destinations, destinationLessons, workspaces] = await Promise.all([
     prisma.course.findMany({
+      where: contentScope(user),
       orderBy: { title: 'asc' },
       select: {
         id: true,
@@ -21,12 +23,14 @@ export default async function CopyPage({
         section: true,
         description: true,
         courseLessons: {
+          where: { lesson: lessonLibraryScope(user) },
           orderBy: { sortOrder: 'asc' },
           select: { lessonId: true, openDate: true, dueDate: true, lateDeadline: true },
         },
       },
     }),
     prisma.lesson.findMany({
+      where: lessonLibraryScope(user),
       orderBy: { title: 'asc' },
       select: {
         id: true,
@@ -35,12 +39,25 @@ export default async function CopyPage({
         lessonNodes: { orderBy: { sortOrder: 'asc' }, select: { nodeId: true } },
       },
     }),
-    prisma.node.findMany({ orderBy: { title: 'asc' }, select: { id: true, title: true, isDraft: true } }),
+    prisma.node.findMany({
+      where: nodeLibraryScope(user),
+      orderBy: { title: 'asc' },
+      select: { id: true, title: true, isDraft: true },
+    }),
     prisma.course.findMany({ where: contentScope(user), orderBy: { title: 'asc' }, select: { id: true, title: true } }),
-    prisma.lesson.findMany({ where: contentScope(user), orderBy: { title: 'asc' }, select: { id: true, title: true } }),
+    prisma.lesson.findMany({
+      where: lessonLibraryScope(user, 'content.edit'),
+      orderBy: { title: 'asc' },
+      select: { id: true, title: true },
+    }),
+    prisma.workspace.findMany({
+      where: { members: { some: { userId: user.id, role: { in: ['OWNER', 'ADMIN', 'EDITOR'] } } } },
+      select: { id: true, name: true },
+    }),
   ]);
   return (
     <CopyForm
+      workspaces={workspaces}
       courses={courses.map((course) => ({
         ...course,
         courseLessons: course.courseLessons.map((row) => ({

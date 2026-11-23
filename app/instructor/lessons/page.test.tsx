@@ -1,3 +1,4 @@
+import { lessonLibraryScope } from '@/lib/workspaces/permissions';
 import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
   getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
@@ -22,7 +23,7 @@ it('loads counts and only instructor-owned course associations, and passes URL s
   expect(screen.getByRole('link', { name: '+ New lesson' })).toHaveAttribute('href', '/instructor/lessons/new');
   expect(mockLessons).toHaveBeenCalledWith(
     expect.objectContaining({
-      where: {},
+      where: lessonLibraryScope(appUser({ clerkUserId: 'instructor-1' })),
       select: expect.objectContaining({
         _count: { select: { lessonNodes: true } },
         courseLessons: {

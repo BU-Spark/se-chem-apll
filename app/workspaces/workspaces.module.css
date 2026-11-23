@@ -1,0 +1,141 @@
+.backLink {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #1f5fab;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.muted {
+  margin-top: 0.25rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+.settingsPage {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+.settingsPage > header {
+  margin-bottom: 0;
+}
+.settingsForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  max-width: 720px;
+}
+.growField {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.invitationLink {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+.tableHeading {
+  margin-bottom: 1rem;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.workspaceHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.workspaceToolbar,
+.workspaceHeading,
+.workspaceLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+.workspaceToolbar label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  color: #374151;
+  font-size: 0.875rem;
+}
+.roleBadge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #edf2f8;
+  color: #52647a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.workspaceHeading {
+  justify-content: space-between;
+}
+.workspaceLinks a {
+  color: #1f5fab;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.subtitle {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+.library {
+  min-width: 0;
+}
+.libraryTabs {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.libraryTab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: -1px;
+  padding: 0 0 0.75rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.selectedLibraryTab {
+  border-bottom-color: #1f5fab;
+  color: #1f5fab;
+}
+.libraryTab:focus-visible,
+.backLink:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+}
+.tabCount {
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: #edf2f8;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+@media (max-width: 480px) {
+  .settingsForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .growField {
+    flex: 0 1 auto;
+    width: 100%;
+  }
+  .workspaceLinks {
+    gap: 0.5rem 1rem;
+  }
+}
+.objectives {
+  padding-left: 1.25rem;
+}

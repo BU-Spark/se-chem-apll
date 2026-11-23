@@ -52,6 +52,9 @@ export default function RoleSelector({
         )}
         {currentRole && <p>Current role: {currentRole === 'STUDENT' ? 'Student' : 'Instructor'}</p>}
         {admin && <p>Your administrator access remains available in either role.</p>}
+        <p>
+          <Link href="/workspaces">Open workspaces</Link>
+        </p>
         <div className={styles.roleButtons}>
           <button disabled={saving} className={styles.roleButton} onClick={() => select('STUDENT')}>
             <span className={styles.roleTitle}>Student</span>

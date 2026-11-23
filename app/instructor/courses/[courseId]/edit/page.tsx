@@ -1,3 +1,4 @@
+import { lessonLibraryScope } from '@/lib/workspaces/permissions';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { requireInstructor, contentScope } from '@/lib/auth/server';
@@ -31,7 +32,7 @@ export default async function EditCoursePage({ params }: Props) {
     prisma.lesson.findMany({
       where: {
         isDraft: false,
-        ...contentScope(user),
+        ...lessonLibraryScope(user),
       },
       select: { id: true, title: true, slug: true },
       orderBy: { title: 'asc' },

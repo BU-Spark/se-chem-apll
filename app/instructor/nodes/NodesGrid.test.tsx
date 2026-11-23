@@ -107,7 +107,7 @@ it('virtualizes a large library instead of mounting every row', async () => {
   expect(screen.getByRole('status')).toHaveTextContent('5000 of 5000 nodes');
 });
 
-it('uses linked titles and text statuses with only the five intended columns', async () => {
+it('uses linked titles and text statuses with the library and content columns', async () => {
   const { container } = setup();
   const link = await screen.findByRole('link', { name: 'Alpha' });
   expect(link).toHaveAttribute('href', '/instructor/nodes/a/edit');
@@ -121,7 +121,7 @@ it('uses linked titles and text statuses with only the five intended columns', a
       .getAllByRole('columnheader')
       .map((header) => header.getAttribute('col-id'))
       .filter(Boolean)
-  ).toEqual(['title', 'isDraft', 'tags', 'usage', 'updatedAt']);
+  ).toEqual(['title', 'workspace', 'isDraft', 'tags', 'usage', 'updatedAt']);
 });
 
 it('refreshes relative timestamps on focus without changing timestamp sorting', async () => {
