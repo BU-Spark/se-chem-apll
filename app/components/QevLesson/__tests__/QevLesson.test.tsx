@@ -1,4 +1,4 @@
-import { act, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import QevLesson from '../QevLesson';
 import type { VideoControls } from '@/app/components/QevVideo/QevVideo';
@@ -7,11 +7,6 @@ import type { TimelineItem } from '@/lib/studentNode';
 const mockPush = jest.fn();
 const mockRefresh = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush, refresh: mockRefresh }) }));
-jest.mock('@/app/components/QuestionBank/MarkdownPreview', () => ({
-  __esModule: true,
-  default: ({ content }: { content: string }) => <span>{content}</span>,
-}));
-
 // A fake player whose time the test controls.
 let time = 0;
 // Real YouTube can say "ended" while still reporting an old time.
@@ -95,15 +90,15 @@ describe('QevLesson', () => {
   });
   afterEach(() => jest.useRealTimers());
 
-  it('pauses at a question, checks the answer, and keeps the video playing', async () => {
+  it('keeps the video paused with formatted feedback until Continue', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const fetchMock = mockApi(
       {
         id: 'attempt-1',
         questions: [question('late', 'Asked at the end', ['Yes', 'No']), question('early', 'Asked at 10 seconds')],
       },
-      { correct: true },
-      { correct: false },
+      { correct: true, feedback: String.raw`**Water** is $\ce{H2O}$. Its molar mass is $18\,\mathrm{g/mol}$.` },
+      { correct: false, feedback: null },
       { id: 'attempt-1' }
     );
     renderLesson([asked('early', 10), asked('late', null)]);
@@ -121,21 +116,33 @@ describe('QevLesson', () => {
     expect(player.pause).toHaveBeenCalled();
 
     await user.click(screen.getByRole('radio', { name: /A/ }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
     expect(sent(fetchMock, 1)).toEqual([
       '/api/student/assignments/cl-1/check',
       { attemptId: 'attempt-1', answer: { questionId: 'early', selectedIndices: [0] } },
     ]);
-    // Feedback shows and the video resumes on its own: no second click.
     expect(await screen.findByRole('status')).toHaveTextContent('Correct');
+    const water = screen.getByText('Water', { selector: 'strong' });
+    expect(water.closest('p')?.querySelectorAll('.katex')).toHaveLength(2);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(screen.getByText('Asked at 10 seconds')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /B/ })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByText('Water')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(player.play).toHaveBeenCalled();
     expect(screen.queryByText('Asked at 10 seconds')).not.toBeInTheDocument();
 
     // The untimed question opens when the video ends; answering it saves everything.
     await advanceTo(99.8);
     await user.click(screen.getByRole('radio', { name: /No/ }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Incorrect');
+    expect(screen.getAllByTestId('markdown-preview')).toHaveLength(3); // Prompt and two choices.
+    expect(attemptCalls(fetchMock)).toHaveLength(3);
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(sent(fetchMock, 3)).toEqual([
       '/api/student/assignments/cl-1',
       {
@@ -161,6 +168,8 @@ describe('QevLesson', () => {
 
     await advanceTo(10);
     await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
+    await screen.findByRole('status');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText(/Finish the video to continue/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
@@ -168,6 +177,34 @@ describe('QevLesson', () => {
     await advanceTo(99.5);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/node');
+  });
+
+  it('retries a failed final save with the same locked answer and feedback', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const fetchMock = mockApi(
+      { id: 'attempt-1', questions: [question('q', 'At 10 seconds')] },
+      { correct: false, feedback: 'Check the units.' },
+      {}
+    );
+    renderLesson([asked('q', 10)]);
+    await screen.findByText(WAITING);
+    await advanceTo(10);
+    await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Incorrect');
+
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Unable to save.' }) });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save.');
+    expect(screen.getByText('Check the units.')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /B/ })).toBeDisabled();
+    expect(player.play).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(sent(fetchMock, 3)).toEqual(sent(fetchMock, 2));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(player.play).toHaveBeenCalledTimes(1);
   });
 
   it('opens a question timed past the end of the video when the video ends', async () => {
@@ -179,8 +216,10 @@ describe('QevLesson', () => {
     await advanceTo(99.5);
     expect(screen.getByText('Timed after the end')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: /A/ }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Correct');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(mockPush).toHaveBeenCalledWith('/node');
   });
@@ -208,12 +247,16 @@ describe('QevLesson', () => {
 
     await advanceTo(99.8);
     await user.click(screen.getByRole('radio', { name: /A/ }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
+    await screen.findByRole('status');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByText('Second at the end')).toBeInTheDocument();
+    expect(screen.getByText('Second at the end')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: /A/ }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
 
-    await waitForElementToBeRemoved(() => screen.queryByText('Second at the end'));
+    await screen.findByRole('status');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.queryByText('Second at the end')).not.toBeInTheDocument());
     expect(sent(fetchMock, 3)[1]).toMatchObject({ action: 'finish' });
     expect(player.play).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -234,7 +277,9 @@ describe('QevLesson', () => {
 
       await advanceTo(10);
       expect(player.pause).toHaveBeenCalled();
-      expect(screen.getByRole('region', { name: 'Note' })).toHaveTextContent('Watch the **flame** color.');
+      expect(
+        within(screen.getByRole('region', { name: 'Note' })).getByText('flame', { selector: 'strong' })
+      ).toBeInTheDocument();
       expect(screen.getByText('1/1 Questions')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -244,8 +289,9 @@ describe('QevLesson', () => {
       // Only the question is checked and saved.
       await advanceTo(30);
       await user.click(screen.getByRole('radio', { name: /A/ }));
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await user.click(screen.getByRole('button', { name: 'Check answer' }));
       await screen.findByRole('status');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       // The attempt API gets only the question.
       expect(attemptCalls(fetchMock)).toHaveLength(3);
       expect(sent(fetchMock, 1)[1]).toEqual({
@@ -316,7 +362,7 @@ describe('QevLesson', () => {
     await screen.findByText(WAITING);
     await advanceTo(99.5);
     await user.click(screen.getByRole('radio', { name: /A/ }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
     await screen.findByRole('status');
     expect(progressSaves(fetchMock)).toEqual([{ nodeId: 'ln1', positionSeconds: 100, watched: false }]);
   });
@@ -339,8 +385,10 @@ describe('QevLesson', () => {
 
       // The re-asked question can be answered, the attempt saves, and the student moves on.
       await user.click(screen.getByRole('radio', { name: /A/ }));
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await user.click(screen.getByRole('button', { name: 'Check answer' }));
       expect(await screen.findByRole('status')).toHaveTextContent('Correct');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByText(/Finish the video to continue/);
       expect(sent(fetchMock, 2)).toEqual([
         '/api/student/assignments/cl-1',
         { action: 'finish', attemptId: 'attempt-1', answers: [{ questionId: 'q', selectedIndices: [0] }] },
@@ -382,6 +430,8 @@ describe('QevLesson', () => {
       await screen.findByText(WAITING);
       await advanceTo(10);
       await user.click(screen.getByRole('radio', { name: /A/ }));
+      await user.click(screen.getByRole('button', { name: 'Check answer' }));
+      await screen.findByRole('status');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByText(/Finish the video to continue/);
 

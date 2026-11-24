@@ -30,7 +30,14 @@ const request = (body: unknown) => ({ json: async () => body }) as never;
 const check = async (answer: unknown) => POST(request({ attemptId: 'a1', answer }), context);
 const snapshot = {
   questions: [
-    { id: 'q1', prompt: 'Pick B', options: ['A', 'B'], correctIndices: [1] },
+    {
+      id: 'q1',
+      prompt: 'Pick B',
+      options: ['A', 'B'],
+      correctIndices: [1],
+      feedbackCorrect: '  **Well done!**',
+      feedbackIncorrect: 'Look at choice B again.',
+    },
     { id: 'both', prompt: 'Pick A and C', options: ['A', 'B', 'C'], correctIndices: [0, 2] },
     {
       id: 'num',
@@ -49,8 +56,14 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
   });
 
   it("checks one answer of the student's own unfinished video attempt", async () => {
-    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({ correct: true });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({ correct: false });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
+      correct: true,
+      feedback: '  **Well done!**',
+    });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+      correct: false,
+      feedback: 'Look at choice B again.',
+    });
 
     expect(mockAttemptFindFirst).toHaveBeenCalledWith({
       where: {
@@ -71,11 +84,26 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
   });
 
   it('checks multiple-answer, number, and "I\'m Not Sure" answers', async () => {
-    expect(await (await check({ questionId: 'both', selectedIndices: [2, 0] })).json()).toEqual({ correct: true });
-    expect(await (await check({ questionId: 'both', selectedIndices: [0] })).json()).toEqual({ correct: false });
-    expect(await (await check({ questionId: 'num', rawAnswer: '7' })).json()).toEqual({ correct: true });
-    expect(await (await check({ questionId: 'num', rawAnswer: '8' })).json()).toEqual({ correct: false });
-    expect(await (await check({ questionId: 'q1', notSure: true })).json()).toEqual({ correct: false });
+    expect(await (await check({ questionId: 'both', selectedIndices: [2, 0] })).json()).toEqual({
+      correct: true,
+      feedback: null,
+    });
+    expect(await (await check({ questionId: 'both', selectedIndices: [0] })).json()).toEqual({
+      correct: false,
+      feedback: null,
+    });
+    expect(await (await check({ questionId: 'num', rawAnswer: '7' })).json()).toEqual({
+      correct: true,
+      feedback: null,
+    });
+    expect(await (await check({ questionId: 'num', rawAnswer: '8' })).json()).toEqual({
+      correct: false,
+      feedback: null,
+    });
+    expect(await (await check({ questionId: 'q1', notSure: true })).json()).toEqual({
+      correct: false,
+      feedback: 'Look at choice B again.',
+    });
   });
 
   it('never writes to the database', async () => {
@@ -87,6 +115,19 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
     ];
     for (const [, write] of writes) expect(write).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, null, '  \n\t'])(
+    'returns null for feedback %j without using the other outcome',
+    async (value) => {
+      mockAttemptFindFirst.mockResolvedValue({
+        snapshot: { questions: [{ ...snapshot.questions[0], feedbackIncorrect: value }] },
+      });
+      expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+        correct: false,
+        feedback: null,
+      });
+    }
+  );
 
   it('returns the access error when signed out or not a student', async () => {
     mockApiAccess.mockResolvedValue({ error: { status: 401 } });

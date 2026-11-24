@@ -7,13 +7,14 @@ const LETTERS = 'ABCDEFGH';
 interface QuizQuestionViewProps {
   question: QuizQuestion;
   answer: QuizAnswer | undefined;
+  disabled?: boolean;
   onSelect: (selectedIndices: number[]) => void;
   onType: (rawAnswer: string) => void;
 }
 
 // One question: lettered choices for multiple choice (pick one, or several when more than one
 // is correct), a number box otherwise.
-export default function QuizQuestionView({ question, answer, onSelect, onType }: QuizQuestionViewProps) {
+export default function QuizQuestionView({ question, answer, disabled, onSelect, onType }: QuizQuestionViewProps) {
   const selected = answer && 'selectedIndices' in answer ? answer.selectedIndices : [];
   const toggle = (index: number) =>
     onSelect(selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index]);
@@ -36,6 +37,7 @@ export default function QuizQuestionView({ question, answer, onSelect, onType }:
               type="button"
               role={question.allowsMultiple ? 'checkbox' : 'radio'}
               aria-checked={selected.includes(index)}
+              disabled={disabled}
               className={selected.includes(index) ? `${styles.choice} ${styles.selected}` : styles.choice}
               onClick={() => (question.allowsMultiple ? toggle(index) : onSelect([index]))}
             >
@@ -52,6 +54,7 @@ export default function QuizQuestionView({ question, answer, onSelect, onType }:
             inputMode="decimal"
             className={styles.numberInput}
             value={rawAnswer}
+            disabled={disabled}
             onChange={(event) => onType(event.target.value)}
             aria-invalid={showNumberError}
           />

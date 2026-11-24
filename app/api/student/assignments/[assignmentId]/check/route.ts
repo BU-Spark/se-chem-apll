@@ -60,7 +60,9 @@ export async function POST(request: Request, { params }: Context) {
 
   // Grading errors become a 400 with their message, the same as the "finish" action.
   try {
-    return NextResponse.json({ correct: gradeAnswer(question, answer) });
+    const correct = gradeAnswer(question, answer);
+    const feedback = correct ? question.feedbackCorrect : question.feedbackIncorrect;
+    return NextResponse.json({ correct, feedback: feedback?.trim() ? feedback : null });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
