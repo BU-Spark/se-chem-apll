@@ -1,5 +1,7 @@
 /** @jest-environment node */
-jest.mock('@/lib/auth/content', () => ({ referencedContentAllowed: async () => true }));
+import { referencedContentAllowed } from '@/lib/auth/content';
+import { prisma } from '@/lib/prisma';
+jest.mock('@/lib/auth/content', () => ({ referencedContentAllowed: jest.fn().mockResolvedValue(true) }));
 import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
   getAppUser: jest.requireActual('@/test/mocks/appIdentity').mockGetAppUser,
@@ -27,7 +29,7 @@ jest.mock('@/lib/prisma', () => ({
       findFirst: (...args: unknown[]) => mockCourseFindFirst(...args),
       update: (...args: unknown[]) => mockCourseUpdate(...args),
     },
-    courseLesson: { count: jest.fn().mockResolvedValue(0) },
+    courseLesson: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     lesson: { findFirst: (...args: unknown[]) => mockLessonFindFirst(...args) },
     courseContact: { findMany: (...args: unknown[]) => mockContactFindMany(...args) },
   },
@@ -42,6 +44,8 @@ function patchRequest(body: unknown) {
 describe('PATCH /api/instructor/courses/[courseId]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (referencedContentAllowed as jest.Mock).mockResolvedValue(true);
+    (prisma.courseLesson.findMany as jest.Mock).mockResolvedValue([]);
     mockGetAppUser.mockResolvedValue(appUser({ clerkUserId: 'instructor-1' }));
     mockCourseFindFirst.mockResolvedValue({ id: 'course-1' });
     mockLessonFindFirst.mockResolvedValue(null);
@@ -283,5 +287,29 @@ describe('PATCH /api/instructor/courses/[courseId]', () => {
         }),
       })
     );
+  });
+
+  it('retains existing assignments after library access is revoked', async () => {
+    (prisma.courseLesson.findMany as jest.Mock).mockResolvedValue([{ lessonId: 'shared-lesson' }]);
+    (referencedContentAllowed as jest.Mock).mockImplementation(async (_kind, ids) => ids.length === 0);
+    mockGetAppUser.mockResolvedValue(appUser());
+    mockCourseFindFirst.mockResolvedValue({ id: 'course-1' });
+    const response = await PATCH(
+      patchRequest({ title: 'Updated title', lessons: [{ lessonId: 'shared-lesson', sortOrder: 0 }] }) as never,
+      context
+    );
+    expect(response.status).toBe(200);
+    expect(referencedContentAllowed).toHaveBeenLastCalledWith('lesson', [], expect.anything());
+  });
+  it('still rejects a newly added inaccessible lesson', async () => {
+    (prisma.courseLesson.findMany as jest.Mock).mockResolvedValue([{ lessonId: 'shared-lesson' }]);
+    (referencedContentAllowed as jest.Mock).mockResolvedValue(false);
+    mockCourseUpdate.mockClear();
+    const response = await PATCH(
+      patchRequest({ lessons: [{ lessonId: 'private-lesson', sortOrder: 0 }] }) as never,
+      context
+    );
+    expect(response.status).toBe(403);
+    expect(mockCourseUpdate).not.toHaveBeenCalled();
   });
 });

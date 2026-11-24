@@ -1,6 +1,10 @@
+import { lessonLibraryScope } from '@/lib/workspaces/permissions';
+import { creationWorkspace } from '@/lib/workspaces/access';
+import { authErrorResponse } from '@/lib/workspaces/http';
+import { lockNodes } from '@/lib/workspaces/access';
 import { referencedContentAllowed } from '@/lib/auth/content';
 import { NextRequest, NextResponse } from 'next/server';
-import { apiAccess, contentScope } from '@/lib/auth/api';
+import { apiAccess } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { isValidPassingPercent } from '@/app/utils/passingPercent';
 import { isValidQuizQuestionCount } from '@/app/utils/quizQuestionCount';
@@ -8,12 +12,12 @@ import { isAcyclic } from '@/app/utils/dagValidation';
 
 // GET /api/instructor/lessons
 export async function GET() {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   const lessons = await prisma.lesson.findMany({
     where: {
-      ...contentScope(user),
+      ...lessonLibraryScope(user),
     },
     include: {
       lessonNodes: {
@@ -28,7 +32,7 @@ export async function GET() {
 
 // POST /api/instructor/lessons
 export async function POST(req: NextRequest) {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   let body: unknown;
@@ -36,6 +40,16 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return NextResponse.json({ error: 'Body must be an object' }, { status: 422 });
+
+  let workspaceId: string | null;
+  try {
+    workspaceId = await creationWorkspace(user, (body as { workspaceId?: unknown })?.workspaceId);
+  } catch (error) {
+    return authErrorResponse(error);
   }
 
   const {
@@ -113,65 +127,77 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'slug must be lowercase letters, numbers, and hyphens only' }, { status: 422 });
   }
 
-  const nodeIds = [...new Set((lessonNodes ?? []).map((ln) => ln.nodeId))];
-  if (nodeIds.length > 0) {
-    if (!(await referencedContentAllowed('node', nodeIds, user)))
-      return NextResponse.json({ error: 'Referenced nodes are unavailable.' }, { status: 403 });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await creationWorkspace(user, workspaceId, tx);
+      const nodeIds = [...new Set((lessonNodes ?? []).map((ln) => ln.nodeId))];
+      await lockNodes(tx, nodeIds);
+      if (nodeIds.length > 0) {
+        if (!(await referencedContentAllowed('node', nodeIds, user, workspaceId, tx)))
+          return NextResponse.json(
+            { error: 'Nodes must be accessible and belong to this workspace or the seed library.' },
+            { status: 403 }
+          );
 
-    const draftNode = await prisma.node.findFirst({
-      where: { id: { in: nodeIds }, isDraft: true },
-      select: { id: true },
+        const draftNode = await tx.node.findFirst({
+          where: { id: { in: nodeIds }, isDraft: true },
+          select: { id: true },
+        });
+        if (draftNode) {
+          return NextResponse.json({ error: 'Draft nodes cannot be added to a lesson.' }, { status: 422 });
+        }
+      }
+
+      const lesson = await tx.lesson.create({
+        data: {
+          title: title?.trim() ?? '',
+          slug: slug?.trim() || null,
+          summary: summary?.trim() ?? '',
+          createdByClerkId: user.clerkUserId,
+          workspaceId,
+          isDraft,
+          description: description ?? null,
+          estimatedMinutes: estimatedMinutes ?? null,
+          lessonNodes: {
+            create: (lessonNodes ?? []).map((ln) => ({
+              nodeId: ln.nodeId,
+              sortOrder: ln.sortOrder,
+              passingPercent: ln.passingPercent ?? 0,
+              quizQuestionCount: ln.quizQuestionCount ?? 0,
+              isRequired: ln.isRequired ?? true,
+            })),
+          },
+        },
+        include: {
+          lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+        },
+      });
+      if (edges && edges.length > 0) {
+        const sortToId = new Map(lesson.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
+        const edgeRows = edges
+          .map(({ sourceSortOrder, targetSortOrder }) => ({
+            lessonId: lesson.id,
+            sourceId: sortToId.get(sourceSortOrder)!,
+            targetId: sortToId.get(targetSortOrder)!,
+          }))
+          .filter((e) => e.sourceId && e.targetId);
+        if (edgeRows.length > 0) {
+          await tx.lessonNodeEdge.createMany({ data: edgeRows });
+        }
+      }
+      const fullLesson = await tx.lesson.findUnique({
+        where: { id: lesson.id },
+        include: {
+          lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
+          lessonNodeEdges: {
+            select: { id: true, sourceId: true, targetId: true },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+      return NextResponse.json(fullLesson, { status: 201 });
     });
-    if (draftNode) {
-      return NextResponse.json({ error: 'Draft nodes cannot be added to a lesson.' }, { status: 422 });
-    }
+  } catch (error) {
+    return authErrorResponse(error);
   }
-
-  const lesson = await prisma.lesson.create({
-    data: {
-      title: title?.trim() ?? '',
-      slug: slug?.trim() || null,
-      summary: summary?.trim() ?? '',
-      createdByClerkId: user.clerkUserId,
-      isDraft,
-      description: description ?? null,
-      estimatedMinutes: estimatedMinutes ?? null,
-      lessonNodes: {
-        create: (lessonNodes ?? []).map((ln) => ({
-          nodeId: ln.nodeId,
-          sortOrder: ln.sortOrder,
-          passingPercent: ln.passingPercent ?? 0,
-          quizQuestionCount: ln.quizQuestionCount ?? 0,
-          isRequired: ln.isRequired ?? true,
-        })),
-      },
-    },
-    include: {
-      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
-    },
-  });
-  if (edges && edges.length > 0) {
-    const sortToId = new Map(lesson.lessonNodes.map((ln) => [ln.sortOrder, ln.id]));
-    const edgeRows = edges
-      .map(({ sourceSortOrder, targetSortOrder }) => ({
-        lessonId: lesson.id,
-        sourceId: sortToId.get(sourceSortOrder)!,
-        targetId: sortToId.get(targetSortOrder)!,
-      }))
-      .filter((e) => e.sourceId && e.targetId);
-    if (edgeRows.length > 0) {
-      await prisma.lessonNodeEdge.createMany({ data: edgeRows });
-    }
-  }
-  const fullLesson = await prisma.lesson.findUnique({
-    where: { id: lesson.id },
-    include: {
-      lessonNodes: { include: { node: true }, orderBy: { sortOrder: 'asc' } },
-      lessonNodeEdges: {
-        select: { id: true, sourceId: true, targetId: true },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
-  });
-  return NextResponse.json(fullLesson, { status: 201 });
 }

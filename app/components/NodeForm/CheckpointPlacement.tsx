@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormCheckpoint } from './types';
 import YouTubeAuthoringPlayer, { type YTPlayer } from './YouTubeAuthoringPlayer';
 import CheckpointGroupPreview from './CheckpointGroupPreview';
@@ -15,16 +15,57 @@ type Props = {
   onSaveDraft: () => void;
   saving?: boolean;
 };
+
+function isValidTimestamp(seconds: number) {
+  return Number.isInteger(seconds) && seconds >= 0 && seconds <= 2147483647;
+}
+
 export default function CheckpointPlacement({ checkpoints, videoId, onChange, onSaveDraft, saving = false }: Props) {
   const [selected, setSelected] = useState<string | null>(
     () => (checkpoints.find((c) => c.timeOffsetSeconds === null) ?? checkpoints[0])?.id ?? null
   );
-  const player = useRef<YTPlayer | null>(null);
-  const [ready, setReady] = useState(false);
+  const [player, setPlayer] = useState<YTPlayer | null>(null);
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  const [seekError, setSeekError] = useState<string | null>(null);
   const unplaced = checkpoints.filter((c) => c.timeOffsetSeconds === null);
+  const selectedTime = checkpoints.find((c) => c.id === selected)?.timeOffsetSeconds ?? null;
+
+  useEffect(() => {
+    setSeekError(null);
+    if (!player || selectedTime === null) return;
+    if (!isValidTimestamp(selectedTime)) {
+      setSeekError('Enter a valid whole-second timestamp.');
+      return;
+    }
+
+    let durationCheck: ReturnType<typeof setTimeout> | undefined;
+    const deadline = Date.now() + 5000;
+    function checkDuration(activePlayer: YTPlayer, seconds: number, shouldSeek: boolean) {
+      try {
+        const duration = activePlayer.getDuration();
+        const durationKnown = Number.isFinite(duration) && duration > 0;
+        if (durationKnown && seconds > duration) {
+          setSeekError('This timestamp is past the end of the video. Choose an earlier time.');
+          return;
+        }
+        if (shouldSeek) {
+          activePlayer.seekTo(seconds, true);
+        }
+        // An unstarted YouTube video can report 0 until a seek starts loading it.
+        if (!durationKnown && Date.now() < deadline) {
+          durationCheck = setTimeout(() => checkDuration(activePlayer, seconds, false), 250);
+        }
+      } catch {
+        setSeekError('The video could not jump to this time. You can still adjust the timestamp manually.');
+      }
+    }
+
+    checkDuration(player, selectedTime, true);
+    return () => clearTimeout(durationCheck);
+  }, [player, selected, selectedTime]);
+
   function assign(id: string, seconds: number | null) {
-    if (seconds !== null && (!Number.isInteger(seconds) || seconds < 0 || seconds > 2147483647)) {
+    if (seconds !== null && !isValidTimestamp(seconds)) {
       setError({ id, message: 'Enter a valid whole-second timestamp.' });
       return;
     }
@@ -48,7 +89,9 @@ export default function CheckpointPlacement({ checkpoints, videoId, onChange, on
       <div className={styles.heading}>
         <div className={styles.headingText}>
           <h2 className={styles.title}>Assign checkpoint timestamps</h2>
-          <p className={styles.subtitle}>Select a group, find its place in the video, and assign a time.</p>
+          <p className={styles.subtitle}>
+            Select a group to jump to its assigned time, or find its place in the video and assign a time.
+          </p>
         </div>
         <button type="button" className={formStyles.draftBtn} onClick={onSaveDraft} disabled={saving}>
           {saving ? 'Saving…' : 'Save as draft'}
@@ -61,13 +104,7 @@ export default function CheckpointPlacement({ checkpoints, videoId, onChange, on
         <aside className={styles.player}>
           {videoId ? (
             <div className={formStyles.videoWrap}>
-              <YouTubeAuthoringPlayer
-                videoId={videoId}
-                onReady={(value) => {
-                  player.current = value;
-                  setReady(true);
-                }}
-              />
+              <YouTubeAuthoringPlayer videoId={videoId} onReady={setPlayer} />
             </div>
           ) : (
             <div className={styles.noVideo}>
@@ -98,12 +135,12 @@ export default function CheckpointPlacement({ checkpoints, videoId, onChange, on
                       <button
                         type="button"
                         className={formStyles.submitBtn}
-                        disabled={!ready}
+                        disabled={!player}
                         onClick={() => {
                           try {
-                            const seconds = player.current?.getCurrentTime();
+                            const seconds = player?.getCurrentTime();
                             if (seconds === undefined || !Number.isFinite(seconds)) throw new Error();
-                            player.current?.pauseVideo();
+                            player?.pauseVideo();
                             assign(checkpoint.id, Math.floor(seconds));
                           } catch {
                             setError({
@@ -128,9 +165,9 @@ export default function CheckpointPlacement({ checkpoints, videoId, onChange, on
                       </button>
                     )}
                   </div>
-                  {error?.id === checkpoint.id && (
+                  {(error?.id === checkpoint.id || seekError) && (
                     <p role="alert" className={styles.error}>
-                      {error.message}
+                      {error?.id === checkpoint.id ? error.message : seekError}
                     </p>
                   )}
                 </>

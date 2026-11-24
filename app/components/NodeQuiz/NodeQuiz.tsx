@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAttemptApi from '@/app/hooks/useAttemptApi';
@@ -10,6 +10,7 @@ import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
 import buttons from '@/app/styles/buttons.module.css';
+import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import NotSureDialog from './NotSureDialog';
 import styles from './NodeQuiz.module.css';
 
@@ -22,6 +23,8 @@ interface NodeQuizProps {
   doneHref: string;
   // Skip the intro, e.g. when retaking the quiz after the video lesson.
   startImmediately?: boolean;
+  purpose?: 'STANDARD' | 'IMPROVEMENT';
+  attemptId?: string;
 }
 
 /**
@@ -36,8 +39,11 @@ export default function NodeQuiz({
   lessonHref,
   doneHref,
   startImmediately = false,
+  purpose = 'STANDARD',
+  attemptId,
 }: NodeQuizProps) {
   const router = useRouter();
+  const startKey = useRef<string | null>(null);
   const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[] } | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
@@ -46,11 +52,14 @@ export default function NodeQuiz({
 
   const start = () =>
     run(async () => {
+      startKey.current ??= crypto.randomUUID();
       const started = await post({
         action: 'start',
         nodeId: lessonNodeId,
         kind: 'QUIZ',
-        key: crypto.randomUUID(),
+        key: startKey.current,
+        ...(purpose === 'IMPROVEMENT' ? { purpose } : {}),
+        ...(attemptId ? { attemptId } : {}),
       });
       setAttempt({ id: started.id, questions: started.questions });
     });
@@ -60,6 +69,7 @@ export default function NodeQuiz({
     run(async () => {
       await post({
         action: 'finish',
+        submitWhenReady: true,
         attemptId: attempt!.id,
         answers: attempt!.questions.map((question) => ({ questionId: question.id, ...finalAnswers[question.id] })),
       });
@@ -75,7 +85,7 @@ export default function NodeQuiz({
     return (
       <NodeScreenFrame closeHref={lessonHref}>
         {error ? (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         ) : (
@@ -88,18 +98,18 @@ export default function NodeQuiz({
   if (!attempt) {
     return (
       <NodeScreenFrame closeHref={lessonHref}>
-        <h1 className={styles.introTitle}>{nodeTitle}</h1>
-        <p className={styles.introLead}>Take your first step forward in your learning journey.</p>
-        <p className={styles.introText}>
+        <h1 className={screen.title}>{nodeTitle}</h1>
+        <p className={screen.lead}>Take your first step forward in your learning journey.</p>
+        <p className={screen.text}>
           We&rsquo;ll take a quick look at what you already know. If you don&rsquo;t know an answer, that&rsquo;s
           okay&mdash;this is just a starting point, not a test.
         </p>
         {error && (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         )}
-        <div className={styles.actions}>
+        <div className={screen.actions}>
           <Link href={lessonHref} className={buttons.secondary}>
             Back
           </Link>
@@ -140,12 +150,12 @@ export default function NodeQuiz({
           key={question.id}
           question={question}
           answer={answers[question.id]}
-          onChoose={(choiceIndex) => setAnswer({ selectedIndices: [choiceIndex] })}
+          onSelect={(selectedIndices) => setAnswer({ selectedIndices })}
           onType={(rawAnswer) => setAnswer({ rawAnswer })}
         />
 
         {error && (
-          <p role="alert" className={styles.error}>
+          <p role="alert" className={screen.error}>
             {error}
           </p>
         )}

@@ -9,6 +9,8 @@ import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types'
 import styles from './page.module.css';
 
 interface Props {
+  returnTo?: string;
+  canDelete?: boolean;
   lesson: Lesson & {
     lessonNodes: (LessonNode & { node: Node })[];
     lessonNodeEdges: { id: string; sourceId: string; targetId: string }[];
@@ -16,7 +18,12 @@ interface Props {
   availableNodes: PaletteNode[];
 }
 
-export default function LessonEditForm({ lesson, availableNodes }: Props) {
+export default function LessonEditForm({
+  lesson,
+  availableNodes,
+  returnTo = '/instructor/lessons',
+  canDelete = true,
+}: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -165,7 +172,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
 
-      router.push('/instructor/lessons');
+      router.push(returnTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -196,7 +203,7 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
 
-      router.push('/instructor/lessons');
+      router.push(returnTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -213,9 +220,11 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
         </p>
       </header>
 
-      <p>
-        <Link href={`/instructor/copy?mode=nodes&destinationId=${lesson.id}`}>Copy nodes from another course</Link>
-      </p>
+      {!lesson.workspaceId && (
+        <p>
+          <Link href={`/instructor/copy?mode=nodes&destinationId=${lesson.id}`}>Copy nodes from another course</Link>
+        </p>
+      )}
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>
@@ -297,11 +306,17 @@ export default function LessonEditForm({ lesson, availableNodes }: Props) {
         {error && <p className={styles.error}>{error}</p>}
 
         <div className={styles.actions}>
-          <button type="button" onClick={handleDelete} className={styles.deleteBtn} disabled={deleting || saving}>
+          <button
+            type="button"
+            onClick={handleDelete}
+            hidden={!canDelete}
+            className={styles.deleteBtn}
+            disabled={deleting || saving}
+          >
             {deleting ? 'Deleting…' : 'Delete lesson'}
           </button>
           <div className={styles.rightActions}>
-            <a href="/instructor/lessons" className={styles.cancelLink}>
+            <a href={returnTo} className={styles.cancelLink}>
               Cancel
             </a>
             <button

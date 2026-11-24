@@ -9,6 +9,7 @@ import RefreshKnowledge from '@/app/components/RefreshKnowledge/RefreshKnowledge
 import VideoResult from '@/app/components/VideoResult/VideoResult';
 import KeepMovingForward from '@/app/components/KeepMovingForward/KeepMovingForward';
 import NodeIncomplete from '@/app/components/NodeIncomplete/NodeIncomplete';
+import NodeClosed from '@/app/components/NodeClosed/NodeClosed';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,9 +29,16 @@ export default async function StudentNodePage({ params }: PageProps) {
   const nodeHref = ROUTES.studentNode(courseId, lessonId, nodeId);
   const videoHref = ROUTES.studentNode(courseId, lessonId, nodeId, 'video');
   const quizHref = ROUTES.studentNode(courseId, lessonId, nodeId, 'quiz');
-  // Locked nodes can't be opened yet; send the student back to the lesson map.
+  // Nodes the map can't open (locked, or before the lesson opens) go back to the map.
   if (view.screen === 'LOCKED') redirect(lessonHref);
 
+  const improvement = {
+    improvementHref:
+      view.node.openForWork && view.node.prerequisitesReady && (view.node.canImprove || view.node.improvementAttemptId)
+        ? `${quizHref}?improve=1`
+        : undefined,
+    resumingImprovement: !!view.node.improvementAttemptId,
+  };
   const quizScore = { correct: view.lastQuiz?.correct ?? 0, total: view.lastQuiz?.total ?? 0 };
 
   switch (view.screen) {
@@ -44,7 +52,9 @@ export default async function StudentNodePage({ params }: PageProps) {
         />
       );
     case 'COMPLETE':
-      return <NodeComplete lessonHref={lessonHref} {...quizScore} coursePercent={view.coursePercent} />;
+      return (
+        <NodeComplete {...improvement} lessonHref={lessonHref} {...quizScore} coursePercent={view.coursePercent} />
+      );
     case 'REFRESH':
       return (
         <RefreshKnowledge
@@ -61,22 +71,34 @@ export default async function StudentNodePage({ params }: PageProps) {
           {...quizScore}
           coursePercent={view.coursePercent}
           lessonHref={lessonHref}
-          // Foundational nodes retry through the video lesson; regular nodes go straight to the quiz.
-          retryHref={view.node.isFoundational ? videoHref : quizHref}
+          retryHref={videoHref}
+        />
+      );
+    case 'CLOSED':
+      return (
+        <NodeClosed
+          {...quizScore}
+          coursePercent={view.coursePercent}
+          lessonHref={lessonHref}
+          videoUrl={view.video.url}
         />
       );
     case 'INCOMPLETE':
-      return <NodeIncomplete {...quizScore} coursePercent={view.coursePercent} lessonHref={lessonHref} />;
+      return (
+        <NodeIncomplete {...improvement} {...quizScore} coursePercent={view.coursePercent} lessonHref={lessonHref} />
+      );
     case 'VIDEO_RESULT':
+      // A video without questions has no result to show: the student goes on to the quiz.
+      if (!view.lastVideo) redirect(quizHref);
       return (
         <VideoResult
-          passed={view.lastVideo!.passed}
+          passed={view.lastVideo.passed}
           isFoundational={view.node.isFoundational}
-          correct={view.lastVideo!.correct}
-          total={view.lastVideo!.total}
+          correct={view.lastVideo.correct}
+          total={view.lastVideo.total}
           coursePercent={view.coursePercent}
           lessonHref={lessonHref}
-          rewatchHref={videoHref}
+          rewatchHref={`${videoHref}?restart=1`}
           quizHref={quizHref}
         />
       );

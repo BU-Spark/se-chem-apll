@@ -46,7 +46,9 @@ model User {
   name                 String?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
+  workspaceMemberships WorkspaceMember[]
   enrollments          Enrollment[]
+  courseJoinRateLimit  CourseJoinRateLimit?
   courseLessonProgress CourseLessonProgress[]
   lessonNodeAttempts   NodeAttempt[]
   nodeResponses        NodeResponse[]
@@ -54,6 +56,7 @@ model User {
   analytics            StudentAnalytics?
   surveyResponses      SurveyResponse[]
   badgeProgress        StudentBadge[]
+  videoProgress        NodeVideoProgress[]
 
   @@map("Student")
 }
@@ -106,9 +109,25 @@ model Course {
   enrollments      Enrollment[]
   courseLessons    CourseLesson[]
   contacts         CourseContact[]
+  joinCode         CourseJoinCode?
 
   @@unique([code, section])
   @@index([createdByClerkId])
+}
+
+model CourseJoinCode {
+  courseId String @id
+  code     String @unique @db.VarChar(8)
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model CourseJoinRateLimit {
+  studentId       String   @id
+  windowExpiresAt DateTime @db.Timestamptz(3)
+  attempts        Int
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 model CourseContact {
@@ -164,6 +183,8 @@ model Lesson {
   estimatedMinutes  Int?
   createdByClerkId  String?
   isDraft           Boolean            @default(false)
+  workspaceId       String?
+  workspace         Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   courseLessons     CourseLesson[]
@@ -173,6 +194,7 @@ model Lesson {
   badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
 
   @@index([createdByClerkId])
+  @@index([workspaceId])
 }
 
 enum LatePenaltyType {
@@ -196,9 +218,10 @@ model CourseLesson {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
-  course   Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lesson   Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  progress CourseLessonProgress[]
+  course        Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson        Lesson                 @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  progress      CourseLessonProgress[]
+  videoProgress NodeVideoProgress[]
 
   @@unique([courseId, lessonId])
   @@index([lessonId])
@@ -220,6 +243,8 @@ model Node {
   learningObjectives String[]         @default([])
   createdByClerkId   String?
   isDraft            Boolean          @default(false)
+  workspaceId        String?
+  workspace          Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   checkpoints        NodeCheckpoint[]
@@ -227,6 +252,7 @@ model Node {
   lessonNodes        LessonNode[]
 
   @@index([createdByClerkId])
+  @@index([workspaceId])
 }
 
 // Timestamped QEV cue during the node video; holds one or more checkpoint questions.
@@ -319,11 +345,12 @@ model LessonNode {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  lesson        Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  node          Node             @relation(fields: [nodeId], references: [id])
+  lesson        Lesson              @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  node          Node                @relation(fields: [nodeId], references: [id])
   attempts      NodeAttempt[]
-  edgesAsSource LessonNodeEdge[] @relation("EdgeSource")
-  edgesAsTarget LessonNodeEdge[] @relation("EdgeTarget")
+  edgesAsSource LessonNodeEdge[]    @relation("EdgeSource")
+  edgesAsTarget LessonNodeEdge[]    @relation("EdgeTarget")
+  videoProgress NodeVideoProgress[]
 
   @@unique([lessonId, sortOrder])
 }
@@ -407,7 +434,35 @@ model LessonSubmission {
   @@index([progressId, finalPercent, submittedAt])
 }
 
+enum AttemptPurpose {
+  STANDARD
+  IMPROVEMENT
+}
+
+// Where a student is in a node's video, so leaving and coming back resumes there. Videos without
+// questions have no attempt, so watchedAt also records that the video was watched to the end.
+model NodeVideoProgress {
+  id              String       @id @default(cuid())
+  studentId       String
+  courseLessonId  String
+  lessonNodeId    String
+  // How far the student got; only used to resume if saved after their latest failed quiz.
+  positionSeconds Float        @default(0)
+  // The latest time a video without questions was watched to the end.
+  watchedAt       DateTime?
+  updatedAt       DateTime     @updatedAt
+  student         User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseLesson    CourseLesson @relation(fields: [courseLessonId], references: [id], onDelete: Cascade)
+  lessonNode      LessonNode   @relation(fields: [lessonNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseLessonId, lessonNodeId])
+}
+
 model NodeAttempt {
+  purpose          AttemptPurpose @default(STANDARD)
+  draftAnswers     Json           @default("[]")
+  videoCompletedAt DateTime?
+
   id             String               @id @default(cuid())
   progressId     String
   courseLessonId String
@@ -572,4 +627,64 @@ model SurveyResponse {
 enum SurveyContext {
   LESSON
   BADGE
+}
+
+// Workspace roles grant content permissions only, never course or platform roles.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Workspace {
+  id          String                @id @default(cuid())
+  name        String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  nodes       Node[]
+  lessons     Lesson[]
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  tokenHash   String        @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+}
+
+// Snapshots survive membership removal and workspace deletion.
+model WorkspaceAudit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorId     String
+  action      String
+  targetId    String?
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
 }

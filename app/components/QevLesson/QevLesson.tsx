@@ -1,174 +1,285 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAttemptApi from '@/app/hooks/useAttemptApi';
 import useRunOnce from '@/app/hooks/useRunOnce';
 import NodeScreenFrame from '@/app/components/NodeScreenFrame/NodeScreenFrame';
 import QuizProgress from '@/app/components/QuizProgress/QuizProgress';
-import QevVideo, { type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import QevVideo, { END_TOLERANCE_SECONDS, hasEnded, type VideoControls } from '@/app/components/QevVideo/QevVideo';
+import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
-import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
+import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
+import StudentFeedback from '@/app/components/StudentFeedback/StudentFeedback';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
+import type { TimelineItem } from '@/lib/studentNode';
 import buttons from '@/app/styles/buttons.module.css';
+import screen from '@/app/components/NodeScreenFrame/nodeScreen.module.css';
 import styles from './QevLesson.module.css';
 
 const POLL_MS = 300;
-// Players can stop slightly before their reported duration, so count the last second as the end.
-const END_TOLERANCE_SECONDS = 1;
-// Developer-only shortcut for testing; never set this in production.
-const DEV_SKIP = process.env.NEXT_PUBLIC_DEV_QEV_SKIP === 'true';
+const SAVE_EVERY_MS = 5000;
 
 interface QevLessonProps {
   courseLessonId: string;
   lessonNodeId: string;
   nodeTitle: string;
   video: { url: string | null; muxPlaybackId: string | null };
-  // When each question appears, in seconds; null means after the video ends.
-  questionTimes: Record<string, number | null>;
+  // The video's questions and notes, in the instructor's order.
+  timeline: TimelineItem[];
+  // Where the student left the video last time, in seconds (0 to start over).
+  resumeAt: number;
   lessonHref: string;
-  // Where to go once every question is answered (the node page shows the video result).
+  // Where Continue goes after the video (the video result, or the quiz when there are no questions).
   doneHref: string;
+  markReviewed?: boolean;
 }
 
-// Untimed questions go last, keeping their order.
-function byTime(questions: QuizQuestion[], times: Record<string, number | null>) {
-  const at = (question: QuizQuestion) => times[question.id] ?? Infinity;
-  return [...questions].sort((a, b) => at(a) - at(b));
+// One place the video pauses: a question to answer, or a note to read.
+type Stop = Extract<TimelineItem, { kind: 'NOTE' }> | { kind: 'QUESTION'; at: number | null; question: QuizQuestion };
+
+/**
+ * The video's pauses by time, untimed ones last. The sort keeps equal times in the instructor's
+ * order. Questions use the attempt's copy; one no longer in the video still gets asked at the end,
+ * since the attempt needs every answer. When resuming, notes already passed aren't shown again;
+ * unanswered questions still appear.
+ */
+function buildStops(timeline: TimelineItem[], questions: QuizQuestion[], resumeAt: number): Stop[] {
+  const timed = timeline.flatMap((item): Stop[] => {
+    if (item.kind === 'NOTE') return item.at != null && item.at < resumeAt ? [] : [item];
+    const question = questions.find((q) => q.id === item.id);
+    return question ? [{ kind: 'QUESTION', at: item.at, question }] : [];
+  });
+  const leftover = questions
+    .filter((question) => !timeline.some((item) => item.id === question.id))
+    .map((question): Stop => ({ kind: 'QUESTION', at: null, question }));
+  return [...timed, ...leftover].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
+}
+
+// Saves where the student is in the video, in the background: a failed save only means resuming a
+// bit earlier next time. Saves can also finish out of order; at worst that moves the position back
+// by one save interval. keepalive lets it finish while the student is leaving the page.
+function saveVideoProgress(
+  courseLessonId: string,
+  nodeId: string,
+  progress: { positionSeconds: number; watched?: boolean }
+) {
+  void fetch(`/api/student/assignments/${courseLessonId}/video-progress`, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nodeId, ...progress }),
+  }).catch(() => {});
 }
 
 /**
- * The video lesson: plays the node's video and pauses when it reaches each question's time.
- * Each answer is checked right away ("Correct"/"Incorrect"), then the video continues. When the
- * last question is done, all answers are saved through the team's attempt API.
+ * Plays the video with pauses for notes and questions. Answers are saved as drafts
+ * as they are entered. The checkpoint completes once every answer and the video end are saved.
  */
 export default function QevLesson({
   courseLessonId,
   lessonNodeId,
   nodeTitle,
   video,
-  questionTimes,
+  timeline,
+  resumeAt,
   lessonHref,
   doneHref,
+  markReviewed = false,
 }: QevLessonProps) {
   const router = useRouter();
   const controls = useRef<VideoControls | null>(null);
   const hasVideo = Boolean(video.url || video.muxPlaybackId);
-  const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[] } | null>(null);
+  // Only videos with questions have an attempt to start and save.
+  const hasQuestions = timeline.some((item) => item.kind === 'QUESTION');
+  const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[]; restoredCount: number } | null>(null);
+  const startKey = useRef<string | null>(null);
+  const reviewKey = useRef<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
-  const [answeredCount, setAnsweredCount] = useState(0);
-  const [questionOpen, setQuestionOpen] = useState(!hasVideo);
-  const [feedback, setFeedback] = useState<boolean | null>(null);
+  const [stopIndex, setStopIndex] = useState(0);
+  const [stopOpen, setStopOpen] = useState(!hasVideo);
+  const [checked, setChecked] = useState<{ correct: boolean; feedback: string | null } | null>(null);
   // Without a video there's nothing to wait for.
   const [videoEnded, setVideoEnded] = useState(!hasVideo);
-  // All answers saved; the student can move on once the video has ended.
-  const [saved, setSaved] = useState(false);
+  // All answers saved (nothing to save without questions); the student can move on once the
+  // video has ended.
+  const [saved, setSaved] = useState(!hasQuestions);
   const { post, run, busy, error } = useAttemptApi(courseLessonId);
 
   // Start (or resume) the video-question attempt once.
   useRunOnce(() => {
+    if (!hasQuestions) return;
     run(async () => {
+      startKey.current ??= crypto.randomUUID();
       const started = await post({
         action: 'start',
         nodeId: lessonNodeId,
         kind: 'CHECKPOINT',
-        key: crypto.randomUUID(),
+        key: startKey.current,
       });
-      setAttempt({ id: started.id, questions: byTime(started.questions, questionTimes) });
+      const drafts = Object.fromEntries(
+        (started.draftAnswers ?? []).map((answer: QuizAnswer & { questionId: string }) => [answer.questionId, answer])
+      );
+      const questions: QuizQuestion[] = started.questions;
+      const pending = started.completedAt ? [] : questions.filter((question) => !drafts[question.id]);
+      setAttempt({ id: started.id, questions: pending, restoredCount: questions.length - pending.length });
+      setAnswers(drafts);
+      if (started.videoCompletedAt) setVideoEnded(true);
+      setSaved(Boolean(started.completedAt));
     });
   });
 
-  const questions = attempt?.questions ?? [];
-  const question = questions[answeredCount];
-
-  // While the video plays, pause it at the next question's time, and notice when it ends
-  // (untimed questions appear then).
+  // How far the student has got (the furthest point played), saved every few seconds and on
+  // leaving, so coming back resumes there.
+  const position = useRef(resumeAt);
+  const savedPosition = useRef(resumeAt);
   useEffect(() => {
-    if (questionOpen || videoEnded) return;
+    const save = () => {
+      if (position.current <= savedPosition.current + 1) return;
+      savedPosition.current = position.current;
+      saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: position.current });
+    };
+    const timer = setInterval(save, SAVE_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+      save();
+    };
+  }, [courseLessonId, lessonNodeId]);
+
+  // Save the end right away. A video without questions has no attempt, so this also records that
+  // it was watched (coming back then goes to the quiz).
+  const savedEnd = useRef(false);
+  useEffect(() => {
+    if (!videoEnded || savedEnd.current) return;
+    savedEnd.current = true;
+    savedPosition.current = position.current;
+    saveVideoProgress(courseLessonId, lessonNodeId, { positionSeconds: position.current, watched: !hasQuestions });
+  }, [videoEnded, hasQuestions, courseLessonId, lessonNodeId]);
+
+  // Wait for the attempt's questions before stopping anywhere, so the order never shifts.
+  const stops = useMemo(
+    () => (hasQuestions && !attempt ? null : buildStops(timeline, attempt?.questions ?? [], resumeAt)),
+    [attempt, hasQuestions, timeline, resumeAt]
+  );
+  const stop = stops?.[stopIndex];
+  const restoredCount = attempt?.restoredCount ?? 0;
+  const questionCount = restoredCount + (stops?.filter((s) => s.kind === 'QUESTION').length ?? 0);
+  const questionsDone = restoredCount + (stops?.slice(0, stopIndex).filter((s) => s.kind === 'QUESTION').length ?? 0);
+
+  // While the video plays, pause it at the next stop's time, and notice when it ends
+  // (untimed stops appear then).
+  useEffect(() => {
+    if (stopOpen || videoEnded) return;
     const timer = setInterval(() => {
       const player = controls.current;
       if (!player) return;
-      const ended = player.duration() > 0 && player.currentTime() >= player.duration() - END_TOLERANCE_SECONDS;
+      const ended = hasEnded(player);
+      // At the end, YouTube can still report an older time, so use the full length.
+      position.current = Math.max(position.current, ended ? player.duration() : player.currentTime());
       if (ended) setVideoEnded(true);
-      if (!question) return;
-      const at = questionTimes[question.id];
-      // At the end, every remaining question opens, even one timed past the video's real length.
-      if (ended || (at != null && player.currentTime() >= at)) {
+      if (!stop) return;
+      // At the end, every remaining stop opens, even one timed past the video's real length.
+      if (ended || (stop.at != null && player.currentTime() >= stop.at)) {
         player.pause();
-        setFeedback(null);
-        setQuestionOpen(true);
+        setStopOpen(true);
       }
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [question, questionOpen, questionTimes, videoEnded]);
+  }, [stop, stopOpen, videoEnded]);
 
-  // Dev-only: jump to the next question's time (or the end) instead of watching.
+  // Dev-only: jump to the next stop's time (or the end) instead of watching.
   function devSkip() {
     const player = controls.current;
     if (!player) return;
     // Land inside the end tolerance, so the lesson sees the video as finished.
     const end = Math.max(0, player.duration() - END_TOLERANCE_SECONDS / 2);
-    player.seekTo(question ? (questionTimes[question.id] ?? end) : end);
+    player.seekTo(stop?.at ?? end);
   }
 
-  // Check the answer, show Correct/Incorrect, and keep the video playing. After the last
-  // question, save all answers; the student continues once the video has ended.
-  const submitAnswer = () =>
+  // Move past the current stop: after the video has ended the next stop opens right away,
+  // otherwise the video keeps playing until it gets there.
+  function nextStop() {
+    const next = stopIndex + 1;
+    const afterVideo = !hasVideo || videoEnded;
+    setChecked(null);
+    setStopIndex(next);
+    setStopOpen(afterVideo && next < stops!.length);
+    if (!afterVideo) controls.current?.play();
+  }
+
+  // Save each answer and show Correct/Incorrect with the instructor's feedback. The stop stays
+  // open (video paused) until the student clicks Continue.
+  const submitAnswer = (question: QuizQuestion) =>
     run(async () => {
-      const result = await post(
-        { attemptId: attempt!.id, answer: { questionId: question.id, ...answers[question.id] } },
-        '/check'
-      );
-      setFeedback(result.correct);
-      const next = answeredCount + 1;
-      setAnsweredCount(next);
-      setQuestionOpen(!hasVideo && next < questions.length);
-      if (next === questions.length) {
-        await post({
-          action: 'finish',
-          attemptId: attempt!.id,
-          answers: questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
-        });
-        setSaved(true);
-      }
-      if (hasVideo) controls.current?.play();
+      const result = await post({
+        action: 'saveCheckpoint',
+        attemptId: attempt!.id,
+        answer: { questionId: question.id, ...answers[question.id] },
+        videoEnded,
+      });
+      setChecked({ correct: result.correct, feedback: result.feedback ?? null });
+      setSaved(Boolean(result.completedAt));
     });
 
-  function goToResult() {
-    router.push(doneHref);
-    router.refresh();
+  async function goToResult() {
+    await run(async () => {
+      if (markReviewed) {
+        reviewKey.current ??= crypto.randomUUID();
+        const review = await post({ action: 'start', kind: 'REVIEW', nodeId: lessonNodeId, key: reviewKey.current });
+        await post({ action: 'finish', attemptId: review.id, answers: [], submitWhenReady: true, videoEnded: true });
+      } else if (!saved) {
+        const result = await post({ action: 'saveCheckpoint', attemptId: attempt!.id, videoEnded: true });
+        if (!result.completedAt) throw new Error('Save every answer before completing the video lesson.');
+        setSaved(true);
+      }
+      router.push(doneHref);
+      router.refresh();
+    });
   }
+
+  const openStop = stopOpen || videoEnded ? stop : undefined;
+  // Every pause handled, answers saved and the video over: the student can move on.
+  const done = Boolean(stops) && !stop && videoEnded;
 
   return (
     <NodeScreenFrame closeHref={lessonHref}>
       <div className={styles.layout}>
-        <section className={styles.panel} aria-label="Video questions">
+        <section className={styles.panel} aria-label="Video questions and notes">
           <QuizProgress
             title={`${nodeTitle} Video Lesson`}
-            filled={answeredCount + (questionOpen ? 1 : 0)}
-            current={Math.min(answeredCount + 1, questions.length)}
-            total={questions.length}
+            filled={questionsDone + (openStop?.kind === 'QUESTION' ? 1 : 0)}
+            current={Math.min(questionsDone + 1, questionCount)}
+            total={questionCount}
           />
 
-          {question && questionOpen ? (
+          {openStop?.kind === 'QUESTION' && (
             <QuizQuestionView
-              key={question.id}
-              question={question}
-              answer={answers[question.id]}
-              onChoose={(choiceIndex) =>
-                setAnswers((prev) => ({ ...prev, [question.id]: { selectedIndices: [choiceIndex] } }))
+              key={openStop.question.id}
+              question={openStop.question}
+              answer={answers[openStop.question.id]}
+              disabled={busy || checked !== null}
+              onSelect={(selectedIndices) =>
+                setAnswers((prev) => ({ ...prev, [openStop.question.id]: { selectedIndices } }))
               }
-              onType={(rawAnswer) => setAnswers((prev) => ({ ...prev, [question.id]: { rawAnswer } }))}
+              onType={(rawAnswer) => setAnswers((prev) => ({ ...prev, [openStop.question.id]: { rawAnswer } }))}
             />
-          ) : (
-            attempt && (
-              <p className={styles.waiting}>
-                {saved
-                  ? 'All questions answered. Finish the video to continue.'
-                  : 'Watch the video. Questions will appear here.'}
-              </p>
-            )
+          )}
+          {checked && <StudentFeedback {...checked} />}
+          {openStop?.kind === 'NOTE' && (
+            <section className={styles.note} aria-label="Note">
+              <p className={styles.noteLabel}>Note</p>
+              <MarkdownPreview content={openStop.prompt} />
+            </section>
+          )}
+          {stops && !openStop && !done && (
+            <p className={styles.waiting}>
+              {stop
+                ? 'Watch the video. It pauses here for questions and notes.'
+                : hasQuestions
+                  ? 'All answers saved. Finish the video to continue.'
+                  : 'Finish the video to continue.'}
+            </p>
           )}
         </section>
 
@@ -177,40 +288,41 @@ export default function QevLesson({
             videoUrl={video.url}
             muxPlaybackId={video.muxPlaybackId}
             onReady={(c) => (controls.current = c)}
-            playLocked={questionOpen}
+            playLocked={Boolean(openStop)}
+            startAt={resumeAt}
           />
-          {DEV_SKIP && !questionOpen && !videoEnded && (
-            <button type="button" className={styles.devSkip} onClick={devSkip}>
-              Skip to next question (dev only)
-            </button>
-          )}
+          {!stopOpen && !videoEnded && <DevSkipButton onClick={devSkip}>Skip to next pause (dev only)</DevSkipButton>}
         </div>
       </div>
 
       {error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className={screen.error}>
           {error}
         </p>
       )}
 
       <footer className={styles.footer}>
-        {feedback !== null && <FeedbackBanner correct={feedback} />}
-        {question && questionOpen && (
+        {openStop?.kind === 'QUESTION' && (
           <button
             type="button"
             className={buttons.primary}
-            onClick={submitAnswer}
-            disabled={busy || !isAnswered(answers[question.id])}
+            onClick={checked ? nextStop : () => submitAnswer(openStop.question)}
+            disabled={busy || !isAnswered(answers[openStop.question.id])}
           >
+            {checked ? 'Continue' : 'Check answer'}
+          </button>
+        )}
+        {openStop?.kind === 'NOTE' && (
+          <button type="button" className={buttons.primary} onClick={nextStop}>
             Continue
           </button>
         )}
-        {saved && videoEnded && (
-          <button type="button" className={buttons.primary} onClick={goToResult}>
-            Continue
+        {done && (
+          <button type="button" className={buttons.primary} disabled={busy} onClick={goToResult}>
+            {busy ? 'Saving…' : markReviewed ? 'Mark reviewed' : error ? 'Retry completing video lesson' : 'Continue'}
           </button>
         )}
-        {error && !attempt && (
+        {error && hasQuestions && !attempt && (
           <Link href={lessonHref} className={buttons.secondary}>
             Back to lesson
           </Link>

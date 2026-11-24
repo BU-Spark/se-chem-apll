@@ -250,3 +250,60 @@
   margin: 0;
   accent-color: #1f5fab;
 }
+
+.rowDeleteButton {
+  padding: 4px 8px;
+  border: 1px solid #f1c8c8;
+  border-radius: 5px;
+  background: white;
+  color: #a42222;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.rowDeleteButton:hover:not(:disabled) {
+  background: #fff0f0;
+}
+.rowDeleteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.rowDeleteButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.actionError {
+  margin: 0 0 12px;
+  color: #a42222;
+  font-size: 0.9rem;
+}
+
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #d5deeb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  color: #374151;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.table th {
+  padding: 0.9rem 1rem;
+  background: #edf2f8;
+  color: #1f2937;
+  font-weight: 600;
+}
+.table td {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+.table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}

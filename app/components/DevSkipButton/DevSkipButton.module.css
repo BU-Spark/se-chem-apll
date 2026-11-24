@@ -1,0 +1,13 @@
+/* Dashed so it's clearly not part of the student design. */
+.button {
+  align-self: flex-start;
+  margin-top: 0.75rem;
+  border: 1px dashed var(--apll-text);
+  border-radius: 0.5rem;
+  background: none;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--apll-text);
+  cursor: pointer;
+}

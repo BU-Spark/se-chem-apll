@@ -39,11 +39,15 @@ jest.mock('@/app/components/NodeIncomplete/NodeIncomplete', () => ({
   __esModule: true,
   default: () => <div>node incomplete</div>,
 }));
+jest.mock('@/app/components/NodeClosed/NodeClosed', () => ({
+  __esModule: true,
+  default: ({ videoUrl }: { videoUrl: string | null }) => <div>node closed, review {videoUrl}</div>,
+}));
 jest.mock('@/app/components/VideoResult/VideoResult', () => ({
   __esModule: true,
-  default: ({ passed, quizHref }: { passed: boolean; quizHref: string }) => (
+  default: ({ passed, quizHref, rewatchHref }: { passed: boolean; quizHref: string; rewatchHref: string }) => (
     <div>
-      video {passed ? 'passed' : 'not passed'} then {quizHref}
+      video {passed ? 'passed' : 'not passed'} then {quizHref}, rewatch {rewatchHref}
     </div>
   ),
 }));
@@ -62,6 +66,7 @@ const view = (
   screen: screenName,
   lastQuiz,
   lastVideo: { correct: 4, total: 5, passed: true },
+  video: { url: 'https://youtu.be/abc', muxPlaybackId: null },
   coursePercent: 10,
 });
 
@@ -75,9 +80,15 @@ describe('StudentNodePage', () => {
     ['QUIZ', null, 'quiz for Atoms'],
     ['COMPLETE', { correct: 5, total: 5 }, 'complete 5/5'],
     ['REFRESH', { correct: 1, total: 5 }, 'refresh then /student/courses/c1/lessons/cl1/nodes/ln1/video'],
-    ['VIDEO_RESULT', { correct: 1, total: 5 }, 'video passed then /student/courses/c1/lessons/cl1/nodes/ln1/quiz'],
+    [
+      'VIDEO_RESULT',
+      { correct: 1, total: 5 },
+      // Rewatch starts over (with the questions) instead of resuming.
+      'video passed then /student/courses/c1/lessons/cl1/nodes/ln1/quiz, rewatch /student/courses/c1/lessons/cl1/nodes/ln1/video?restart=1',
+    ],
     ['RETRY', { correct: 1, total: 5 }, 'keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/video'],
     ['INCOMPLETE', { correct: 1, total: 5 }, 'node incomplete'],
+    ['CLOSED', { correct: 1, total: 5 }, 'node closed, review https://youtu.be/abc'],
   ])('shows the %s screen', async (screenName, lastQuiz, text) => {
     mockGetStudentNode.mockResolvedValue(view(screenName, lastQuiz));
     render(await StudentNodePage({ params }));
@@ -85,7 +96,7 @@ describe('StudentNodePage', () => {
     expect(mockGetStudentNode).toHaveBeenCalledWith('student-1', 'c1', 'cl1', 'ln1');
   });
 
-  it('starts a regular node with the intro, and retries its quiz without the video', async () => {
+  it('starts a regular node with the intro, and retries it through the video lesson', async () => {
     mockGetStudentNode.mockResolvedValue(view('INTRO', null, false));
     render(await StudentNodePage({ params }));
     expect(screen.getByText('intro then /student/courses/c1/lessons/cl1/nodes/ln1/video')).toBeInTheDocument();
@@ -93,11 +104,17 @@ describe('StudentNodePage', () => {
     mockGetStudentNode.mockResolvedValue(view('RETRY', { correct: 1, total: 5 }, false));
     render(await StudentNodePage({ params }));
     expect(
-      screen.getByText('keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/quiz')
+      screen.getByText('keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/video')
     ).toBeInTheDocument();
   });
 
-  it('sends a locked node back to the lesson map', async () => {
+  it('sends a watched video without questions straight to the quiz', async () => {
+    mockGetStudentNode.mockResolvedValue({ ...view('VIDEO_RESULT'), lastVideo: undefined });
+    await expect(StudentNodePage({ params })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mockRedirect).toHaveBeenCalledWith('/student/courses/c1/lessons/cl1/nodes/ln1/quiz');
+  });
+
+  it('sends a node it cannot open back to the lesson map', async () => {
     mockGetStudentNode.mockResolvedValue(view('LOCKED'));
     await expect(StudentNodePage({ params })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/student/courses/c1/lessons/cl1');

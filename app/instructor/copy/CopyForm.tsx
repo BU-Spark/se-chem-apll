@@ -14,6 +14,7 @@ type Course = Item & {
   courseLessons: { lessonId: string; openDate: string | null; dueDate: string | null; lateDeadline: string | null }[];
 };
 interface Props {
+  workspaces?: { id: string; name: string }[];
   courses: Course[];
   lessons: Lesson[];
   nodes: (Item & { isDraft: boolean })[];
@@ -22,11 +23,20 @@ interface Props {
   initial: { mode: string; sourceCourseId: string; destinationId: string; lessonId: string; nodeId: string };
 }
 
-export default function CopyForm({ courses, lessons, nodes, destinations, destinationLessons, initial }: Props) {
+export default function CopyForm({
+  courses,
+  lessons,
+  nodes,
+  destinations,
+  destinationLessons,
+  initial,
+  workspaces = [],
+}: Props) {
   const router = useRouter();
   const [mode, setMode] = useState(['course', 'lessons', 'nodes'].includes(initial.mode) ? initial.mode : 'course');
   const [sourceId, setSourceId] = useState(initial.sourceCourseId);
   const source = courses.find((course) => course.id === sourceId);
+  const [workspaceId, setWorkspaceId] = useState('');
   const [destinationId, setDestinationId] = useState(initial.destinationId);
   const [selected, setSelected] = useState<string[]>([initial.lessonId, initial.nodeId].filter(Boolean));
   const [query, setQuery] = useState('');
@@ -71,6 +81,7 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode,
+          workspaceId: mode !== 'course' && !destinationId ? workspaceId || undefined : undefined,
           sourceCourseId: sourceId || undefined,
           destinationId: destinationId || undefined,
           lessonIds: mode === 'lessons' ? selected : undefined,
@@ -95,7 +106,7 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
   return (
     <main className={styles.page}>
       <h1>Copy course content</h1>
-      <p>Browse content from all instructors. Copies belong to you and can be edited independently.</p>
+      <p>Browse your accessible content. Copies are independent and can be saved to Personal or a workspace.</p>
       <form onSubmit={submit} className={styles.form}>
         <fieldset disabled={saving} className={styles.panel}>
           <legend>Choose content</legend>
@@ -107,6 +118,7 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
                 setMode(event.target.value);
                 setSelected([]);
                 setDestinationId('');
+                setWorkspaceId('');
                 setError('');
               }}
             >
@@ -169,7 +181,13 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
               </div>
               <label className={styles.field}>
                 Destination {mode === 'nodes' ? 'lesson' : 'course'}
-                <select value={destinationId} onChange={(event) => setDestinationId(event.target.value)}>
+                <select
+                  value={destinationId}
+                  onChange={(event) => {
+                    setDestinationId(event.target.value);
+                    setWorkspaceId('');
+                  }}
+                >
                   <option value="">Save copies to my library</option>
                   {destinationOptions.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -178,6 +196,19 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
                   ))}
                 </select>
               </label>
+              {!destinationId && (
+                <label>
+                  Content destination
+                  <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+                    <option value="">Personal</option>
+                    {workspaces.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {mode === 'lessons' && source && destinationId && (
                 <label className={styles.choice}>
                   <input
@@ -243,7 +274,9 @@ export default function CopyForm({ courses, lessons, nodes, destinations, destin
                 {selected.length} {mode} selected.{' '}
                 {destinationId
                   ? `Copies will be appended to ${destinationOptions.find((item) => item.id === destinationId)?.title}.`
-                  : 'Copies will be saved to your library.'}
+                  : workspaceId
+                    ? `Copies will be saved to ${workspaces.find((w) => w.id === workspaceId)?.name}.`
+                    : 'Copies will be saved to your personal library.'}
               </p>
               <ul>
                 {selectedItems.map((item) => (

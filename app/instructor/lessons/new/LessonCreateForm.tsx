@@ -8,10 +8,12 @@ import type { PaletteNode, LessonNodeEntry, LessonEdgeEntry } from '@/app/types'
 import styles from './page.module.css';
 
 interface Props {
+  workspaceId?: string;
+  returnTo?: string;
   availableNodes: PaletteNode[];
 }
 
-export default function LessonCreateForm({ availableNodes }: Props) {
+export default function LessonCreateForm({ availableNodes, workspaceId, returnTo = '/instructor/lessons' }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +114,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          workspaceId,
           title,
           slug,
           summary,
@@ -134,7 +137,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
         throw new Error(data.error ?? `Server error ${res.status}`);
       }
 
-      router.push('/instructor/lessons');
+      router.push(returnTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -154,9 +157,11 @@ export default function LessonCreateForm({ availableNodes }: Props) {
         <p className={styles.pageSubtitle}>Fill in the lesson details, then build the learning roadmap below.</p>
       </header>
 
-      <p>
-        <Link href="/instructor/copy?mode=nodes">Copy nodes from another course to your library</Link>
-      </p>
+      {!workspaceId && (
+        <p>
+          <Link href="/instructor/copy?mode=nodes">Copy nodes from another course to your library</Link>
+        </p>
+      )}
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* ── Metadata ── */}
         <section className={styles.section}>
@@ -238,7 +243,7 @@ export default function LessonCreateForm({ availableNodes }: Props) {
         {error && <p className={styles.error}>{error}</p>}
 
         <div className={styles.actions}>
-          <a href="/instructor/lessons" className={styles.cancelLink}>
+          <a href={returnTo} className={styles.cancelLink}>
             Cancel
           </a>
           <button type="button" className={styles.draftBtn} onClick={() => persistLesson(true)} disabled={saving}>

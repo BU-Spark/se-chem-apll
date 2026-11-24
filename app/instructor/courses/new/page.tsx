@@ -1,6 +1,7 @@
+import { lessonLibraryScope } from '@/lib/workspaces/permissions';
 import { prisma } from '@/lib/prisma';
 import CourseCreateForm from './CourseCreateForm';
-import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { requireInstructor } from '@/lib/auth/server';
 export const dynamic = 'force-dynamic';
 
 export default async function NewCoursePage() {
@@ -8,7 +9,7 @@ export default async function NewCoursePage() {
   const availableLessons = await prisma.lesson.findMany({
     where: {
       isDraft: false,
-      ...contentScope(user),
+      ...lessonLibraryScope(user),
     },
     select: { id: true, title: true, slug: true },
     orderBy: { title: 'asc' },

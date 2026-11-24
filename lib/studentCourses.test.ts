@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { workNode, workAttempt } from '@/test/mocks/work';
 import {
   courseProgressPercent,
   findCurrentLesson,
   getEnrolledCourses,
   getStudentCourse,
+  getLessonsToDo,
   getStudentInstructors,
+  lessonAvailability,
   type StudentLesson,
 } from './studentCourses';
 
@@ -11,11 +15,36 @@ const mockEnrollmentFindMany = jest.fn();
 const mockEnrollmentFindFirst = jest.fn();
 const mockContactFindMany = jest.fn();
 
+// Older course fixtures describe only outcomes; fill the content identity required by the readers.
+const hydrateCourse = (course: any) => ({
+  ...course,
+  courseLessons: course.courseLessons.map((cl: any) => {
+    const nodes = cl.lesson.lessonNodes.map((n: any) => ({ ...workNode(n.id, n.id, n.isRequired), ...n }));
+    return {
+      ...cl,
+      lesson: { ...cl.lesson, lessonNodes: nodes },
+      progress: cl.progress.map((p: any) => ({
+        ...p,
+        submissions: p.submissions ?? (p.status === 'COMPLETED' ? [{ id: 'submission' }] : []),
+        attempts: p.attempts.map((a: any, i: number) =>
+          workAttempt(
+            nodes.find((n: any) => n.id === a.lessonNodeId),
+            { ...a, id: `attempt-${i}` }
+          )
+        ),
+      })),
+    };
+  }),
+});
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     enrollment: {
-      findMany: (...args: unknown[]) => mockEnrollmentFindMany(...args),
-      findFirst: (...args: unknown[]) => mockEnrollmentFindFirst(...args),
+      findMany: async (...args: unknown[]) =>
+        (await mockEnrollmentFindMany(...args)).map((e: any) => ({ course: hydrateCourse(e.course) })),
+      findFirst: async (...args: unknown[]) => {
+        const e = await mockEnrollmentFindFirst(...args);
+        return e ? { course: hydrateCourse(e.course) } : null;
+      },
     },
     courseContact: { findMany: (...args: unknown[]) => mockContactFindMany(...args) },
   },
@@ -71,6 +100,8 @@ describe('courseProgressPercent', () => {
     number: 1,
     title: '',
     status: 'IN_PROGRESS',
+    availability: 'OPEN',
+    dueDate: null,
     nodeCount,
     finishedNodeCount,
   });
@@ -133,8 +164,12 @@ describe('getStudentCourse', () => {
   const now = new Date('2026-10-17T12:00:00Z');
   const courseLesson = (id: string, overrides: Record<string, unknown> = {}) => ({
     id,
+    openDate: null,
     dueDate: null,
+    lateDeadline: null,
     hideAfterDue: false,
+    latePenaltyType: 'NONE',
+    latePenaltyPercent: 0,
     lesson: { title: `Title ${id}`, lessonNodes: [] },
     progress: [],
     ...overrides,
@@ -149,13 +184,19 @@ describe('getStudentCourse', () => {
   });
 
   it('numbers visible lessons in order with the student status, skipping hidden ones', async () => {
+    const dueDate = new Date('2026-10-16T12:00:00Z');
+    const lateDeadline = new Date('2026-10-18T12:00:00Z');
     mockEnrollmentFindFirst.mockResolvedValue({
       course: {
         id: 'course-1',
         title: 'Chem',
         description: 'Intro',
         courseLessons: [
-          courseLesson('a', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
+          courseLesson('a', {
+            dueDate,
+            lateDeadline,
+            progress: [{ status: 'COMPLETED', attempts: [], submissions: [{ finalPercent: 0 }] }],
+          }),
           courseLesson('hidden', { hideAfterDue: true, dueDate: new Date('2026-10-01T00:00:00Z') }),
           courseLesson('b'),
         ],
@@ -167,9 +208,38 @@ describe('getStudentCourse', () => {
       title: 'Chem',
       description: 'Intro',
       lessons: [
-        { id: 'a', number: 1, title: 'Title a', status: 'COMPLETED', nodeCount: 0, finishedNodeCount: 0 },
-        { id: 'b', number: 2, title: 'Title b', status: 'NOT_STARTED', nodeCount: 0, finishedNodeCount: 0 },
+        {
+          id: 'a',
+          number: 1,
+          title: 'Title a',
+          status: 'COMPLETED',
+          availability: 'OPEN',
+          dueDate,
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          needsAttention: false,
+          submission: { dueDate, lateDeadline, window: 'LATE', penalty: 'No late penalty.', best: { finalPercent: 0 } },
+        },
+        {
+          id: 'b',
+          number: 2,
+          title: 'Title b',
+          status: 'NOT_STARTED',
+          availability: 'OPEN',
+          dueDate: null,
+          nodeCount: 0,
+          finishedNodeCount: 0,
+          needsAttention: false,
+          submission: { dueDate: null, lateDeadline: null, window: 'ON_TIME', penalty: 'No late penalty.', best: null },
+        },
       ],
+    });
+    const progress = mockEnrollmentFindFirst.mock.lastCall![0].select.course.select.courseLessons.select.progress;
+    expect(progress.where).toEqual({ studentId: 'student-1' });
+    expect(progress.select.submissions).toEqual({
+      orderBy: [{ finalPercent: { sort: 'desc', nulls: 'last' } }, { submittedAt: 'asc' }, { number: 'asc' }],
+      take: 1,
+      select: { finalPercent: true },
     });
   });
 });
@@ -185,8 +255,12 @@ describe('getStudentCourse lesson status from nodes', () => {
       courseLessons: [
         {
           id: 'a',
+          openDate: null,
           dueDate: null,
+          lateDeadline: null,
           hideAfterDue: false,
+          latePenaltyType: 'NONE',
+          latePenaltyPercent: 0,
           lesson: {
             title: 'Atoms',
             lessonNodes: [
@@ -194,7 +268,7 @@ describe('getStudentCourse lesson status from nodes', () => {
               { id: 'n2', isRequired: true },
             ],
           },
-          progress: [{ status: 'IN_PROGRESS', attempts }],
+          progress: [{ status: 'IN_PROGRESS', attempts, submissions: [] }],
         },
       ],
     },
@@ -220,12 +294,106 @@ describe('getStudentCourse lesson status from nodes', () => {
   });
 });
 
+describe('lessonAvailability', () => {
+  const dates = { openDate: null, dueDate: null, lateDeadline: null, hideAfterDue: false };
+  const now = new Date('2026-11-08T12:00:00Z');
+
+  it('is open without dates, and while on time or late', () => {
+    expect(lessonAvailability(dates, now)).toBe('OPEN');
+    expect(lessonAvailability({ ...dates, dueDate: new Date('2026-11-10') }, now)).toBe('OPEN');
+    expect(
+      lessonAvailability({ ...dates, dueDate: new Date('2026-11-07'), lateDeadline: new Date('2026-11-09') }, now)
+    ).toBe('OPEN');
+  });
+
+  it('is not open before the open date, and closed after the due date or late deadline', () => {
+    expect(lessonAvailability({ ...dates, openDate: new Date('2026-11-10') }, now)).toBe('NOT_OPEN');
+    expect(lessonAvailability({ ...dates, dueDate: new Date('2026-11-07') }, now)).toBe('CLOSED');
+    expect(
+      lessonAvailability({ ...dates, dueDate: new Date('2026-11-01'), lateDeadline: new Date('2026-11-07') }, now)
+    ).toBe('CLOSED');
+  });
+});
+
+describe('getLessonsToDo', () => {
+  const now = new Date('2026-11-15T12:00:00Z');
+  const courseLesson = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    openDate: null,
+    dueDate: null,
+    lateDeadline: null,
+    hideAfterDue: false,
+    lesson: { title: `Title ${id}`, lessonNodes: [{ id: `${id}-node`, isRequired: true }] },
+    progress: [],
+    ...overrides,
+  });
+
+  it('lists unfinished lessons you can work on now, across courses, due soonest first', async () => {
+    mockEnrollmentFindMany.mockResolvedValue([
+      {
+        course: {
+          id: 'c1',
+          title: 'Chem 101',
+          description: null,
+          courseLessons: [
+            courseLesson('no-due'),
+            courseLesson('later', { dueDate: new Date('2026-11-30T00:00:00Z') }),
+            courseLesson('done', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
+            courseLesson('past-due', { dueDate: new Date('2026-11-01T00:00:00Z') }),
+            courseLesson('not-open', { openDate: new Date('2026-12-01T00:00:00Z') }),
+          ],
+        },
+      },
+      {
+        course: {
+          id: 'c2',
+          title: 'Lab Safety',
+          description: null,
+          courseLessons: [courseLesson('soon', { dueDate: new Date('2026-11-20T00:00:00Z') })],
+        },
+      },
+    ]);
+
+    const lessons = await getLessonsToDo('student-1', now);
+    expect(lessons.map((lesson) => [lesson.id, lesson.courseTitle])).toEqual([
+      ['soon', 'Lab Safety'],
+      ['later', 'Chem 101'],
+      ['no-due', 'Chem 101'],
+    ]);
+    expect(lessons[0]).toMatchObject({ courseId: 'c2', dueDate: new Date('2026-11-20T00:00:00Z') });
+  });
+
+  it('returns an empty list when the student has no enrollments', async () => {
+    mockEnrollmentFindMany.mockResolvedValue([]);
+    expect(await getLessonsToDo('student-1', now)).toEqual([]);
+  });
+
+  it('returns an empty list when every lesson is completed or past due', async () => {
+    mockEnrollmentFindMany.mockResolvedValue([
+      {
+        course: {
+          id: 'c1',
+          title: 'Chem 101',
+          description: null,
+          courseLessons: [
+            courseLesson('done', { progress: [{ status: 'COMPLETED', attempts: [] }] }),
+            courseLesson('past-due', { dueDate: new Date('2026-11-01T00:00:00Z') }),
+          ],
+        },
+      },
+    ]);
+    expect(await getLessonsToDo('student-1', now)).toEqual([]);
+  });
+});
+
 describe('findCurrentLesson', () => {
   const lesson = (id: string, status: StudentLesson['status']): StudentLesson => ({
     id,
     number: 1,
     title: id,
     status,
+    availability: 'OPEN',
+    dueDate: null,
     nodeCount: 1,
     finishedNodeCount: status === 'COMPLETED' ? 1 : 0,
   });

@@ -1,5 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import { studentLessonSubmission } from '@/lib/studentLessonSubmission';
 import StudentLessonPage from './page';
+
+jest.mock('@/lib/submissions/service', () => ({ lessonSubmissionView: jest.fn().mockResolvedValue({}) }));
+jest.mock('@/app/components/LessonSubmission/LessonSubmission', () => ({
+  __esModule: true,
+  default: () => <div>Lesson submission receipt</div>,
+}));
 
 const mockRequireStudent = jest.fn();
 const mockGetStudentLessonRoadmap = jest.fn();
@@ -19,6 +26,18 @@ jest.mock('next/navigation', () => ({
 }));
 
 const params = Promise.resolve({ courseId: 'course-1', lessonId: 'cl-1' });
+const submission = studentLessonSubmission(
+  {
+    openDate: null,
+    dueDate: new Date('2026-10-12T14:30:00Z'),
+    lateDeadline: new Date('2026-10-14T14:30:00Z'),
+    hideAfterDue: false,
+    latePenaltyType: 'HOURLY',
+    latePenaltyPercent: 2,
+  },
+  { finalPercent: null },
+  new Date('2026-10-13T14:30:00Z')
+);
 
 describe('StudentLessonPage', () => {
   beforeEach(() => {
@@ -27,9 +46,24 @@ describe('StudentLessonPage', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
+      submission,
       nodes: [{ id: 'a' }, { id: 'b' }],
       edges: [],
+      availability: 'OPEN',
+      availabilityDate: null,
     });
+  });
+
+  it('shows the late policy and submission details in the roadmap header', async () => {
+    render(await StudentLessonPage({ params }));
+
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByText('Oct 12, 2026, 2:30 PM UTC')).toBeVisible();
+    expect(header.getByText('Oct 14, 2026, 2:30 PM UTC')).toBeVisible();
+    expect(header.getByText('Open for late submissions')).toBeVisible();
+    expect(header.getByText(/2% of the earned score deducted per hour/)).toBeVisible();
+    expect(header.getByText('Submitted')).toBeVisible();
+    expect(header.getByText('Completion only')).toBeVisible();
   });
 
   it('shows the lesson title, the course, a back link, and the roadmap', async () => {
@@ -45,8 +79,47 @@ describe('StudentLessonPage', () => {
     expect(screen.getByTestId('roadmap')).toHaveTextContent('2 nodes');
   });
 
+  it('shows no notice while the lesson is open', async () => {
+    render(await StudentLessonPage({ params }));
+    expect(screen.queryByText(/This lesson (closed|opens)/)).not.toBeInTheDocument();
+  });
+
+  it('says when a closed lesson closed, or when a lesson opens, in Boston time', async () => {
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'C',
+      lessonTitle: 'L',
+      nodes: [{ id: 'a' }],
+      edges: [],
+      submission: { ...submission, window: 'CLOSED' },
+      availability: 'CLOSED',
+      // 11:59 PM in Boston on Nov 7 is already Nov 8 in UTC.
+      availabilityDate: new Date('2026-11-08T04:59:00Z'),
+    });
+    const { unmount } = render(await StudentLessonPage({ params }));
+    expect(screen.getByText('This lesson closed on Nov 7. You can still review its nodes.')).toBeInTheDocument();
+    unmount();
+
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'C',
+      lessonTitle: 'L',
+      nodes: [{ id: 'a' }],
+      edges: [],
+      submission: { ...submission, window: 'NOT_OPEN' },
+      availability: 'NOT_OPEN',
+      availabilityDate: new Date('2026-11-10T14:00:00Z'),
+    });
+    render(await StudentLessonPage({ params }));
+    expect(screen.getByText('This lesson opens on Nov 10.')).toBeInTheDocument();
+  });
+
   it('says so when the lesson has no nodes', async () => {
-    mockGetStudentLessonRoadmap.mockResolvedValue({ courseTitle: 'C', lessonTitle: 'L', nodes: [], edges: [] });
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'C',
+      lessonTitle: 'L',
+      submission,
+      nodes: [],
+      edges: [],
+    });
     render(await StudentLessonPage({ params }));
     expect(screen.getByText('This lesson has no nodes yet.')).toBeInTheDocument();
   });

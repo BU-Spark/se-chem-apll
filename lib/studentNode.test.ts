@@ -4,6 +4,7 @@ const mockGetStudentLessonRoadmap = jest.fn();
 const mockGetStudentCourse = jest.fn();
 const mockLessonNodeFindUnique = jest.fn();
 const mockAttemptFindMany = jest.fn();
+const mockProgressFindUnique = jest.fn();
 
 jest.mock('@/lib/studentLessonRoadmap', () => ({
   getStudentLessonRoadmap: (...args: unknown[]) => mockGetStudentLessonRoadmap(...args),
@@ -16,6 +17,7 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     lessonNode: { findUniqueOrThrow: (...args: unknown[]) => mockLessonNodeFindUnique(...args) },
     nodeAttempt: { findMany: (...args: unknown[]) => mockAttemptFindMany(...args) },
+    nodeVideoProgress: { findUnique: (...args: unknown[]) => mockProgressFindUnique(...args) },
   },
 }));
 
@@ -40,7 +42,8 @@ describe('nodeScreen', () => {
     ['LOCKED', 0, false, 'LOCKED'],
     ['NOT_STARTED', 0, false, 'INTRO'],
     ['NOT_STARTED', 0, true, 'VIDEO_RESULT'],
-    ['NOT_STARTED', 1, true, 'RETRY'],
+    ['NOT_STARTED', 1, false, 'RETRY'],
+    ['NOT_STARTED', 1, true, 'VIDEO_RESULT'],
     ['COMPLETED', 0, true, 'COMPLETE'],
     ['INCOMPLETE', 2, true, 'INCOMPLETE'],
   ] as const)(
@@ -62,39 +65,41 @@ describe('canWatchVideo and canOpenQuiz', () => {
   });
 
   it('opens the quiz after the video lesson, or right away when the video has no questions', () => {
-    expect(canOpenQuiz('VIDEO_RESULT', true, true)).toBe(true);
-    expect(canOpenQuiz('REFRESH', true, true)).toBe(false);
-    expect(canOpenQuiz('REFRESH', false, true)).toBe(true);
-    expect(canOpenQuiz('INTRO', true, false)).toBe(false);
-    expect(canOpenQuiz('INTRO', false, false)).toBe(true);
-    expect(canOpenQuiz('QUIZ', false, true)).toBe(false);
-    expect(canOpenQuiz('INCOMPLETE', false, true)).toBe(false);
+    expect(canOpenQuiz('VIDEO_RESULT', true)).toBe(true);
+    expect(canOpenQuiz('REFRESH', true)).toBe(false);
+    expect(canOpenQuiz('REFRESH', false)).toBe(true);
+    expect(canOpenQuiz('INTRO', true)).toBe(false);
+    expect(canOpenQuiz('INTRO', false)).toBe(true);
+    expect(canOpenQuiz('QUIZ', false)).toBe(false);
+    expect(canOpenQuiz('INCOMPLETE', false)).toBe(false);
   });
 
-  it("sends a regular node's retry straight to the quiz, and a foundational one through the video", () => {
-    expect(canOpenQuiz('RETRY', true, false)).toBe(true);
-    expect(canOpenQuiz('RETRY', true, true)).toBe(false);
+  it('sends every retry back through the video lesson before the quiz', () => {
+    expect(canOpenQuiz('RETRY', true)).toBe(false);
   });
 });
 
 describe('getStudentNode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProgressFindUnique.mockResolvedValue(null);
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
+      availability: 'OPEN',
     });
     mockLessonNodeFindUnique.mockResolvedValue({
       passingPercent: 60,
       node: {
+        quizQuestions: [{ id: 'q1' }],
         learningObjectives: ['Balance equations.'],
         videoUrl: 'https://youtu.be/abc',
         muxPlaybackId: null,
         checkpoints: [
-          { timeOffsetSeconds: 30, questions: [{ id: 'cq1' }] },
-          { timeOffsetSeconds: null, questions: [{ id: 'cq2' }] },
+          { timeOffsetSeconds: 30, questions: [{ id: 'cq1', kind: 'QUESTION', prompt: 'Q1' }] },
+          { timeOffsetSeconds: null, questions: [{ id: 'cq2', kind: 'QUESTION', prompt: 'Q2' }] },
         ],
       },
     });
@@ -130,6 +135,7 @@ describe('getStudentNode', () => {
     mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
 
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toEqual({
+      hasQuiz: true,
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
       node: {
@@ -137,14 +143,19 @@ describe('getStudentNode', () => {
         title: 'Atoms',
         isFoundational: true,
         status: 'NOT_STARTED',
+        canOpen: true,
         learningObjectives: ['Balance equations.'],
       },
       screen: 'REFRESH',
       lastQuiz: { correct: 1, total: 3 },
       lastVideo: undefined,
       video: { url: 'https://youtu.be/abc', muxPlaybackId: null },
-      questionTimes: { cq1: 30, cq2: null },
+      timeline: [
+        { kind: 'QUESTION', id: 'cq1', at: 30 },
+        { kind: 'QUESTION', id: 'cq2', at: null },
+      ],
       hasVideoQuestions: true,
+      resumeAt: 0,
       coursePercent: 50,
     });
   });
@@ -171,8 +182,9 @@ describe('getStudentNode', () => {
     mockGetStudentLessonRoadmap.mockResolvedValue({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
-      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED' }],
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED', canOpen: true }],
       edges: [],
+      availability: 'OPEN',
     });
     mockAttemptFindMany.mockResolvedValue([]);
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'INTRO' });
@@ -184,11 +196,241 @@ describe('getStudentNode', () => {
     });
   });
 
+  it.each(['LOCKED', 'IN_PROGRESS', 'COMPLETED'])(
+    'shows a %s node of a past-due lesson the review screen, never the quiz or video lesson',
+    async (status) => {
+      mockGetStudentLessonRoadmap.mockResolvedValue({
+        courseTitle: 'Course #3',
+        lessonTitle: 'Lesson 2',
+        nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status, canOpen: true }],
+        edges: [],
+        availability: 'CLOSED',
+      });
+      mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+      const view = await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1');
+      expect(view).toMatchObject({ screen: 'CLOSED' });
+      expect(canWatchVideo(view!.screen)).toBe(false);
+      expect(canOpenQuiz(view!.screen, false)).toBe(false);
+    }
+  );
+
   it('shows the quiz when the node has not been tried yet', async () => {
     mockAttemptFindMany.mockResolvedValue([]);
     expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
       screen: 'QUIZ',
       lastQuiz: undefined,
     });
+  });
+
+  it('handles a video with zero questions', async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        quizQuestions: [{ id: 'q1' }],
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [{ timeOffsetSeconds: 30, questions: [] }],
+      },
+    });
+    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'REFRESH',
+      timeline: [],
+      hasVideoQuestions: false,
+      lastVideo: undefined,
+    });
+  });
+
+  it('resumes the video where the student left it this round', async () => {
+    mockAttemptFindMany.mockResolvedValue([quiz(10, false, 1, 3)]);
+    mockProgressFindUnique.mockResolvedValue({ positionSeconds: 42.5, watchedAt: null, updatedAt: at(20) });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 42.5 });
+
+    // Saved before the latest failed quiz: a new round starts the video over.
+    mockProgressFindUnique.mockResolvedValue({ positionSeconds: 42.5, watchedAt: null, updatedAt: at(5) });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 0 });
+
+    mockProgressFindUnique.mockResolvedValue(null);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ resumeAt: 0 });
+  });
+
+  describe('a saved watch (videos without questions)', () => {
+    const noQuestions = {
+      passingPercent: 60,
+      node: {
+        quizQuestions: [{ id: 'q1' }],
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [],
+      },
+    };
+    const regularNode = {
+      courseTitle: 'Course #3',
+      lessonTitle: 'Lesson 2',
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: false, status: 'NOT_STARTED', canOpen: true }],
+      edges: [],
+      availability: 'OPEN',
+    };
+
+    it('counts as watched, so the student goes on to the quiz', async () => {
+      mockGetStudentLessonRoadmap.mockResolvedValue(regularNode);
+      mockLessonNodeFindUnique.mockResolvedValue(noQuestions);
+      mockAttemptFindMany.mockResolvedValue([]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+        screen: 'VIDEO_RESULT',
+        lastVideo: undefined,
+      });
+      expect(mockProgressFindUnique).toHaveBeenCalledWith({
+        where: {
+          studentId_courseLessonId_lessonNodeId: {
+            studentId: 'student-1',
+            courseLessonId: 'cl-1',
+            lessonNodeId: 'ln1',
+          },
+        },
+        select: { positionSeconds: true, watchedAt: true, updatedAt: true },
+      });
+    });
+
+    it('only counts a watch after the latest failed quiz', async () => {
+      mockLessonNodeFindUnique.mockResolvedValue(noQuestions);
+      mockAttemptFindMany.mockResolvedValue([quiz(30, false, 0, 3)]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'REFRESH' });
+
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(40), updatedAt: at(40) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'VIDEO_RESULT' });
+    });
+
+    it('is ignored for a video with questions, which needs its answers', async () => {
+      mockGetStudentLessonRoadmap.mockResolvedValue(regularNode);
+      mockAttemptFindMany.mockResolvedValue([]);
+      mockProgressFindUnique.mockResolvedValue({ positionSeconds: 0, watchedAt: at(20), updatedAt: at(20) });
+      expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ screen: 'INTRO' });
+    });
+  });
+
+  it("includes notes in the timeline, in the instructor's order, without counting them as questions", async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        quizQuestions: [{ id: 'q1' }],
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [
+          {
+            timeOffsetSeconds: 30,
+            questions: [
+              { id: 'n1', kind: 'NOTE', prompt: 'Watch the **flame**.' },
+              { id: 'q1', kind: 'QUESTION', prompt: 'What color?' },
+            ],
+          },
+          { timeOffsetSeconds: null, questions: [{ id: 'n2', kind: 'NOTE', prompt: 'Well done.' }] },
+        ],
+      },
+    });
+    mockAttemptFindMany.mockResolvedValue([]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      timeline: [
+        { kind: 'NOTE', id: 'n1', at: 30, prompt: 'Watch the **flame**.' },
+        { kind: 'QUESTION', id: 'q1', at: 30 },
+        { kind: 'NOTE', id: 'n2', at: null, prompt: 'Well done.' },
+      ],
+      hasVideoQuestions: true,
+    });
+
+    // A video with only notes has no questions to grade.
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: {
+        quizQuestions: [{ id: 'q1' }],
+        learningObjectives: [],
+        videoUrl: 'https://youtu.be/abc',
+        muxPlaybackId: null,
+        checkpoints: [{ timeOffsetSeconds: 30, questions: [{ id: 'n1', kind: 'NOTE', prompt: 'Only a note' }] }],
+      },
+    });
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({ hasVideoQuestions: false });
+  });
+
+  it('shows Incomplete with the last score after three failed quizzes', async () => {
+    mockGetStudentLessonRoadmap.mockResolvedValue({
+      courseTitle: 'Course #3',
+      lessonTitle: 'Lesson 2',
+      nodes: [{ id: 'ln1', title: 'Atoms', isFoundational: true, status: 'INCOMPLETE', canOpen: true }],
+      edges: [],
+      availability: 'OPEN',
+    });
+    // Newest first, as the query orders them.
+    mockAttemptFindMany.mockResolvedValue([
+      quiz(50, false, 2, 3),
+      video(40, 3, 5),
+      quiz(30, false, 1, 3),
+      video(20, 2, 5),
+      quiz(10, false, 0, 3),
+    ]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'INCOMPLETE',
+      lastQuiz: { correct: 2, total: 3 },
+    });
+  });
+
+  it('uses only the newest video after the newest failed quiz when attempts are mixed', async () => {
+    // Fail → video → fail → video: the second round's video result shows.
+    mockAttemptFindMany.mockResolvedValue([
+      video(40, 4, 5),
+      quiz(30, false, 1, 3),
+      video(20, 1, 5),
+      quiz(10, false, 0, 3),
+    ]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'VIDEO_RESULT',
+      lastQuiz: { correct: 1, total: 3 },
+      lastVideo: { correct: 4, total: 5, passed: true },
+    });
+    // The mocks above are newest first, so the query must ask the database for that order.
+    expect(mockAttemptFindMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { completedAt: 'desc' } }));
+
+    // Fail → video → fail: the old video doesn't count, so the student retries.
+    mockAttemptFindMany.mockResolvedValue([quiz(30, false, 1, 3), video(20, 5, 5), quiz(10, false, 0, 3)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      screen: 'RETRY',
+      lastVideo: undefined,
+    });
+  });
+
+  it('scores attempts with zero responses as 0/0 instead of failing', async () => {
+    mockAttemptFindMany.mockResolvedValue([video(20, 0, 0), quiz(10, false, 0, 0)]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      lastQuiz: { correct: 0, total: 0 },
+      // No questions to get wrong, so the video counts as passed (no division by zero).
+      lastVideo: { correct: 0, total: 0, passed: true },
+    });
+  });
+
+  it('opens the video path for a foundational node with no quiz', async () => {
+    mockLessonNodeFindUnique.mockResolvedValue({
+      passingPercent: 60,
+      node: { quizQuestions: [], learningObjectives: [], videoUrl: null, muxPlaybackId: null, checkpoints: [] },
+    });
+    mockAttemptFindMany.mockResolvedValue([]);
+    expect(await getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).toMatchObject({
+      hasQuiz: false,
+      screen: 'INTRO',
+      hasVideoQuestions: false,
+    });
+  });
+
+  it('passes a database error on to the page instead of hiding it', async () => {
+    mockAttemptFindMany.mockResolvedValue([]);
+    mockLessonNodeFindUnique.mockRejectedValue(new Error('database unavailable'));
+    await expect(getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).rejects.toThrow('database unavailable');
+
+    mockGetStudentLessonRoadmap.mockRejectedValue(new Error('connection lost'));
+    await expect(getStudentNode('student-1', 'course-1', 'cl-1', 'ln1')).rejects.toThrow('connection lost');
   });
 });

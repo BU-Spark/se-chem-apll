@@ -27,6 +27,10 @@
   cursor: pointer;
 }
 
+.choice:disabled {
+  cursor: default;
+}
+
 .letter {
   flex: 0 0 auto;
   width: 2.6rem;

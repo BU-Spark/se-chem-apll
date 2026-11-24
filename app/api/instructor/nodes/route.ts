@@ -1,5 +1,8 @@
+import { nodeLibraryScope } from '@/lib/workspaces/permissions';
+import { creationWorkspace } from '@/lib/workspaces/access';
+import { authErrorResponse } from '@/lib/workspaces/http';
 import { NextRequest, NextResponse } from 'next/server';
-import { apiAccess, contentScope } from '@/lib/auth/api';
+import { apiAccess } from '@/lib/auth/api';
 import { prisma } from '@/lib/prisma';
 import { parseYouTubeId } from '@/app/utils/youtube';
 import {
@@ -13,12 +16,12 @@ import {
 
 // GET /api/instructor/nodes — list all nodes
 export async function GET() {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   const nodes = await prisma.node.findMany({
     where: {
-      ...contentScope(user),
+      ...nodeLibraryScope(user),
     },
     select: {
       id: true,
@@ -45,7 +48,7 @@ function rejectIfNotArray(value: unknown, field: string): NextResponse | null {
 
 // POST /api/instructor/nodes — create a new node with checkpoints + quiz bank
 export async function POST(req: NextRequest) {
-  const { user, error } = await apiAccess('instructor');
+  const { user, error } = await apiAccess('member');
   if (error) return error;
 
   let body: unknown;
@@ -57,6 +60,13 @@ export async function POST(req: NextRequest) {
 
   if (!body || typeof body !== 'object' || Array.isArray(body))
     return NextResponse.json({ error: 'Body must be an object' }, { status: 422 });
+
+  let workspaceId: string | null;
+  try {
+    workspaceId = await creationWorkspace(user, (body as { workspaceId?: unknown })?.workspaceId);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 
   const {
     title,
@@ -135,6 +145,7 @@ export async function POST(req: NextRequest) {
       tags: normalizedTags,
       learningObjectives: normalizedLearningObjectives,
       createdByClerkId: user.clerkUserId,
+      workspaceId,
       isDraft,
       checkpoints: {
         create: (checkpoints ?? []).map(serializeCheckpointCreate),

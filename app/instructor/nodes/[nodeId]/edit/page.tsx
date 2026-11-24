@@ -1,5 +1,7 @@
+import { nodeLibraryScope } from '@/lib/workspaces/permissions';
+import { redirect } from 'next/navigation';
 import { notFound } from 'next/navigation';
-import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { requireInstructor } from '@/lib/auth/server';
 import { prisma } from '@/lib/prisma';
 import { nodeInclude } from '@/app/utils/nodeContent';
 import NodeEditForm from './NodeEditForm';
@@ -17,12 +19,13 @@ export default async function EditNodePage({ params }: Props) {
   const node = await prisma.node.findFirst({
     where: {
       id: nodeId,
-      ...contentScope(user),
+      ...nodeLibraryScope(user),
     },
     include: nodeInclude,
   });
 
   if (!node) notFound();
+  if (node.workspaceId) redirect(`/workspaces/${node.workspaceId}/nodes/${node.id}`);
 
   return (
     <NodeEditForm

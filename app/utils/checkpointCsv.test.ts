@@ -74,9 +74,6 @@ describe('checkpoint CSV', () => {
         note({ checkpoint_key: 'other', checkpoint_order: '2', checkpoint_seconds: '0' }),
       ],
     ],
-    ['invalid timestamp', [note({ checkpoint_seconds: '-1' })]],
-    ['fractional timestamp', [note({ checkpoint_seconds: '1.5' })]],
-    ['database overflow', [note({ checkpoint_seconds: '2147483648' })]],
     ['blank key', [note({ checkpoint_key: '' })]],
     ['note answers', [note({ correct: '1' })]],
     ['invalid question', [note({ type: 'multipleChoice' })]],
@@ -85,6 +82,18 @@ describe('checkpoint CSV', () => {
     expect(result.checkpoints).toEqual([]);
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0].message).toMatch(/Record \d+/);
+  });
+  it.each(['invalid', '-1', '1.5', '2147483648'])('imports items and warns about timestamp %s', (seconds) => {
+    const result = csvToCheckpoints(
+      csv(
+        note({ checkpoint_seconds: seconds }),
+        note({ checkpoint_key: 'end', checkpoint_order: '2', checkpoint_seconds: '155' })
+      )
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([expect.objectContaining({ row: 2, message: expect.stringContaining('intro') })]);
+    expect(result.checkpoints.map((checkpoint) => checkpoint.timeOffsetSeconds)).toEqual([null, 155]);
+    expect(result.checkpoints[0].questions).toHaveLength(1);
   });
   it('preserves formula-like text, quotes, commas, newlines, math and Unicode', () => {
     const text = '=intro,"quoted"\n$\\ce{H2O}$ — water';

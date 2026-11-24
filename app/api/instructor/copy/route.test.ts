@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { POST } from './route';
 import { copyLessonFixture, copyNodeFixture } from '@/test/fixtures/contentCopy';
+import { appUser } from '@/test/mocks/appIdentity';
 import { prisma } from '@/lib/prisma';
 
 const mockAccess = jest.fn();
@@ -12,10 +13,11 @@ jest.mock('@/lib/auth/api', () => ({
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     course: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-    lesson: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-    node: { findMany: jest.fn(), create: jest.fn() },
+    lesson: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    node: { count: jest.fn(), findMany: jest.fn(), create: jest.fn() },
     lessonNodeEdge: { createMany: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   },
 }));
 const db = jest.mocked(prisma);
@@ -39,8 +41,11 @@ const request = (body: unknown) =>
   new NextRequest('http://localhost/api/instructor/copy', { method: 'POST', body: JSON.stringify(body) });
 beforeEach(() => {
   jest.resetAllMocks();
-  mockAccess.mockResolvedValue({ user: { clerkUserId: 'owner' }, error: null });
+  (db.$transaction as jest.Mock).mockImplementation((work) => work(db));
+  mockAccess.mockResolvedValue({ user: appUser({ clerkUserId: 'owner' }), error: null });
   (db.course.findUnique as jest.Mock).mockResolvedValue(source);
+  (db.lesson.count as jest.Mock).mockImplementation(async ({ where }) => where.id.in.length);
+  (db.node.count as jest.Mock).mockImplementation(async ({ where }) => where.id.in.length);
   (db.lesson.findMany as jest.Mock).mockResolvedValue([copyLessonFixture]);
   (db.node.findMany as jest.Mock).mockResolvedValue([copyNodeFixture]);
   for (const [model, method] of [
@@ -71,12 +76,14 @@ it.each([
   expect((await POST(request(body))).status).toBe(422);
   expect(db.$transaction).not.toHaveBeenCalled();
 });
-it('duplicates another instructor’s course with new authoring records and the original schedule in one transaction', async () => {
+it('duplicates an accessible course with new authoring records and the original schedule in one transaction', async () => {
   const response = await POST(
     request({ mode: 'course', sourceCourseId: 'source', code: 'CHEM', section: 'new', title: 'Copy' })
   );
   expect(response.status).toBe(201);
-  expect(db.course.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'source' } }));
+  expect(db.course.findUnique).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { id: 'source', createdByClerkId: 'owner' } })
+  );
   expect(db.course.create).toHaveBeenCalledWith({
     data: expect.objectContaining({
       createdByClerkId: 'owner',
@@ -88,18 +95,18 @@ it('duplicates another instructor’s course with new authoring records and the 
     }),
   });
   expect(db.$transaction).toHaveBeenCalledTimes(1);
-  expect((db.$transaction as jest.Mock).mock.calls[0][0]).toHaveLength(4);
+  expect((db.$transaction as jest.Mock).mock.calls[0][0]).toEqual(expect.any(Function));
   expect((await response.json()).redirect).toMatch(/^\/instructor\/courses\/.+\/edit$/);
   const data = (db.course.create as jest.Mock).mock.calls[0][0].data;
   expect(data).not.toHaveProperty('enrollments');
   expect(data).not.toHaveProperty('contacts');
 });
-it('rejects a duplicate code/section before executing a transaction', async () => {
+it('rejects a duplicate code/section before creating a course', async () => {
   (db.course.findFirst as jest.Mock).mockResolvedValue({ id: 'existing' });
   expect((await POST(request({ mode: 'course', sourceCourseId: 'source', code: 'CHEM', title: 'Copy' }))).status).toBe(
     409
   );
-  expect(db.$transaction).not.toHaveBeenCalled();
+  expect(db.course.create).not.toHaveBeenCalled();
 });
 it('blocks writes to another instructor’s destination', async () => {
   expect((await POST(request({ mode: 'lessons', lessonIds: ['lesson-old'], destinationId: 'private' }))).status).toBe(
@@ -108,7 +115,7 @@ it('blocks writes to another instructor’s destination', async () => {
   expect(db.course.findFirst).toHaveBeenCalledWith(
     expect.objectContaining({ where: { id: 'private', createdByClerkId: 'owner' } })
   );
-  expect(db.$transaction).not.toHaveBeenCalled();
+  expect(db.course.create).not.toHaveBeenCalled();
 });
 it.each([false, true])('appends lessons with optional source schedules (%s)', async (copySchedule) => {
   (db.course.findFirst as jest.Mock).mockResolvedValue({ id: 'destination', courseLessons: [{ sortOrder: 4 }] });
@@ -155,7 +162,7 @@ it('allows standalone library copies of draft nodes but rejects attaching them t
   expect((await POST(request({ mode: 'nodes', nodeIds: ['node-old'], destinationId: 'destination' }))).status).toBe(
     422
   );
-  expect(db.$transaction).toHaveBeenCalledTimes(1);
+  expect(db.node.create).toHaveBeenCalledTimes(1);
 });
 it('reports failure without returning a successful redirect when the atomic transaction fails', async () => {
   (db.$transaction as jest.Mock).mockRejectedValue(new Error('connection failed'));

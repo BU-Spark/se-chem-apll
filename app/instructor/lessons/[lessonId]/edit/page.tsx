@@ -1,6 +1,8 @@
+import { lessonLibraryScope, nodeLibraryScope } from '@/lib/workspaces/permissions';
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { requireInstructor } from '@/lib/auth/server';
 import LessonEditForm from './LessonEditForm';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +19,7 @@ export default async function EditLessonPage({ params }: Props) {
     prisma.lesson.findFirst({
       where: {
         id: lessonId,
-        ...contentScope(user),
+        ...lessonLibraryScope(user),
       },
       include: {
         lessonNodes: {
@@ -33,7 +35,8 @@ export default async function EditLessonPage({ params }: Props) {
     prisma.node.findMany({
       where: {
         isDraft: false,
-        ...contentScope(user),
+        ...nodeLibraryScope(user),
+        workspaceId: null,
       },
       include: {
         _count: { select: { quizQuestions: true, checkpoints: true } },
@@ -46,6 +49,7 @@ export default async function EditLessonPage({ params }: Props) {
     notFound();
   }
 
+  if (lesson.workspaceId) redirect(`/workspaces/${lesson.workspaceId}/lessons/${lesson.id}`);
   const paletteNodes = nodes.map((n) => ({
     id: n.id,
     title: n.title,

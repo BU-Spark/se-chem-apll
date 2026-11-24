@@ -1,7 +1,8 @@
+import { nodeLibraryScope, lessonLibraryScope, workspaceAllows } from '@/lib/workspaces/permissions';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import styles from '../../components/InstructorGrid/grid.module.css';
-import { requireInstructor, contentScope } from '@/lib/auth/server';
+import { requireInstructor } from '@/lib/auth/server';
 import { readNodeFilters, type SearchParams } from './listFilters';
 import NodesGrid from './NodesGrid';
 
@@ -12,9 +13,11 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
   const user = await requireInstructor();
   const [availableNodes, lessons] = await Promise.all([
     prisma.node.findMany({
-      where: {},
+      where: nodeLibraryScope(user),
       select: {
         createdByClerkId: true,
+        workspaceId: true,
+        workspace: { select: { name: true, members: { where: { userId: user.id }, select: { role: true } } } },
         id: true,
         title: true,
         summary: true,
@@ -23,14 +26,14 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
         createdAt: true,
         updatedAt: true,
         lessonNodes: {
-          where: { lesson: contentScope(user, false) },
+          where: { lesson: lessonLibraryScope(user, 'content.edit', false) },
           select: { lesson: { select: { id: true, title: true } } },
         },
       },
       orderBy: [{ isDraft: 'desc' }, { updatedAt: 'desc' }],
     }),
     prisma.lesson.findMany({
-      where: contentScope(user, false),
+      where: lessonLibraryScope(user, 'content.edit', false),
       select: { id: true, title: true, isDraft: true },
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
     }),
@@ -52,8 +55,9 @@ export default async function NodesPage({ searchParams }: { searchParams?: Promi
           ...item,
           canEdit:
             user.platformRole === 'ADMIN' ||
-            item.createdByClerkId === null ||
-            item.createdByClerkId === user.clerkUserId,
+            (item.workspaceId
+              ? workspaceAllows(item.workspace?.members[0]?.role ?? null, 'content.edit')
+              : item.createdByClerkId === null || item.createdByClerkId === user.clerkUserId),
         }))}
         lessons={lessons}
         initialFilters={filters}

@@ -6,7 +6,7 @@ import { csvToCheckpoints, sampleCheckpointCsv } from '@/app/utils/checkpointCsv
 function upload(text: string) {
   const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
   Object.defineProperty(file, 'text', { value: async () => text });
-  fireEvent.change(screen.getByLabelText('Choose checkpoint CSV file'), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText('Choose checkpoint CSV or Excel file'), { target: { files: [file] } });
 }
 
 describe('checkpoint CSV review', () => {
@@ -23,20 +23,31 @@ describe('checkpoint CSV review', () => {
     expect(onApply).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ checkpointKey: 'intro', timeOffsetSeconds: null, questions: expect.any(Array) }),
+        expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: 120 }),
       ])
     );
     expect(onClose).toHaveBeenCalled();
   });
+  it('allows importing a file with an invalid timestamp after showing a warning', async () => {
+    const onApply = jest.fn();
+    render(<CheckpointCsvDialog existing={[]} onApply={onApply} onClose={jest.fn()} />);
+    upload(sampleCheckpointCsv().replace('forces,2,1,120,', 'forces,2,1,-1,'));
+    expect(await screen.findByRole('list', { name: 'Timestamp warnings' })).toHaveTextContent('forces');
+    await userEvent.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
+    expect(onApply).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: null })])
+    );
+  });
   it('keeps the filename visible, hides irrelevant modes, and permits selecting the same file again', async () => {
     render(<CheckpointCsvDialog existing={[]} onApply={jest.fn()} onClose={jest.fn()} />);
-    expect(screen.getByRole('button', { name: 'Choose CSV' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Choose CSV or Excel' })).toHaveFocus();
     upload(sampleCheckpointCsv());
     await screen.findByText('2 checkpoints · 3 items · 1 need timestamps');
     expect(screen.getByText('checkpoints.csv')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change file' })).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    expect(screen.queryByText('No CSV selected')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Choose checkpoint CSV file')).toHaveValue('');
+    expect(screen.queryByText('No file selected')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Choose checkpoint CSV or Excel file')).toHaveValue('');
     upload(sampleCheckpointCsv());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Import and assign timestamps' })).toBeEnabled());
   });
@@ -58,6 +69,9 @@ describe('checkpoint CSV review', () => {
     await userEvent.click(screen.getByRole('checkbox'));
     await userEvent.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
     expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: 120 })])
+    );
   });
   it('invalid uploads and cancellation leave existing content unchanged', async () => {
     const onApply = jest.fn();
@@ -80,7 +94,7 @@ describe('checkpoint CSV review', () => {
         }),
     });
     render(<CheckpointCsvDialog existing={[]} onApply={jest.fn()} onClose={jest.fn()} />);
-    fireEvent.change(screen.getByLabelText('Choose checkpoint CSV file'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Choose checkpoint CSV or Excel file'), { target: { files: [file] } });
     upload('wrong\nvalue');
     await screen.findByRole('list', { name: 'Import errors' });
     resolve(sampleCheckpointCsv());
