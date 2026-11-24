@@ -838,6 +838,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
         {step === 'checkpoints' && placementOpen && (
           <CheckpointPlacement
+            key={youtubeId}
             checkpoints={checkpoints}
             videoId={youtubeId}
             onChange={setCheckpoints}

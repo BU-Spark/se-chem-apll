@@ -151,6 +151,13 @@ export default function CheckpointCsvDialog({ existing, onApply, onClose }: Prop
                 {result.checkpoints.reduce((n, c) => n + c.questions.length, 0)} items ·{' '}
                 {result.checkpoints.filter((c) => c.timeOffsetSeconds === null).length} need timestamps
               </p>
+              {!!result.warnings.length && (
+                <ul aria-label="Timestamp warnings">
+                  {result.warnings.map((warning) => (
+                    <li key={warning.row}>{warning.message}</li>
+                  ))}
+                </ul>
+              )}
               <div className={layout.groups}>
                 {result.checkpoints.map((checkpoint, index) => (
                   <CheckpointGroupPreview key={checkpoint.id} checkpoint={checkpoint} index={index} />
