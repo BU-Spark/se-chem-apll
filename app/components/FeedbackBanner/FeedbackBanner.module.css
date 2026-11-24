@@ -1,11 +1,12 @@
 .banner {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: 1.25rem;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 1rem 1.5rem;
   border-radius: 1rem;
   color: var(--apll-text);
+  text-align: left;
 }
 
 .correct {
@@ -14,16 +15,6 @@
 
 .incorrect {
   background: #eaa2b0;
-}
-
-.icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  border: 2px solid currentColor;
-  border-radius: 9999px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
 }
 
 .label {
