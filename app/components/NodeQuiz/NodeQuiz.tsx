@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useAttemptApi from '@/app/hooks/useAttemptApi';
@@ -23,6 +23,8 @@ interface NodeQuizProps {
   doneHref: string;
   // Skip the intro, e.g. when retaking the quiz after the video lesson.
   startImmediately?: boolean;
+  purpose?: 'STANDARD' | 'IMPROVEMENT';
+  attemptId?: string;
 }
 
 /**
@@ -37,8 +39,11 @@ export default function NodeQuiz({
   lessonHref,
   doneHref,
   startImmediately = false,
+  purpose = 'STANDARD',
+  attemptId,
 }: NodeQuizProps) {
   const router = useRouter();
+  const startKey = useRef<string | null>(null);
   const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[] } | null>(null);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
@@ -47,11 +52,14 @@ export default function NodeQuiz({
 
   const start = () =>
     run(async () => {
+      startKey.current ??= crypto.randomUUID();
       const started = await post({
         action: 'start',
         nodeId: lessonNodeId,
         kind: 'QUIZ',
-        key: crypto.randomUUID(),
+        key: startKey.current,
+        ...(purpose === 'IMPROVEMENT' ? { purpose } : {}),
+        ...(attemptId ? { attemptId } : {}),
       });
       setAttempt({ id: started.id, questions: started.questions });
     });
@@ -61,6 +69,7 @@ export default function NodeQuiz({
     run(async () => {
       await post({
         action: 'finish',
+        submitWhenReady: true,
         attemptId: attempt!.id,
         answers: attempt!.questions.map((question) => ({ questionId: question.id, ...finalAnswers[question.id] })),
       });

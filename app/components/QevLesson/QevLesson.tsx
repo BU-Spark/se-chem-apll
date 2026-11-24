@@ -33,6 +33,7 @@ interface QevLessonProps {
   lessonHref: string;
   // Where Continue goes after the video (the video result, or the quiz when there are no questions).
   doneHref: string;
+  markReviewed?: boolean;
 }
 
 // One place the video pauses: a question to answer, or a note to read.
@@ -42,7 +43,7 @@ type Stop = Extract<TimelineItem, { kind: 'NOTE' }> | { kind: 'QUESTION'; at: nu
  * The video's pauses by time, untimed ones last. The sort keeps equal times in the instructor's
  * order. Questions use the attempt's copy; one no longer in the video still gets asked at the end,
  * since the attempt needs every answer. When resuming, notes already passed aren't shown again;
- * questions are, since answers are only saved at the end.
+ * unanswered questions still appear.
  */
 function buildStops(timeline: TimelineItem[], questions: QuizQuestion[], resumeAt: number): Stop[] {
   const timed = timeline.flatMap((item): Stop[] => {
@@ -73,10 +74,8 @@ function saveVideoProgress(
 }
 
 /**
- * The video lesson: plays the node's video and pauses at each question or note. Each answer is
- * checked right away ("Correct"/"Incorrect"); a note just shows until the student continues.
- * When the last question is done, all answers are saved through the team's attempt API. Notes
- * are never answered, graded or counted.
+ * Plays the video with pauses for notes and questions. Answers are saved as drafts
+ * as they are entered. The checkpoint completes once every answer and the video end are saved.
  */
 export default function QevLesson({
   courseLessonId,
@@ -87,13 +86,16 @@ export default function QevLesson({
   resumeAt,
   lessonHref,
   doneHref,
+  markReviewed = false,
 }: QevLessonProps) {
   const router = useRouter();
   const controls = useRef<VideoControls | null>(null);
   const hasVideo = Boolean(video.url || video.muxPlaybackId);
   // Only videos with questions have an attempt to start and save.
   const hasQuestions = timeline.some((item) => item.kind === 'QUESTION');
-  const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[] } | null>(null);
+  const [attempt, setAttempt] = useState<{ id: string; questions: QuizQuestion[]; restoredCount: number } | null>(null);
+  const startKey = useRef<string | null>(null);
+  const reviewKey = useRef<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
   const [stopIndex, setStopIndex] = useState(0);
   const [stopOpen, setStopOpen] = useState(!hasVideo);
@@ -109,13 +111,22 @@ export default function QevLesson({
   useRunOnce(() => {
     if (!hasQuestions) return;
     run(async () => {
+      startKey.current ??= crypto.randomUUID();
       const started = await post({
         action: 'start',
         nodeId: lessonNodeId,
         kind: 'CHECKPOINT',
-        key: crypto.randomUUID(),
+        key: startKey.current,
       });
-      setAttempt({ id: started.id, questions: started.questions });
+      const drafts = Object.fromEntries(
+        (started.draftAnswers ?? []).map((answer: QuizAnswer & { questionId: string }) => [answer.questionId, answer])
+      );
+      const questions: QuizQuestion[] = started.questions;
+      const pending = started.completedAt ? [] : questions.filter((question) => !drafts[question.id]);
+      setAttempt({ id: started.id, questions: pending, restoredCount: questions.length - pending.length });
+      setAnswers(drafts);
+      if (started.videoCompletedAt) setVideoEnded(true);
+      setSaved(Boolean(started.completedAt));
     });
   });
 
@@ -152,8 +163,9 @@ export default function QevLesson({
     [attempt, hasQuestions, timeline, resumeAt]
   );
   const stop = stops?.[stopIndex];
-  const questionCount = stops?.filter((s) => s.kind === 'QUESTION').length ?? 0;
-  const questionsDone = stops?.slice(0, stopIndex).filter((s) => s.kind === 'QUESTION').length ?? 0;
+  const restoredCount = attempt?.restoredCount ?? 0;
+  const questionCount = restoredCount + (stops?.filter((s) => s.kind === 'QUESTION').length ?? 0);
+  const questionsDone = restoredCount + (stops?.slice(0, stopIndex).filter((s) => s.kind === 'QUESTION').length ?? 0);
 
   // While the video plays, pause it at the next stop's time, and notice when it ends
   // (untimed stops appear then).
@@ -196,41 +208,39 @@ export default function QevLesson({
     if (!afterVideo) controls.current?.play();
   }
 
-  // Keep the stop open so students can read the feedback before continuing.
+  // Save each answer and show Correct/Incorrect with the instructor's feedback. The stop stays
+  // open (video paused) until the student clicks Continue.
   const submitAnswer = (question: QuizQuestion) =>
     run(async () => {
-      const result = await post(
-        { attemptId: attempt!.id, answer: { questionId: question.id, ...answers[question.id] } },
-        '/check'
-      );
-      setChecked({ correct: result.correct, feedback: result.feedback });
-    });
-
-  function continueAfterQuestion() {
-    if (questionsDone + 1 !== questionCount) {
-      nextStop();
-      return;
-    }
-    // A failed save leaves the checked answer visible. Continue retries just the save.
-    run(async () => {
-      await post({
-        action: 'finish',
+      const result = await post({
+        action: 'saveCheckpoint',
         attemptId: attempt!.id,
-        answers: attempt!.questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
+        answer: { questionId: question.id, ...answers[question.id] },
+        videoEnded,
       });
-      setSaved(true);
-      nextStop();
+      setChecked({ correct: result.correct, feedback: result.feedback ?? null });
+      setSaved(Boolean(result.completedAt));
+    });
+
+  async function goToResult() {
+    await run(async () => {
+      if (markReviewed) {
+        reviewKey.current ??= crypto.randomUUID();
+        const review = await post({ action: 'start', kind: 'REVIEW', nodeId: lessonNodeId, key: reviewKey.current });
+        await post({ action: 'finish', attemptId: review.id, answers: [], submitWhenReady: true, videoEnded: true });
+      } else if (!saved) {
+        const result = await post({ action: 'saveCheckpoint', attemptId: attempt!.id, videoEnded: true });
+        if (!result.completedAt) throw new Error('Save every answer before completing the video lesson.');
+        setSaved(true);
+      }
+      router.push(doneHref);
+      router.refresh();
     });
   }
 
-  function goToResult() {
-    router.push(doneHref);
-    router.refresh();
-  }
-
-  const openStop = stopOpen ? stop : undefined;
+  const openStop = stopOpen || videoEnded ? stop : undefined;
   // Every pause handled, answers saved and the video over: the student can move on.
-  const done = Boolean(stops) && !stop && saved && videoEnded;
+  const done = Boolean(stops) && !stop && videoEnded;
 
   return (
     <NodeScreenFrame closeHref={lessonHref}>
@@ -264,7 +274,11 @@ export default function QevLesson({
           )}
           {stops && !openStop && !done && (
             <p className={styles.waiting}>
-              {stop ? 'Watch the video. It pauses here for questions and notes.' : 'Finish the video to continue.'}
+              {stop
+                ? 'Watch the video. It pauses here for questions and notes.'
+                : hasQuestions
+                  ? 'All answers saved. Finish the video to continue.'
+                  : 'Finish the video to continue.'}
             </p>
           )}
         </section>
@@ -274,7 +288,7 @@ export default function QevLesson({
             videoUrl={video.url}
             muxPlaybackId={video.muxPlaybackId}
             onReady={(c) => (controls.current = c)}
-            playLocked={stopOpen}
+            playLocked={Boolean(openStop)}
             startAt={resumeAt}
           />
           {!stopOpen && !videoEnded && <DevSkipButton onClick={devSkip}>Skip to next pause (dev only)</DevSkipButton>}
@@ -292,7 +306,7 @@ export default function QevLesson({
           <button
             type="button"
             className={buttons.primary}
-            onClick={checked ? continueAfterQuestion : () => submitAnswer(openStop.question)}
+            onClick={checked ? nextStop : () => submitAnswer(openStop.question)}
             disabled={busy || !isAnswered(answers[openStop.question.id])}
           >
             {checked ? 'Continue' : 'Check answer'}
@@ -304,8 +318,8 @@ export default function QevLesson({
           </button>
         )}
         {done && (
-          <button type="button" className={buttons.primary} onClick={goToResult}>
-            Continue
+          <button type="button" className={buttons.primary} disabled={busy} onClick={goToResult}>
+            {busy ? 'Saving…' : markReviewed ? 'Mark reviewed' : error ? 'Retry completing video lesson' : 'Continue'}
           </button>
         )}
         {error && hasQuestions && !attempt && (

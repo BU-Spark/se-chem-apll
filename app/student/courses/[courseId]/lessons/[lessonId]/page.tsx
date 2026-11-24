@@ -4,8 +4,10 @@ import { requireStudent } from '@/lib/auth/server';
 import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 import { ROUTES } from '@/app/routes';
 import LessonRoadmap from '@/app/components/LessonRoadmap/LessonRoadmap';
+import LessonSubmission from '@/app/components/LessonSubmission/LessonSubmission';
 import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
 import { formatDay } from '@/app/utils/dates';
+import { lessonSubmissionView } from '@/lib/submissions/service';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +23,7 @@ export default async function StudentLessonPage({ params }: PageProps) {
   const roadmap = await getStudentLessonRoadmap(student.id, courseId, lessonId);
   // Not enrolled, or a draft, hidden, or unknown lesson: show the standard not-found page.
   if (!roadmap) notFound();
+  const submission = await lessonSubmissionView(student.id, lessonId);
 
   return (
     <div className={styles.page}>
@@ -43,6 +46,27 @@ export default async function StudentLessonPage({ params }: PageProps) {
             : `This lesson opens on ${formatDay(roadmap.availabilityDate)}.`}
         </p>
       )}
+
+      {roadmap.availability === 'OPEN' && roadmap.nodes.some((node) => node.needsUpdatedWork) && (
+        <section aria-label="Updated work">
+          <h2>Updated work required</h2>
+          <p>Your earlier grades are retained. Complete the updated nodes to submit again.</p>
+          <ul>
+            {roadmap.nodes
+              .filter((node) => node.needsUpdatedWork)
+              .map((node) => (
+                <li key={node.id}>
+                  {node.status === 'LOCKED' ? (
+                    `${node.title} — finish its prerequisites first`
+                  ) : (
+                    <Link href={ROUTES.studentNode(courseId, lessonId, node.id)}>Start updated work: {node.title}</Link>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
+      <LessonSubmission key={lessonId} assignmentId={lessonId} view={submission} />
 
       {roadmap.nodes.length === 0 ? (
         <p className={styles.empty}>This lesson has no nodes yet.</p>

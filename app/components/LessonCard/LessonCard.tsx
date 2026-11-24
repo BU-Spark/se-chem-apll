@@ -14,6 +14,8 @@ interface LessonCardProps {
   isCurrent: boolean;
   href: string;
   submission: StudentLessonSubmission;
+  // Updated nodes to redo, or finished work not yet handed in.
+  needsAttention?: boolean;
 }
 
 export default function LessonCard({
@@ -24,6 +26,7 @@ export default function LessonCard({
   isCurrent,
   href,
   submission,
+  needsAttention,
 }: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
   const statusLabel =
@@ -40,7 +43,7 @@ export default function LessonCard({
       <span className={styles.title}>{name}</span>
       <span className={styles.progress}>
         {status === 'COMPLETED' && <span aria-hidden="true">✓ </span>}
-        {statusLabel}
+        {needsAttention && availability === 'OPEN' ? 'Updated or unfinished work' : statusLabel}
       </span>
       <LessonSubmissionSummary submission={submission} />
     </Link>

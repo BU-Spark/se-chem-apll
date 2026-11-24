@@ -73,6 +73,7 @@ describe('NodeQuiz', () => {
 
     expect(sentBody(fetchMock, 1)).toEqual({
       action: 'finish',
+      submitWhenReady: true,
       attemptId: 'attempt-1',
       answers: [
         { questionId: 'q1', notSure: true },
@@ -129,6 +130,7 @@ describe('NodeQuiz', () => {
 
     expect(sentBody(fetchMock, 1)).toEqual({
       action: 'finish',
+      submitWhenReady: true,
       attemptId: 'attempt-1',
       answers: [
         { questionId: 'q1', selectedIndices: [0] },

@@ -2,6 +2,12 @@ import { render, screen, within } from '@testing-library/react';
 import { studentLessonSubmission } from '@/lib/studentLessonSubmission';
 import StudentLessonPage from './page';
 
+jest.mock('@/lib/submissions/service', () => ({ lessonSubmissionView: jest.fn().mockResolvedValue({}) }));
+jest.mock('@/app/components/LessonSubmission/LessonSubmission', () => ({
+  __esModule: true,
+  default: () => <div>Lesson submission receipt</div>,
+}));
+
 const mockRequireStudent = jest.fn();
 const mockGetStudentLessonRoadmap = jest.fn();
 

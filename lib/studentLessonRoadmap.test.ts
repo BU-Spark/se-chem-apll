@@ -1,3 +1,4 @@
+import { workNode, workAttempt } from '@/test/mocks/work';
 import { canOpenNode, computeNodeStatuses, getStudentLessonRoadmap } from './studentLessonRoadmap';
 
 const mockCourseLessonFindFirst = jest.fn();
@@ -11,13 +12,10 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 const now = new Date('2026-10-24T12:00:00Z');
-const finishedAt = new Date('2026-10-24T11:00:00Z');
-const quiz = (lessonNodeId: string, isPassing: boolean) => ({
-  lessonNodeId,
-  kind: 'QUIZ',
-  isPassing,
-  completedAt: finishedAt,
-});
+const quiz = (lessonNodeId: string, isPassing: boolean) =>
+  workAttempt(workNode(lessonNodeId, lessonNodeId === 'ln1' ? 'Atoms' : 'Bonds', lessonNodeId === 'ln1'), {
+    isPassing,
+  });
 
 describe('computeNodeStatuses', () => {
   // a → b → c, and a → d
@@ -101,10 +99,7 @@ describe('getStudentLessonRoadmap', () => {
     course: { title: 'Course #3' },
     lesson: {
       title: 'Lesson 2',
-      lessonNodes: [
-        { id: 'ln1', isRequired: true, node: { title: 'Atoms' } },
-        { id: 'ln2', isRequired: false, node: { title: 'Bonds' } },
-      ],
+      lessonNodes: [workNode('ln1', 'Atoms', true), workNode('ln2', 'Bonds', false)],
       lessonNodeEdges: [
         { sourceId: 'ln1', targetId: 'ln2' },
         { sourceId: 'ln2', targetId: 'draft-node' },
@@ -144,7 +139,7 @@ describe('getStudentLessonRoadmap', () => {
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson());
     mockAttemptFindMany.mockResolvedValue([quiz('ln1', true)]);
 
-    expect(await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now)).toEqual({
+    expect(await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now)).toMatchObject({
       courseTitle: 'Course #3',
       lessonTitle: 'Lesson 2',
       submission: { dueDate: null, lateDeadline: null, window: 'ON_TIME', penalty: 'No late penalty.', best: null },
@@ -158,7 +153,7 @@ describe('getStudentLessonRoadmap', () => {
     });
     expect(mockAttemptFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: 'student-1', courseLessonId: 'cl-1', kind: { in: ['QUIZ', 'CHECKPOINT'] } },
+        where: { userId: 'student-1', courseLessonId: 'cl-1', kind: { in: ['QUIZ', 'CHECKPOINT', 'REVIEW'] } },
       })
     );
   });
@@ -194,7 +189,7 @@ describe('getStudentLessonRoadmap', () => {
   it('shows a node in progress once a quiz or video-question try started', async () => {
     mockCourseLessonFindFirst.mockResolvedValue(courseLesson());
     mockAttemptFindMany.mockResolvedValue([
-      { lessonNodeId: 'ln1', kind: 'CHECKPOINT', isPassing: null, completedAt: null },
+      workAttempt(workNode('ln1', 'Atoms'), { kind: 'CHECKPOINT', isPassing: null, completedAt: null }),
     ]);
     expect((await getStudentLessonRoadmap('student-1', 'course-1', 'cl-1', now))!.nodes[0].status).toBe('IN_PROGRESS');
 

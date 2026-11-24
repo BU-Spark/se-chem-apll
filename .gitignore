@@ -119,3 +119,9 @@ temp/
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Browser test artifacts
+/test-results/
+/playwright-report/
+/test/browser/.next/
+/test/browser/next-env.d.ts
