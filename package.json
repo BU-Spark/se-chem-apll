@@ -15,6 +15,7 @@
     "db:seed": "prisma db seed",
     "db:verify-migrations": "node scripts/verify-migrations.cjs",
     "admin:grant": "node scripts/grant-admin.cjs",
+    "db:seed:flow": "node scripts/seed-local-flow.cjs",
     "test:browser": "playwright test"
   },
   "prisma": {

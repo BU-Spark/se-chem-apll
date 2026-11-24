@@ -8,6 +8,7 @@ const mockNodeFindMany = jest.fn();
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
+    workspace: { findMany: jest.fn().mockResolvedValue([]) },
     node: { findMany: (...args: unknown[]) => mockNodeFindMany(...args) },
   },
 }));

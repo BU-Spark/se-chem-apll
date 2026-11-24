@@ -46,6 +46,7 @@ model User {
   name                 String?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
+  workspaceMemberships WorkspaceMember[]
   enrollments          Enrollment[]
   courseJoinRateLimit  CourseJoinRateLimit?
   courseLessonProgress CourseLessonProgress[]
@@ -182,6 +183,8 @@ model Lesson {
   estimatedMinutes  Int?
   createdByClerkId  String?
   isDraft           Boolean            @default(false)
+  workspaceId       String?
+  workspace         Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   courseLessons     CourseLesson[]
@@ -191,6 +194,7 @@ model Lesson {
   badgeRequirements BadgeRequirement[] @relation("BadgeLessonRequirement")
 
   @@index([createdByClerkId])
+  @@index([workspaceId])
 }
 
 enum LatePenaltyType {
@@ -239,6 +243,8 @@ model Node {
   learningObjectives String[]         @default([])
   createdByClerkId   String?
   isDraft            Boolean          @default(false)
+  workspaceId        String?
+  workspace          Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   checkpoints        NodeCheckpoint[]
@@ -246,6 +252,7 @@ model Node {
   lessonNodes        LessonNode[]
 
   @@index([createdByClerkId])
+  @@index([workspaceId])
 }
 
 // Timestamped QEV cue during the node video; holds one or more checkpoint questions.
@@ -620,4 +627,64 @@ model SurveyResponse {
 enum SurveyContext {
   LESSON
   BADGE
+}
+
+// Workspace roles grant content permissions only, never course or platform roles.
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Workspace {
+  id          String                @id @default(cuid())
+  name        String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  nodes       Node[]
+  lessons     Lesson[]
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  tokenHash   String        @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+}
+
+// Snapshots survive membership removal and workspace deletion.
+model WorkspaceAudit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorId     String
+  action      String
+  targetId    String?
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
 }

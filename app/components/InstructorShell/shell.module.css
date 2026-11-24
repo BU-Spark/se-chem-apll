@@ -58,6 +58,16 @@
   transition: background 0.15s ease;
 }
 
+.navItem:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+.activeNavItem {
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+}
+
 .navItem:hover {
   background: rgba(255, 255, 255, 0.15);
 }
@@ -81,15 +91,22 @@
     width: 100%;
     height: auto;
     position: static;
-    flex-direction: row;
-    align-items: center;
+    flex: none;
+    flex-direction: column;
+    align-items: stretch;
     justify-content: space-between;
     padding: 1rem 1.25rem;
     gap: 1.5rem;
   }
 
+  .main {
+    padding: 1.5rem 1rem 3rem;
+    gap: 1.5rem;
+  }
+
   .navList {
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 0.25rem;
   }
 }

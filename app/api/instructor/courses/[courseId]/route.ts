@@ -124,8 +124,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const lessonIds = [...new Set(lessons.map((row) => row.lessonId))];
+    const existingAssignments = await prisma.courseLesson.findMany({ where: { courseId }, select: { lessonId: true } });
+    const existingIds = new Set(existingAssignments.map((row) => row.lessonId));
+    const addedLessonIds = lessonIds.filter((id) => !existingIds.has(id));
     if (lessonIds.length > 0) {
-      if (!(await referencedContentAllowed('lesson', lessonIds, user)))
+      if (!(await referencedContentAllowed('lesson', addedLessonIds, user)))
         return NextResponse.json({ error: 'Referenced lessons are unavailable.' }, { status: 403 });
 
       const draftLesson = await prisma.lesson.findFirst({

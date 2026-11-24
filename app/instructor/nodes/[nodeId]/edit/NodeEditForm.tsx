@@ -4,12 +4,16 @@ import NodeForm from '@/app/components/NodeForm/NodeForm';
 import type { NodeFormInitial } from '@/app/components/NodeForm/types';
 
 type Props = {
+  workspaceId?: string;
+  returnTo?: string;
   node: NodeFormInitial & { id: string };
 };
 
-export default function NodeEditForm({ node }: Props) {
+export default function NodeEditForm({ node, workspaceId, returnTo }: Props) {
   return (
     <NodeForm
+      workspaceId={workspaceId}
+      returnTo={returnTo}
       mode="edit"
       nodeId={node.id}
       initial={{

@@ -40,6 +40,8 @@ type WizardStep = 'basics' | 'checkpoints' | 'quiz' | 'review' | 'done';
 
 type Props = {
   mode: Mode;
+  workspaceId?: string;
+  returnTo?: string;
   nodeId?: string;
   initial?: NodeFormInitial;
 };
@@ -133,7 +135,7 @@ function validateQuestionPayloads(
   return null;
 }
 
-export default function NodeForm({ mode, nodeId, initial }: Props) {
+export default function NodeForm({ mode, nodeId, initial, workspaceId, returnTo = '/instructor/nodes' }: Props) {
   const router = useRouter();
   const playerRef = useRef<YTPlayer | null>(null);
   const checkpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -488,6 +490,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         method: updatingExisting ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          workspaceId,
           title: title.trim(),
           summary,
           videoUrl: videoUrl || null,
@@ -520,7 +523,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
         return;
       }
       if (asDraft) {
-        router.push('/instructor/nodes');
+        router.push(returnTo);
         return;
       }
       setCreatedThisSession(!updatingExisting && mode === 'create');
@@ -1140,7 +1143,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
 
         <div className={styles.actions}>
           {step !== 'done' && (
-            <a href="/instructor/nodes" className={styles.cancelLink}>
+            <a href={returnTo} className={styles.cancelLink}>
               Cancel
             </a>
           )}
@@ -1150,7 +1153,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
                 <button type="button" className={styles.secondaryBtn} onClick={handleBack}>
                   Edit again
                 </button>
-                <button type="button" className={styles.submitBtn} onClick={() => router.push('/instructor/nodes')}>
+                <button type="button" className={styles.submitBtn} onClick={() => router.push(returnTo)}>
                   Back to nodes
                 </button>
               </>

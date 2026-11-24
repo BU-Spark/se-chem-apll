@@ -1,5 +1,7 @@
 'use client';
 
+import DeleteContentButton from '@/app/components/InstructorGrid/DeleteContentButton';
+
 import selectStyles from '@/app/components/Select/Select.module.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -49,12 +51,19 @@ export default function LessonsGrid({
   lessons,
   courses,
   initialFilters,
+  syncUrl = true,
+  workspaceId,
+  allowDelete = false,
 }: {
   lessons: LessonListItem[];
   courses: { id: string; title: string }[];
   initialFilters: LessonFilters;
+  syncUrl?: boolean;
+  workspaceId?: string;
+  allowDelete?: boolean;
 }) {
   const [filters, setFilters] = useState(() => initialFilters);
+  const [actionError, setActionError] = useState('');
   const [visibleCount, setVisibleCount] = useState(lessons.length);
   const [api, setApi] = useState<GridApi<LessonGridRow> | null>(null);
   const [selectedCourses, setSelectedCourses] = useState<LessonGridRow | null>(null);
@@ -75,6 +84,7 @@ export default function LessonsGrid({
   );
 
   useEffect(() => {
+    if (!syncUrl) return;
     const restore = () => {
       const params = new URLSearchParams(window.location.search);
       const restored = readLessonFilters(Object.fromEntries(params));
@@ -82,13 +92,14 @@ export default function LessonsGrid({
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, []);
+  }, [syncUrl]);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const url = lessonFilterUrl(filters);
     if (`${window.location.pathname}${window.location.search}` !== url)
       window.history.replaceState(window.history.state, '', url);
-  }, [filters]);
+  }, [filters, syncUrl]);
 
   useEffect(() => {
     if (!api) return;
@@ -155,14 +166,24 @@ export default function LessonsGrid({
           data ? (
             <EditorTitle
               href={
-                data.canEdit === false
-                  ? `/instructor/copy?mode=lessons&lessonId=${data.id}`
-                  : `/instructor/lessons/${data.id}/edit`
+                data.workspaceId
+                  ? `/workspaces/${data.workspaceId}/lessons/${data.id}`
+                  : data.canEdit === false
+                    ? `/instructor/copy?mode=lessons&lessonId=${data.id}`
+                    : `/instructor/lessons/${data.id}/edit`
               }
               title={data.title}
-              destination={data.canEdit === false ? 'copy workflow' : 'editor'}
+              destination={data.canEdit === false ? (data.workspaceId ? 'viewer' : 'copy workflow') : 'editor'}
             />
           ) : null,
+      },
+      {
+        colId: 'workspace',
+        headerName: 'Library',
+        hide: Boolean(workspaceId),
+        valueGetter: ({ data }) => data?.workspace?.name ?? 'Personal / seed',
+        filter: 'agTextColumnFilter',
+        width: 180,
       },
       {
         field: 'isDraft',
@@ -216,8 +237,24 @@ export default function LessonsGrid({
         tooltipValueGetter: ({ value }) => updatedTooltip(value),
       },
       { colId: 'createdAt', field: 'createdTimestamp', hide: true },
+      ...(allowDelete
+        ? [
+            {
+              colId: 'actions',
+              headerName: 'Actions',
+              width: 100,
+              sortable: false,
+              filter: false,
+              floatingFilter: false,
+              cellRenderer: ({ data }: ICellRendererParams<LessonGridRow>) =>
+                data ? (
+                  <DeleteContentButton kind="lessons" id={data.id} title={data.title} onError={setActionError} />
+                ) : null,
+            },
+          ]
+        : []),
     ],
-    []
+    [allowDelete, workspaceId]
   );
   const defaultColDef = useMemo<ColDef<LessonGridRow>>(
     () => ({
@@ -233,6 +270,11 @@ export default function LessonsGrid({
 
   return (
     <>
+      {actionError && (
+        <p className={styles.actionError} role="alert">
+          {actionError}
+        </p>
+      )}
       <div className={styles.filters}>
         <div className={styles.filterRow}>
           <label className={styles.draftToggle}>

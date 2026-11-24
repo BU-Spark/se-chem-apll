@@ -1,4 +1,5 @@
 /** @jest-environment node */
+import { nodeLibraryScope } from '@/lib/workspaces/permissions';
 import { apiAccess } from './api';
 import { contentScope, homeFor, type Principal } from './policy';
 import { referencedContentAllowed } from './content';
@@ -50,7 +51,7 @@ it('scopes an instructor to their own and shared content', () => {
 it('rejects missing or inaccessible referenced nodes even with duplicate IDs', async () => {
   mockCount.mockResolvedValue(1);
   expect(await referencedContentAllowed('node', ['own', 'own', 'private'], member)).toBe(false);
-  expect(mockCount).toHaveBeenCalledWith({ where: { id: { in: ['own', 'private'] }, ...contentScope(member) } });
+  expect(mockCount).toHaveBeenCalledWith({ where: { id: { in: ['own', 'private'] }, ...nodeLibraryScope(member) } });
 });
 it('allows admins to reference other owners but still checks existence', async () => {
   mockCount.mockResolvedValue(2);

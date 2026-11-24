@@ -1,3 +1,4 @@
+import { prisma } from '@/lib/prisma';
 jest.mock('@/lib/auth/content', () => ({ referencedContentAllowed: async () => true }));
 import { appUser, mockGetAppUser } from '@/test/mocks/appIdentity';
 jest.mock('@/lib/auth/identity', () => ({
@@ -22,6 +23,8 @@ jest.mock('next/server', () => ({
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
+    $transaction: (work: (tx: unknown) => unknown) => work(prisma),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     lesson: {
       findFirst: (...args: unknown[]) => mockLessonFindFirst(...args),
       update: (...args: unknown[]) => mockLessonUpdate(...args),

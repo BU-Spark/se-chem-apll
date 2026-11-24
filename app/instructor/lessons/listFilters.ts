@@ -3,6 +3,8 @@ import { parseGridFilters } from '../../components/InstructorGrid/filterModel';
 export type SearchParams = Record<string, string | string[] | undefined>;
 export type LessonListItem = {
   canEdit?: boolean;
+  workspaceId?: string | null;
+  workspace?: { name: string } | null;
   id: string;
   title: string;
   summary: string | null;
