@@ -15,6 +15,7 @@ import { countIssuesBySeverity, validateQuestionBank } from '@/app/components/Qu
 import type { AuthoringQuestion } from '@/app/components/QuestionBank/types';
 import CheckpointPlacement from './CheckpointPlacement';
 import CheckpointCsvDialog from './CheckpointCsvDialog';
+import SampleXlsxButton from '@/app/components/QuestionBank/SampleXlsxButton';
 import { checkpointsToCsv, sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
 import { downloadCsvFile } from '@/app/utils/csv';
 import { validateNodeContent } from '@/app/utils/nodeContent';
@@ -850,7 +851,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
             <h2 className={styles.sectionTitle}>Checkpoints (QEV)</h2>
             <div className={styles.checkpointToolbar}>
               <button type="button" className={styles.addQuestionBtn} onClick={() => setShowCheckpointImport(true)}>
-                Import CSV
+                Import CSV / Excel
               </button>
               <button
                 type="button"
@@ -873,6 +874,7 @@ export default function NodeForm({ mode, nodeId, initial }: Props) {
               >
                 Download sample CSV
               </button>
+              <SampleXlsxButton kind="checkpoints" className={styles.addQuestionBtn} />
               {checkpoints.length > 0 && checkpoints.every((c) => c.timeOffsetSeconds !== null) && (
                 <button
                   type="button"

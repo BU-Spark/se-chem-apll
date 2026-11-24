@@ -6,7 +6,7 @@ import { csvToCheckpoints, sampleCheckpointCsv } from '@/app/utils/checkpointCsv
 function upload(text: string) {
   const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
   Object.defineProperty(file, 'text', { value: async () => text });
-  fireEvent.change(screen.getByLabelText('Choose checkpoint CSV file'), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText('Choose checkpoint CSV or Excel file'), { target: { files: [file] } });
 }
 
 describe('checkpoint CSV review', () => {
@@ -40,14 +40,14 @@ describe('checkpoint CSV review', () => {
   });
   it('keeps the filename visible, hides irrelevant modes, and permits selecting the same file again', async () => {
     render(<CheckpointCsvDialog existing={[]} onApply={jest.fn()} onClose={jest.fn()} />);
-    expect(screen.getByRole('button', { name: 'Choose CSV' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Choose CSV or Excel' })).toHaveFocus();
     upload(sampleCheckpointCsv());
     await screen.findByText('2 checkpoints · 3 items · 1 need timestamps');
     expect(screen.getByText('checkpoints.csv')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change file' })).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    expect(screen.queryByText('No CSV selected')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Choose checkpoint CSV file')).toHaveValue('');
+    expect(screen.queryByText('No file selected')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Choose checkpoint CSV or Excel file')).toHaveValue('');
     upload(sampleCheckpointCsv());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Import and assign timestamps' })).toBeEnabled());
   });
@@ -94,7 +94,7 @@ describe('checkpoint CSV review', () => {
         }),
     });
     render(<CheckpointCsvDialog existing={[]} onApply={jest.fn()} onClose={jest.fn()} />);
-    fireEvent.change(screen.getByLabelText('Choose checkpoint CSV file'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Choose checkpoint CSV or Excel file'), { target: { files: [file] } });
     upload('wrong\nvalue');
     await screen.findByRole('list', { name: 'Import errors' });
     resolve(sampleCheckpointCsv());

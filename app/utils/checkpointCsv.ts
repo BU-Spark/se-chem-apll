@@ -26,14 +26,23 @@ export const CHECKPOINT_CSV_MAX_ROWS = 5000;
 export type CheckpointCsvResult = { checkpoints: FormCheckpoint[]; errors: CsvRowError[]; warnings: CsvRowError[] };
 
 export function csvToCheckpoints(text: string): CheckpointCsvResult {
-  const errors: CsvRowError[] = [];
+  if (new Blob([text]).size > CHECKPOINT_CSV_MAX_BYTES)
+    return { checkpoints: [], errors: [{ row: 1, message: 'The file limit is 2 MB.' }], warnings: [] };
+  const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
+  return rowsToCheckpoints(
+    parsed.data,
+    parsed.errors.map((error) => ({
+      row: (error.row ?? 0) + 1,
+      message: `Record ${(error.row ?? 0) + 1}: ${error.message}`,
+    }))
+  );
+}
+
+export function rowsToCheckpoints(data: string[][], parseErrors: CsvRowError[] = []): CheckpointCsvResult {
+  const errors: CsvRowError[] = [...parseErrors];
   const warnings: CsvRowError[] = [];
   const fail = (row: number, message: string) => errors.push({ row, message: `Record ${row}: ${message}` });
-  if (new Blob([text]).size > CHECKPOINT_CSV_MAX_BYTES)
-    return { checkpoints: [], errors: [{ row: 1, message: 'The file limit is 2 MB.' }], warnings };
-  const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { skipEmptyLines: 'greedy' });
-  parsed.errors.forEach((error) => fail((error.row ?? 0) + 1, error.message));
-  const [headers = [], ...rows] = parsed.data;
+  const [headers = [], ...rows] = data;
   const map = new Map<string, number>();
   headers.forEach((header, index) => {
     const key = header.trim().toLowerCase();
@@ -209,71 +218,73 @@ export function checkpointsToCsv(checkpoints: FormCheckpoint[]): string {
   return csv;
 }
 
-export function sampleCheckpointCsv(): string {
-  return Papa.unparse(
+/** Canonical sample data shared by CSV and XLSX downloads. */
+export function sampleCheckpointRows(): string[][] {
+  return [
+    [...CHECKPOINT_CSV_HEADERS],
     [
-      [...CHECKPOINT_CSV_HEADERS],
-      [
-        'intro',
-        '1',
-        '1',
-        '',
-        'After the introduction',
-        'multipleChoice',
-        'What is 2 + 2?',
-        '3',
-        '4',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '2',
-        '',
-        '',
-        '',
-        '',
-        'Correct! Two pairs make four.',
-        'Try adding two pairs together.',
-      ],
-      [
-        'intro',
-        '1',
-        '2',
-        '',
-        '',
-        'shortAnswer',
-        'Calculate 3 squared.',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'exact',
-        '9',
-        '',
-        '',
-        '',
-        '',
-      ],
-      [
-        'forces',
-        '2',
-        '1',
-        '120',
-        '',
-        'note',
-        'Consider the forces in this example.',
-        ...Array<string>(QUESTION_CSV_HEADERS.length - 2).fill(''),
-      ],
+      'intro',
+      '1',
+      '1',
+      '',
+      'After the introduction',
+      'multipleChoice',
+      'What is 2 + 2?',
+      '3',
+      '4',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '2',
+      '',
+      '',
+      '',
+      '',
+      'Correct! Two pairs make four.',
+      'Try adding two pairs together.',
     ],
-    { newline: '\n' }
-  );
+    [
+      'intro',
+      '1',
+      '2',
+      '',
+      '',
+      'shortAnswer',
+      'Calculate 3 squared.',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'exact',
+      '9',
+      '',
+      '',
+      '',
+      '',
+    ],
+    [
+      'forces',
+      '2',
+      '1',
+      '120',
+      '',
+      'note',
+      'Consider the forces in this example.',
+      ...Array<string>(QUESTION_CSV_HEADERS.length - 2).fill(''),
+    ],
+  ];
+}
+
+export function sampleCheckpointCsv(): string {
+  return Papa.unparse(sampleCheckpointRows(), { newline: '\n' });
 }
 
 export function appendCheckpoints(existing: FormCheckpoint[], imported: FormCheckpoint[]): FormCheckpoint[] {

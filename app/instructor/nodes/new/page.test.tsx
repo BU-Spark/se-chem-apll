@@ -139,11 +139,11 @@ describe('NewNodePage', () => {
     render(<NewNodePage />);
     await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     await goToCheckpoints(user);
-    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Import CSV / Excel' }));
     const text = sampleCheckpointCsv().replace('forces,2,1,120,', 'forces,2,1,155,');
     const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
     Object.defineProperty(file, 'text', { value: async () => text });
-    await user.upload(screen.getByLabelText('Choose checkpoint CSV file'), file);
+    await user.upload(screen.getByLabelText('Choose checkpoint CSV or Excel file'), file);
     await user.click(await screen.findByRole('button', { name: 'Import and assign timestamps' }));
 
     const placement = within(screen.getByRole('region', { name: 'Checkpoint placement' }));
@@ -157,11 +157,12 @@ describe('NewNodePage', () => {
     const user = userEvent.setup();
     render(<NewNodePage />);
     await goToCheckpoints(user);
-    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    expect(screen.getByRole('button', { name: 'Download sample XLSX' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Import CSV / Excel' }));
     const text = sampleCheckpointCsv();
     const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
     Object.defineProperty(file, 'text', { value: async () => text });
-    await user.upload(screen.getByLabelText('Choose checkpoint CSV file'), file);
+    await user.upload(screen.getByLabelText('Choose checkpoint CSV or Excel file'), file);
     await screen.findByText('2 checkpoints · 3 items · 1 need timestamps');
     await user.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
     expect(screen.getByText('1 of 2 groups assigned')).toBeInTheDocument();
