@@ -434,6 +434,11 @@ model LessonSubmission {
   @@index([progressId, finalPercent, submittedAt])
 }
 
+enum AttemptPurpose {
+  STANDARD
+  IMPROVEMENT
+}
+
 // Where a student is in a node's video, so leaving and coming back resumes there. Videos without
 // questions have no attempt, so watchedAt also records that the video was watched to the end.
 model NodeVideoProgress {
@@ -454,6 +459,10 @@ model NodeVideoProgress {
 }
 
 model NodeAttempt {
+  purpose          AttemptPurpose @default(STANDARD)
+  draftAnswers     Json           @default("[]")
+  videoCompletedAt DateTime?
+
   id             String               @id @default(cuid())
   progressId     String
   courseLessonId String

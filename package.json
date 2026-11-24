@@ -15,7 +15,8 @@
     "db:seed": "prisma db seed",
     "db:verify-migrations": "node scripts/verify-migrations.cjs",
     "admin:grant": "node scripts/grant-admin.cjs",
-    "db:seed:flow": "node scripts/seed-local-flow.cjs"
+    "db:seed:flow": "node scripts/seed-local-flow.cjs",
+    "test:browser": "playwright test"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -31,6 +32,7 @@
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.23.25",
     "hls.js": "^1.6.16",
     "katex": "^0.16.0",
@@ -49,12 +51,14 @@
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "ssf": "^0.11.2"
   },
   "devDependencies": {
     "@eslint/compat": "^1.4.0",
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.37.0",
+    "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",

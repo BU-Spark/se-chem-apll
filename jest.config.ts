@@ -23,6 +23,7 @@ const customJestConfig: Config = {
     '^@/hooks/(.*)$': '<rootDir>/app/hooks/$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
+  testPathIgnorePatterns: ['/node_modules/', '/test/browser/'],
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',

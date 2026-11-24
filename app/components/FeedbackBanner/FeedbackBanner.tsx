@@ -1,16 +1,22 @@
+import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
 import styles from './FeedbackBanner.module.css';
 
-// "Correct" / "Incorrect" after a video question. Announced to screen readers when it appears.
-export default function FeedbackBanner({ correct }: { correct: boolean }) {
+interface FeedbackBannerProps {
+  correct: boolean;
+  // The instructor's feedback for this result, if they wrote any.
+  explanation?: string | null;
+}
+
+// "Correct" / "Incorrect" after a video question, with the instructor's explanation under it.
+// Announced to screen readers when it appears.
+export default function FeedbackBanner({ correct, explanation }: FeedbackBannerProps) {
   return (
     <div
       className={correct ? `${styles.banner} ${styles.correct}` : `${styles.banner} ${styles.incorrect}`}
       role="status"
     >
-      <span className={styles.icon} aria-hidden="true">
-        {correct ? '✓' : '✕'}
-      </span>
-      <span className={styles.label}>{correct ? 'Correct' : 'Incorrect'}</span>
+      <p className={styles.label}>{correct ? 'Correct' : 'Incorrect'}</p>
+      {explanation && <MarkdownPreview content={explanation} />}
     </div>
   );
 }

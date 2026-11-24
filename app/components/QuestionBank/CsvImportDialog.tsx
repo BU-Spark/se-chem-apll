@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { csvToQuestions, sampleQuestionBankCsv, type CsvImportResult } from '@/app/utils/questionBankCsv';
+import {
+  csvToQuestions,
+  rowsToQuestions,
+  sampleQuestionBankCsv,
+  type CsvImportResult,
+} from '@/app/utils/questionBankCsv';
+import { SPREADSHEET_ACCEPT, isXlsxFile, xlsxToRows } from '@/app/utils/spreadsheetImport';
+import SampleXlsxButton from './SampleXlsxButton';
 import { downloadCsvFile } from '@/app/utils/csv';
 import type { AuthoringQuestion } from './types';
 import styles from './QuestionBank.module.css';
@@ -24,8 +31,17 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
   const [result, setResult] = useState<CsvImportResult | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [mode, setMode] = useState<ImportMode>('append');
+  const [reading, setReading] = useState(false);
+  const generation = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(
+    () => () => {
+      generation.current += 1;
+    },
+    []
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -48,22 +64,24 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
   }, [onClose]);
 
   async function handleFile(file: File) {
+    const current = ++generation.current;
     setFileError(null);
     setResult(null);
-
-    if (file.size > MAX_FILE_BYTES) {
-      setFileError(`That file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The import limit is 2 MB.`);
-      return;
-    }
-
+    setReading(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     try {
-      const text = await file.text();
-      const parsed = csvToQuestions(text);
-      setResult(parsed);
-    } catch {
-      setFileError('Could not read that CSV file.');
+      if (file.size > MAX_FILE_BYTES) {
+        throw new Error(`That file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The import limit is 2 MB.`);
+      }
+      const parsed = isXlsxFile(file)
+        ? rowsToQuestions(await xlsxToRows(await file.arrayBuffer()))
+        : csvToQuestions(await file.text());
+      if (current === generation.current) setResult(parsed);
+    } catch (error) {
+      if (current === generation.current)
+        setFileError(error instanceof Error ? error.message : 'Could not read that file.');
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (current === generation.current) setReading(false);
     }
   }
 
@@ -84,10 +102,10 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
-        aria-label="Import questions from CSV"
+        aria-label="Import questions from CSV or Excel"
       >
         <header className={styles.dialogHeader}>
-          <h3 className={styles.dialogTitle}>Import questions from CSV</h3>
+          <h3 className={styles.dialogTitle}>Import questions from CSV or Excel</h3>
           <button type="button" className={styles.dialogCloseBtn} onClick={onClose} aria-label="Close import dialog">
             ×
           </button>
@@ -99,13 +117,14 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
             variant_key, and use var:name columns for {'{{name}}'} placeholders in prompts or choices. Leave variant_key
             blank for ordinary questions.
           </p>
+          <p>Excel files use the first worksheet and preserve subscript and superscript formatting.</p>
           <div className={styles.dialogRow}>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,text/csv"
+              accept={SPREADSHEET_ACCEPT}
               className={styles.dialogFileInput}
-              aria-label="Choose CSV file"
+              aria-label="Choose CSV or Excel file"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void handleFile(file);
@@ -118,8 +137,10 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
             >
               Download sample CSV
             </button>
+            <SampleXlsxButton kind="quiz" className={styles.toolbarBtn} />
           </div>
 
+          {reading && <p role="status">Reading file…</p>}
           {fileError && (
             <p className={styles.fieldError} role="alert">
               {fileError}
@@ -180,7 +201,7 @@ export default function CsvImportDialog({ existingCount, onImport, onClose }: Pr
           <button
             type="button"
             className={styles.primaryBtn}
-            disabled={!result || validCount === 0}
+            disabled={reading || !result || validCount === 0}
             onClick={() => {
               if (
                 replaceNeedsConfirm &&

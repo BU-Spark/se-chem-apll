@@ -6,9 +6,9 @@ import type { Nodes } from 'mdast';
 /** Use the preview's math grammar, including escaped dollars and code boundaries. */
 export function mapOutsideMath(
   source: string,
-  transform: (text: string, before: string, after: string) => string
+  transform: (text: string, before: string, after: string, offset: number) => string
 ): string {
-  if (!source.includes('$')) return transform(source, '', '');
+  if (!source.includes('$')) return transform(source, '', '', 0);
   const tree = fromMarkdown(source, { extensions: [math()], mdastExtensions: [mathFromMarkdown()] });
   const ranges: Array<[number, number]> = [];
   function visit(node: Nodes) {
@@ -22,9 +22,9 @@ export function mapOutsideMath(
   let cursor = 0;
   let result = '';
   for (const [start, end] of ranges) {
-    result += transform(source.slice(cursor, start), source.slice(cursor - 1, cursor), source[start]);
+    result += transform(source.slice(cursor, start), source.slice(cursor - 1, cursor), source[start], cursor);
     result += source.slice(start, end);
     cursor = end;
   }
-  return result + transform(source.slice(cursor), source.slice(cursor - 1, cursor), '');
+  return result + transform(source.slice(cursor), source.slice(cursor - 1, cursor), '', cursor);
 }

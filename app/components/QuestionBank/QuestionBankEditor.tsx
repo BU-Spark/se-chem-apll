@@ -564,7 +564,7 @@ export default function QuestionBankEditor({ questions, onChange, onSave, saving
             + Short answer
           </button>
           <button type="button" className={styles.toolbarBtn} onClick={() => runCommand('import-csv')}>
-            Import CSV
+            Import CSV / Excel
           </button>
           <button
             type="button"

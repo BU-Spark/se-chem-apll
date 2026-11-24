@@ -37,3 +37,18 @@ describe('countFinishedNodes', () => {
     expect(countFinishedNodes([], [])).toBe(0);
   });
 });
+
+it('finishes non-quiz nodes only with their required task and never finishes a quiz node with checkpoints', () => {
+  const nodes = [
+    regular('quiz'),
+    { ...regular('checkpoint'), completionKind: 'CHECKPOINT' as const },
+    { ...regular('review'), completionKind: 'REVIEW' as const },
+  ];
+  expect(
+    countFinishedNodes(nodes, [
+      { ...pass('quiz'), kind: 'CHECKPOINT' },
+      { ...pass('checkpoint'), kind: 'CHECKPOINT' },
+      { ...pass('review'), kind: 'REVIEW' },
+    ])
+  ).toBe(2);
+});

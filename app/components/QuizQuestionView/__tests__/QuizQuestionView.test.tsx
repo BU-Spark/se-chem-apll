@@ -62,4 +62,34 @@ describe('QuizQuestionView', () => {
     await userEvent.type(screen.getByRole('textbox'), '7');
     expect(onType).toHaveBeenCalled();
   });
+
+  it('shows the answer but locks it when disabled', async () => {
+    const onSelect = jest.fn();
+    const onType = jest.fn();
+    const { rerender } = render(
+      <QuizQuestionView
+        question={question(false)}
+        answer={{ selectedIndices: [0] }}
+        onSelect={onSelect}
+        onType={onType}
+        disabled
+      />
+    );
+    expect(screen.getAllByRole('radio')[0]).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getAllByRole('radio')[2]);
+    expect(onSelect).not.toHaveBeenCalled();
+
+    const numberQuestion = { id: 'n', prompt: 'How many?', choices: null, allowsMultiple: false };
+    rerender(
+      <QuizQuestionView
+        question={numberQuestion}
+        answer={{ rawAnswer: '7' }}
+        onSelect={onSelect}
+        onType={onType}
+        disabled
+      />
+    );
+    await userEvent.type(screen.getByRole('textbox'), '1');
+    expect(onType).not.toHaveBeenCalled();
+  });
 });
