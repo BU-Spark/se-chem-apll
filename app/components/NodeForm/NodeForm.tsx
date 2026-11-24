@@ -840,6 +840,7 @@ export default function NodeForm({ mode, nodeId, initial, workspaceId, returnTo 
 
         {step === 'checkpoints' && placementOpen && (
           <CheckpointPlacement
+            key={youtubeId}
             checkpoints={checkpoints}
             videoId={youtubeId}
             onChange={setCheckpoints}

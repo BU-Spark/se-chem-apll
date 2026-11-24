@@ -1,0 +1,7 @@
+checkpoint_key,checkpoint_order,item_order,checkpoint_seconds,placement_hint,type,prompt,choice_1,choice_2,choice_3,choice_4,choice_5,choice_6,choice_7,choice_8,correct,answer_mode,expected_answer,minimum_answer,maximum_answer,feedback_correct,feedback_incorrect
+demo-intro,1,1,20,,note,Demo checkpoint: confirm that the video jumps to 0:20.,,,,,,,,,,,,,,,
+demo-early,2,1,75,,note,Demo checkpoint: verify the frame at 1:15.,,,,,,,,,,,,,,,
+demo-middle,3,1,155,,note,Demo checkpoint: verify the frame at 2:35.,,,,,,,,,,,,,,,
+demo-late,4,1,225,,note,Demo checkpoint: try adjusting 3:45 by a few seconds.,,,,,,,,,,,,,,,
+demo-wrap-up,5,1,280,,note,Demo checkpoint: verify the frame at 4:40.,,,,,,,,,,,,,,,
+demo-manual,6,1,,Try assigning a time around 4:50.,note,This checkpoint is intentionally untimed.,,,,,,,,,,,,,,,
