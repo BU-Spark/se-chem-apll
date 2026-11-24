@@ -23,9 +23,20 @@ describe('checkpoint CSV review', () => {
     expect(onApply).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ checkpointKey: 'intro', timeOffsetSeconds: null, questions: expect.any(Array) }),
+        expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: 120 }),
       ])
     );
     expect(onClose).toHaveBeenCalled();
+  });
+  it('allows importing a file with an invalid timestamp after showing a warning', async () => {
+    const onApply = jest.fn();
+    render(<CheckpointCsvDialog existing={[]} onApply={onApply} onClose={jest.fn()} />);
+    upload(sampleCheckpointCsv().replace('forces,2,1,120,', 'forces,2,1,-1,'));
+    expect(await screen.findByRole('list', { name: 'Timestamp warnings' })).toHaveTextContent('forces');
+    await userEvent.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
+    expect(onApply).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: null })])
+    );
   });
   it('keeps the filename visible, hides irrelevant modes, and permits selecting the same file again', async () => {
     render(<CheckpointCsvDialog existing={[]} onApply={jest.fn()} onClose={jest.fn()} />);
@@ -58,6 +69,9 @@ describe('checkpoint CSV review', () => {
     await userEvent.click(screen.getByRole('checkbox'));
     await userEvent.click(screen.getByRole('button', { name: 'Import and assign timestamps' }));
     expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ checkpointKey: 'forces', timeOffsetSeconds: 120 })])
+    );
   });
   it('invalid uploads and cancellation leave existing content unchanged', async () => {
     const onApply = jest.fn();
