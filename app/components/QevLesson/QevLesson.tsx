@@ -11,7 +11,7 @@ import QevVideo, { END_TOLERANCE_SECONDS, hasEnded, type VideoControls } from '@
 import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
-import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
+import StudentFeedback from '@/app/components/StudentFeedback/StudentFeedback';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
 import type { TimelineItem } from '@/lib/studentNode';
 import buttons from '@/app/styles/buttons.module.css';
@@ -97,8 +97,7 @@ export default function QevLesson({
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
   const [stopIndex, setStopIndex] = useState(0);
   const [stopOpen, setStopOpen] = useState(!hasVideo);
-  // The checked answer's result, shown until Continue.
-  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string | null } | null>(null);
+  const [checked, setChecked] = useState<{ correct: boolean; feedback: string | null } | null>(null);
   // Without a video there's nothing to wait for.
   const [videoEnded, setVideoEnded] = useState(!hasVideo);
   // All answers saved (nothing to save without questions); the student can move on once the
@@ -186,35 +185,43 @@ export default function QevLesson({
     player.seekTo(stop?.at ?? end);
   }
 
-  // Move past the current stop (the student clicked Continue): after the video has ended the next
-  // stop opens right away, otherwise the video plays on until it gets there.
+  // Move past the current stop: after the video has ended the next stop opens right away,
+  // otherwise the video keeps playing until it gets there.
   function nextStop() {
     const next = stopIndex + 1;
     const afterVideo = !hasVideo || videoEnded;
-    setFeedback(null);
+    setChecked(null);
     setStopIndex(next);
     setStopOpen(afterVideo && next < stops!.length);
     if (!afterVideo) controls.current?.play();
   }
 
-  // Check the answer and show Correct/Incorrect; the video stays paused until Continue. After the
-  // last question, save all answers.
+  // Keep the stop open so students can read the feedback before continuing.
   const submitAnswer = (question: QuizQuestion) =>
     run(async () => {
       const result = await post(
         { attemptId: attempt!.id, answer: { questionId: question.id, ...answers[question.id] } },
         '/check'
       );
-      setFeedback({ correct: result.correct, explanation: result.explanation });
-      if (questionsDone + 1 === questionCount) {
-        await post({
-          action: 'finish',
-          attemptId: attempt!.id,
-          answers: attempt!.questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
-        });
-        setSaved(true);
-      }
+      setChecked({ correct: result.correct, feedback: result.feedback });
     });
+
+  function continueAfterQuestion() {
+    if (questionsDone + 1 !== questionCount) {
+      nextStop();
+      return;
+    }
+    // A failed save leaves the checked answer visible. Continue retries just the save.
+    run(async () => {
+      await post({
+        action: 'finish',
+        attemptId: attempt!.id,
+        answers: attempt!.questions.map((q) => ({ questionId: q.id, ...answers[q.id] })),
+      });
+      setSaved(true);
+      nextStop();
+    });
+  }
 
   function goToResult() {
     router.push(doneHref);
@@ -222,8 +229,6 @@ export default function QevLesson({
   }
 
   const openStop = stopOpen ? stop : undefined;
-  // A question waiting for its answer; once checked (and for a note) Continue moves on.
-  const answering = openStop?.kind === 'QUESTION' && feedback === null;
   // Every pause handled, answers saved and the video over: the student can move on.
   const done = Boolean(stops) && !stop && saved && videoEnded;
 
@@ -243,13 +248,14 @@ export default function QevLesson({
               key={openStop.question.id}
               question={openStop.question}
               answer={answers[openStop.question.id]}
-              disabled={feedback !== null}
+              disabled={busy || checked !== null}
               onSelect={(selectedIndices) =>
                 setAnswers((prev) => ({ ...prev, [openStop.question.id]: { selectedIndices } }))
               }
               onType={(rawAnswer) => setAnswers((prev) => ({ ...prev, [openStop.question.id]: { rawAnswer } }))}
             />
           )}
+          {checked && <StudentFeedback {...checked} />}
           {openStop?.kind === 'NOTE' && (
             <section className={styles.note} aria-label="Note">
               <p className={styles.noteLabel}>Note</p>
@@ -282,18 +288,17 @@ export default function QevLesson({
       )}
 
       <footer className={styles.footer}>
-        {feedback && <FeedbackBanner {...feedback} />}
-        {answering && (
+        {openStop?.kind === 'QUESTION' && (
           <button
             type="button"
             className={buttons.primary}
-            onClick={() => submitAnswer(openStop.question)}
+            onClick={checked ? continueAfterQuestion : () => submitAnswer(openStop.question)}
             disabled={busy || !isAnswered(answers[openStop.question.id])}
           >
-            Continue
+            {checked ? 'Continue' : 'Check answer'}
           </button>
         )}
-        {openStop && !answering && (
+        {openStop?.kind === 'NOTE' && (
           <button type="button" className={buttons.primary} onClick={nextStop}>
             Continue
           </button>

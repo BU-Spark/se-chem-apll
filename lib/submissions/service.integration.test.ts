@@ -1,7 +1,16 @@
 /** @jest-environment node */
 import { randomUUID } from 'node:crypto';
+import Papa from 'papaparse';
+import { POST as checkAnswer } from '@/app/api/student/assignments/[assignmentId]/check/route';
+import { serializeQuestionOptions } from '@/app/components/NodeForm/types';
+import { csvToCheckpoints, sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
+import { serializeCheckpointQuestionCreate } from '@/app/utils/nodeContent';
 import { prisma } from '@/lib/prisma';
 import { assignmentView, startAttempt, finishAttempt, submitLesson, type AttemptSnapshot } from './service';
+
+const mockApiAccess = jest.fn();
+jest.mock('@/lib/auth/api', () => ({ apiAccess: () => mockApiAccess() }));
+
 const enabled = process.env.SUBMISSION_TEST_DATABASE_URL;
 if (
   enabled &&
@@ -145,6 +154,8 @@ suite('course submissions in PostgreSQL', () => {
       where: { nodeId: node.nodeId },
       data: {
         prompt: 'Moles of {{compound}} in {{mass}} g?',
+        feedbackCorrect: 'Use mass divided by molar mass.',
+        feedbackIncorrect: 'Check the units.',
         correctIndices: [],
         options: {
           type: 'variantShortAnswer',
@@ -173,17 +184,66 @@ suite('course submissions in PostgreSQL', () => {
     const saved = await prisma.nodeAttempt.findUniqueOrThrow({ where: { id: a.id } });
     const question = (saved.snapshot as unknown as AttemptSnapshot).questions[0];
     expect(['salt', 'water']).toContain(question.variantId);
+    expect(question).toMatchObject({
+      feedbackCorrect: 'Use mass divided by molar mass.',
+      feedbackIncorrect: 'Check the units.',
+    });
     expect((await assignmentView(studentId, first, a.id)).activeAttempt).toEqual(a);
     expect((await assignmentView(studentId, second, a.id)).activeAttempt).toBeNull();
     expect(await startAttempt(studentId, first, node.id, 'QUIZ', 'after-reload-key')).toEqual(a);
     expect(await prisma.nodeAttempt.count({ where: { progressId: saved.progressId, lessonNodeId: node.id } })).toBe(1);
-    expect(JSON.stringify(a)).not.toMatch(/expectedAnswer|variantValues|variantId/);
+    expect(JSON.stringify(a)).not.toMatch(/expectedAnswer|variantValues|variantId|feedbackCorrect|feedbackIncorrect/);
     const answer = String((question.options as { expectedAnswer: number }).expectedAnswer);
     expect((await finishAttempt(studentId, first, a.id, [{ questionId: question.id, rawAnswer: answer }])).score).toBe(
       100
     );
+    const response = await prisma.nodeResponse.findFirstOrThrow({ where: { attemptId: a.id } });
+    expect(response.snapshot).toEqual(question);
     const retry = await startAttempt(studentId, first, node.id, 'QUIZ', 'variant-new-attempt');
     expect(retry.id).not.toBe(a.id);
+  });
+
+  it('checks CSV-authored feedback from the checkpoint snapshot after an instructor edit', async () => {
+    const node = await prisma.lessonNode.findFirstOrThrow({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });
+    const checkpoint = await prisma.nodeCheckpoint.findFirstOrThrow({ where: { nodeId: node.nodeId } });
+    const [headers, row] = Papa.parse<string[]>(sampleCheckpointCsv()).data;
+    row[headers.indexOf('feedback_correct')] = String.raw`**Pairs** give $2 + 2 = 4$. Example: $\ce{H2O}$.`;
+    const imported = csvToCheckpoints(Papa.unparse([headers, row]));
+    expect(imported.errors).toEqual([]);
+    const [question] = imported.checkpoints[0].questions;
+    const authored = serializeCheckpointQuestionCreate({
+      ...question,
+      sortOrder: 0,
+      options: serializeQuestionOptions(question),
+    });
+    const saved = await prisma.checkpointQuestion.findFirstOrThrow({ where: { checkpointId: checkpoint.id } });
+    await prisma.checkpointQuestion.update({ where: { id: saved.id }, data: authored });
+    const attempt = await startAttempt(studentId, first, node.id, 'CHECKPOINT', 'csv-feedback');
+    expect(attempt.questions).toEqual([
+      { id: saved.id, prompt: question.prompt, choices: ['3', '4'], allowsMultiple: false },
+    ]);
+    await prisma.checkpointQuestion.update({
+      where: { id: saved.id },
+      data: { feedbackCorrect: 'Updated feedback.', feedbackIncorrect: null },
+    });
+
+    mockApiAccess.mockResolvedValue({ user: { id: studentId } });
+    async function check(selectedIndex: number) {
+      const response = await checkAnswer(
+        new Request('http://localhost/check', {
+          method: 'POST',
+          body: JSON.stringify({
+            attemptId: attempt.id,
+            answer: { questionId: saved.id, selectedIndices: [selectedIndex] },
+          }),
+        }),
+        { params: Promise.resolve({ assignmentId: first }) }
+      );
+      expect(response.status).toBe(200);
+      return response.json();
+    }
+    expect(await check(1)).toEqual({ correct: true, feedback: row[headers.indexOf('feedback_correct')] });
+    expect(await check(0)).toEqual({ correct: false, feedback: row[headers.indexOf('feedback_incorrect')] });
   });
   it('keeps an unfinished legacy numeric attempt usable after the relational data migration', async () => {
     const node = await prisma.lessonNode.findFirstOrThrow({ where: { lessonId }, orderBy: { sortOrder: 'asc' } });

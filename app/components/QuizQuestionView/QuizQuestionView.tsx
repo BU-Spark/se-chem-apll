@@ -7,21 +7,14 @@ const LETTERS = 'ABCDEFGH';
 interface QuizQuestionViewProps {
   question: QuizQuestion;
   answer: QuizAnswer | undefined;
+  disabled?: boolean;
   onSelect: (selectedIndices: number[]) => void;
   onType: (rawAnswer: string) => void;
-  // Shown but locked, e.g. while its Correct/Incorrect feedback is on screen.
-  disabled?: boolean;
 }
 
 // One question: lettered choices for multiple choice (pick one, or several when more than one
 // is correct), a number box otherwise.
-export default function QuizQuestionView({
-  question,
-  answer,
-  onSelect,
-  onType,
-  disabled = false,
-}: QuizQuestionViewProps) {
+export default function QuizQuestionView({ question, answer, disabled, onSelect, onType }: QuizQuestionViewProps) {
   const selected = answer && 'selectedIndices' in answer ? answer.selectedIndices : [];
   const toggle = (index: number) =>
     onSelect(selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index]);
@@ -61,7 +54,7 @@ export default function QuizQuestionView({
             inputMode="decimal"
             className={styles.numberInput}
             value={rawAnswer}
-            readOnly={disabled}
+            disabled={disabled}
             onChange={(event) => onType(event.target.value)}
             aria-invalid={showNumberError}
           />

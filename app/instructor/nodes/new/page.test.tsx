@@ -1,9 +1,13 @@
 import { sampleCheckpointCsv } from '@/app/utils/checkpointCsv';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
+import type { YTPlayer } from '@/app/components/NodeForm/YouTubeAuthoringPlayer';
 import NewNodePage from './page';
 
 const push = jest.fn();
+const mockSeekTo = jest.fn();
+const mockPlayer = { seekTo: mockSeekTo, getDuration: () => 240, pauseVideo: jest.fn() } as unknown as YTPlayer;
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -11,7 +15,10 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/app/components/NodeForm/YouTubeAuthoringPlayer', () => ({
   __esModule: true,
-  default: () => <div data-testid="youtube-player" />,
+  default: function MockPlayer({ onReady }: { onReady?: (player: YTPlayer) => void }) {
+    useEffect(() => onReady?.(mockPlayer), [onReady]);
+    return <div data-testid="youtube-player" />;
+  },
 }));
 
 // RichMarkdownEditor has its own focused integration coverage. Keep these
@@ -119,11 +126,31 @@ async function goToCheckpoints(user: ReturnType<typeof userEvent.setup>) {
 describe('NewNodePage', () => {
   beforeEach(() => {
     push.mockReset();
+    mockSeekTo.mockClear();
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'node-created-1' }) });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('seeks to a timestamp imported through the checkpoint dialog', async () => {
+    const user = userEvent.setup();
+    render(<NewNodePage />);
+    await user.type(screen.getByLabelText(/Video URL/), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    await goToCheckpoints(user);
+    await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+    const text = sampleCheckpointCsv().replace('forces,2,1,120,', 'forces,2,1,155,');
+    const file = new File([text], 'checkpoints.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => text });
+    await user.upload(screen.getByLabelText('Choose checkpoint CSV file'), file);
+    await user.click(await screen.findByRole('button', { name: 'Import and assign timestamps' }));
+
+    const placement = within(screen.getByRole('region', { name: 'Checkpoint placement' }));
+    expect(mockSeekTo).not.toHaveBeenCalled();
+    await user.click(placement.getByText('forces'));
+    expect(placement.getByLabelText('Time (mm:ss)')).toHaveValue('2:35');
+    expect(mockSeekTo).toHaveBeenCalledWith(155, true);
   });
 
   it('imports untimed content without a video and saves it as a draft', async () => {

@@ -2,7 +2,6 @@ import { POST } from './route';
 
 const mockApiAccess = jest.fn();
 const mockAttemptFindFirst = jest.fn();
-const mockFeedbackFindUnique = jest.fn();
 
 jest.mock('@/lib/auth/api', () => ({ apiAccess: () => mockApiAccess() }));
 // Every way to write an attempt or an answer is a mock too, so a test can prove none is used.
@@ -18,7 +17,6 @@ jest.mock('@/lib/prisma', () => ({
       deleteMany: jest.fn(),
     },
     nodeResponse: { create: jest.fn(), createMany: jest.fn() },
-    checkpointQuestion: { findUnique: (...args: unknown[]) => mockFeedbackFindUnique(...args) },
   },
 }));
 jest.mock('next/server', () => ({
@@ -32,7 +30,14 @@ const request = (body: unknown) => ({ json: async () => body }) as never;
 const check = async (answer: unknown) => POST(request({ attemptId: 'a1', answer }), context);
 const snapshot = {
   questions: [
-    { id: 'q1', prompt: 'Pick B', options: ['A', 'B'], correctIndices: [1] },
+    {
+      id: 'q1',
+      prompt: 'Pick B',
+      options: ['A', 'B'],
+      correctIndices: [1],
+      feedbackCorrect: '  **Well done!**',
+      feedbackIncorrect: 'Look at choice B again.',
+    },
     { id: 'both', prompt: 'Pick A and C', options: ['A', 'B', 'C'], correctIndices: [0, 2] },
     {
       id: 'num',
@@ -48,12 +53,17 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
     jest.clearAllMocks();
     mockApiAccess.mockResolvedValue({ user: { id: 'student-1' } });
     mockAttemptFindFirst.mockResolvedValue({ snapshot });
-    mockFeedbackFindUnique.mockResolvedValue(null);
   });
 
   it("checks one answer of the student's own unfinished video attempt", async () => {
-    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toMatchObject({ correct: true });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toMatchObject({ correct: false });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
+      correct: true,
+      feedback: '  **Well done!**',
+    });
+    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+      correct: false,
+      feedback: 'Look at choice B again.',
+    });
 
     expect(mockAttemptFindFirst).toHaveBeenCalledWith({
       where: {
@@ -74,46 +84,25 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
   });
 
   it('checks multiple-answer, number, and "I\'m Not Sure" answers', async () => {
-    expect(await (await check({ questionId: 'both', selectedIndices: [2, 0] })).json()).toMatchObject({
+    expect(await (await check({ questionId: 'both', selectedIndices: [2, 0] })).json()).toEqual({
       correct: true,
+      feedback: null,
     });
-    expect(await (await check({ questionId: 'both', selectedIndices: [0] })).json()).toMatchObject({ correct: false });
-    expect(await (await check({ questionId: 'num', rawAnswer: '7' })).json()).toMatchObject({ correct: true });
-    expect(await (await check({ questionId: 'num', rawAnswer: '8' })).json()).toMatchObject({ correct: false });
-    expect(await (await check({ questionId: 'q1', notSure: true })).json()).toMatchObject({ correct: false });
-  });
-
-  it("adds the instructor's feedback that matches the result", async () => {
-    mockFeedbackFindUnique.mockResolvedValue({ feedbackCorrect: 'B is **right**.', feedbackIncorrect: 'Try again.' });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
-      correct: true,
-      explanation: 'B is **right**.',
-    });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+    expect(await (await check({ questionId: 'both', selectedIndices: [0] })).json()).toEqual({
       correct: false,
-      explanation: 'Try again.',
+      feedback: null,
     });
-    expect(mockFeedbackFindUnique).toHaveBeenCalledWith({
-      where: { id: 'q1' },
-      select: { feedbackCorrect: true, feedbackIncorrect: true },
-    });
-  });
-
-  it('returns a null explanation when the feedback is blank or missing', async () => {
-    mockFeedbackFindUnique.mockResolvedValue({ feedbackCorrect: null, feedbackIncorrect: '  ' });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
+    expect(await (await check({ questionId: 'num', rawAnswer: '7' })).json()).toEqual({
       correct: true,
-      explanation: null,
+      feedback: null,
     });
-    expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+    expect(await (await check({ questionId: 'num', rawAnswer: '8' })).json()).toEqual({
       correct: false,
-      explanation: null,
+      feedback: null,
     });
-
-    mockFeedbackFindUnique.mockResolvedValue(null);
-    expect(await (await check({ questionId: 'q1', selectedIndices: [1] })).json()).toEqual({
-      correct: true,
-      explanation: null,
+    expect(await (await check({ questionId: 'q1', notSure: true })).json()).toEqual({
+      correct: false,
+      feedback: 'Look at choice B again.',
     });
   });
 
@@ -126,6 +115,19 @@ describe('POST /api/student/assignments/[assignmentId]/check', () => {
     ];
     for (const [, write] of writes) expect(write).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, null, '  \n\t'])(
+    'returns null for feedback %j without using the other outcome',
+    async (value) => {
+      mockAttemptFindFirst.mockResolvedValue({
+        snapshot: { questions: [{ ...snapshot.questions[0], feedbackIncorrect: value }] },
+      });
+      expect(await (await check({ questionId: 'q1', selectedIndices: [0] })).json()).toEqual({
+        correct: false,
+        feedback: null,
+      });
+    }
+  );
 
   it('returns the access error when signed out or not a student', async () => {
     mockApiAccess.mockResolvedValue({ error: { status: 401 } });
