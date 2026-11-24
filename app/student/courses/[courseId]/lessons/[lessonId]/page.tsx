@@ -5,13 +5,12 @@ import { getStudentLessonRoadmap } from '@/lib/studentLessonRoadmap';
 import { ROUTES } from '@/app/routes';
 import LessonRoadmap from '@/app/components/LessonRoadmap/LessonRoadmap';
 import LessonSubmission from '@/app/components/LessonSubmission/LessonSubmission';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
+import { formatDay } from '@/app/utils/dates';
 import { lessonSubmissionView } from '@/lib/submissions/service';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
-
-// Dates as "Nov 7", in Boston time (where the course runs) so a late-evening due date isn't a day off.
-const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
 
 interface PageProps {
   params: Promise<{ courseId: string; lessonId: string }>;
@@ -34,14 +33,17 @@ export default async function StudentLessonPage({ params }: PageProps) {
       <header className={styles.header}>
         <h1 className={styles.title}>{roadmap.lessonTitle}</h1>
         <p className={styles.course}>{roadmap.courseTitle}</p>
+        <div className={styles.submission}>
+          <LessonSubmissionSummary submission={roadmap.submission} showPenalty />
+        </div>
       </header>
 
       {/* Past due: every node opens for review, without the quiz. Not open yet: nothing to start. */}
       {roadmap.availability !== 'OPEN' && roadmap.availabilityDate && (
         <p className={styles.notice}>
           {roadmap.availability === 'CLOSED'
-            ? `This lesson closed on ${dayFormat.format(roadmap.availabilityDate)}. You can still review its nodes.`
-            : `This lesson opens on ${dayFormat.format(roadmap.availabilityDate)}.`}
+            ? `This lesson closed on ${formatDay(roadmap.availabilityDate)}. You can still review its nodes.`
+            : `This lesson opens on ${formatDay(roadmap.availabilityDate)}.`}
         </p>
       )}
 

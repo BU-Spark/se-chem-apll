@@ -9,7 +9,7 @@ import styles from './StudentBottomNav.module.css';
 
 const NAV_ITEMS = [
   { label: 'Home', href: ROUTES.studentHome, icon: <HomeIcon /> },
-  { label: 'Lessons', href: ROUTES.comingSoon, icon: <LessonsIcon /> },
+  { label: 'Lessons', href: ROUTES.studentLessons, icon: <LessonsIcon /> },
   { label: 'Profile', href: ROUTES.studentProfile, icon: <ProfileIcon /> },
   { label: 'Settings', href: ROUTES.studentSettings, icon: <SettingsIcon /> },
 ];

@@ -14,6 +14,7 @@ import { isLessonHidden, submissionStatus } from '@/app/utils/lessonSubmissionPo
 import { getMultipleChoiceChoices } from '@/app/utils/multipleChoice';
 import { quizVariantOptions, resolveQuizVariant, validateQuizVariants } from '@/app/utils/questionVariants';
 import { gradeAnswer, lessonGrade, type AnswerInput, type QuestionSnapshot } from './grading';
+import { bestSubmissionOrder } from './bestSubmission';
 export class SubmissionError extends Error {
   constructor(
     message: string,
@@ -214,17 +215,20 @@ export async function startAttempt(
       kind,
       requiresVideo: kind !== 'QUIZ' && Boolean(node.node.videoUrl || node.node.muxPlaybackId),
       questions: questions.map((q) => {
+        const { id, prompt, options, correctIndices, feedbackCorrect, feedbackIncorrect } = q;
         const variants = quizVariantOptions(q);
         if (variants) {
           if (kind !== 'QUIZ') throw new SubmissionError('Checkpoint variants are not supported.', 409);
-          const error = validateQuizVariants(q.prompt, variants);
+          const error = validateQuizVariants(prompt, variants);
           if (error) throw new SubmissionError(`Invalid question variants. ${error}`, 409);
           return {
-            id: q.id,
-            ...resolveQuizVariant(q.prompt, variants, randomInt(variants.variants.length)),
+            id,
+            ...resolveQuizVariant(prompt, variants, randomInt(variants.variants.length)),
+            feedbackCorrect,
+            feedbackIncorrect,
           };
         }
-        return { id: q.id, prompt: q.prompt, options: q.options, correctIndices: q.correctIndices };
+        return { id, prompt, options, correctIndices, feedbackCorrect, feedbackIncorrect };
       }),
     };
     return publicAttempt(
@@ -437,6 +441,7 @@ export async function saveCheckpoint(
     const snapshot = attempt.snapshot as unknown as AttemptSnapshot;
     const question = answer && snapshot.questions.find((q) => q.id === answer.questionId);
     let correct: boolean | undefined;
+    let feedback: string | null = null;
     if (answer) {
       if (!question) throw new SubmissionError('Question not found.', 404);
       try {
@@ -444,8 +449,11 @@ export async function saveCheckpoint(
       } catch (e) {
         throw new SubmissionError((e as Error).message, 400);
       }
+      // The instructor's feedback for this result, from the attempt's snapshot.
+      const text = correct ? question.feedbackCorrect : question.feedbackIncorrect;
+      feedback = text?.trim() ? text : null;
     }
-    if (attempt.completedAt) return { ...publicAttempt(attempt), correct };
+    if (attempt.completedAt) return { ...publicAttempt(attempt), correct, feedback };
     const now = new Date();
     acceptWindow(assignment, now);
     const node = assignment.lesson.lessonNodes.find((n) => n.id === attempt.lessonNodeId);
@@ -463,9 +471,9 @@ export async function saveCheckpoint(
     });
     const requiresVideo = Boolean(node.node.videoUrl || node.node.muxPlaybackId);
     if (answers.length === snapshot.questions.length && (!requiresVideo || updated.videoCompletedAt)) {
-      return { ...(await finalizeAttempt(tx, assignment, progress, updated, answers, now, true)), correct };
+      return { ...(await finalizeAttempt(tx, assignment, progress, updated, answers, now, true)), correct, feedback };
     }
-    return { ...publicAttempt(updated), correct };
+    return { ...publicAttempt(updated), correct, feedback };
   });
 }
 
@@ -628,7 +636,7 @@ export async function assignmentView(studentId: string, assignmentId: string, pr
     const best = progress
       ? await tx.lessonSubmission.findFirst({
           where: { progressId: progress.id },
-          orderBy: [{ finalPercent: { sort: 'desc', nulls: 'last' } }, { submittedAt: 'asc' }, { number: 'asc' }],
+          orderBy: bestSubmissionOrder,
         })
       : null;
     return {

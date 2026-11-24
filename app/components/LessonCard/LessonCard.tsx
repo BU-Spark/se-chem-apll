@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { LessonStatus } from '@prisma/client';
 import { AVAILABILITY_LABELS, PROGRESS_LABELS, type LessonAvailability } from '@/app/utils/progressStatus';
-import a11y from '@/app/styles/a11y.module.css';
+import LessonSubmissionSummary from '@/app/components/LessonSubmissionSummary/LessonSubmissionSummary';
+import type { StudentLessonSubmission } from '@/lib/studentLessonSubmission';
 import styles from './LessonCard.module.css';
 
 interface LessonCardProps {
@@ -12,10 +13,11 @@ interface LessonCardProps {
   availability?: LessonAvailability;
   isCurrent: boolean;
   href: string;
+  submission: StudentLessonSubmission;
+  // Updated nodes to redo, or finished work not yet handed in.
   needsAttention?: boolean;
 }
 
-// One lesson in a course: a card with a tooltip (title and status) shown when current or hovered.
 export default function LessonCard({
   number,
   title,
@@ -23,6 +25,7 @@ export default function LessonCard({
   availability = 'OPEN',
   isCurrent,
   href,
+  submission,
   needsAttention,
 }: LessonCardProps) {
   const name = `Lesson ${number}: ${title}`;
@@ -37,21 +40,12 @@ export default function LessonCard({
       className={isCurrent ? `${styles.card} ${styles.current}` : styles.card}
       aria-current={isCurrent ? 'step' : undefined}
     >
-      <span className={a11y.srOnly}>
-        {name}, {statusLabel}
-        {needsAttention ? ', updated or unfinished work' : ''}
+      <span className={styles.title}>{name}</span>
+      <span className={styles.progress}>
+        {status === 'COMPLETED' && <span aria-hidden="true">✓ </span>}
+        {needsAttention && availability === 'OPEN' ? 'Updated or unfinished work' : statusLabel}
       </span>
-      {status === 'COMPLETED' && (
-        <span className={styles.check} aria-hidden="true">
-          ✓
-        </span>
-      )}
-      <span className={styles.tooltip} aria-hidden="true">
-        <span className={styles.tooltipTitle}>{name}</span>
-        <span className={styles.tooltipStatus}>
-          {needsAttention && availability === 'OPEN' ? 'Updated or unfinished work' : statusLabel}
-        </span>
-      </span>
+      <LessonSubmissionSummary submission={submission} />
     </Link>
   );
 }

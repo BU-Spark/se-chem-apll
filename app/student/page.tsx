@@ -11,11 +11,13 @@ export default async function StudentHomePage() {
   const student = await requireStudent();
 
   const courses = await getEnrolledCourses(student.id);
+  // First name, or the email when the student hasn't set a name.
+  const greetingName = student.name?.trim().split(/\s+/)[0] || student.email;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Welcome Student</h1>
+        <h1 className={styles.title}>Welcome, {greetingName}</h1>
         <p className={styles.subtitle}>My courses</p>
       </header>
 

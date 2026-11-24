@@ -96,7 +96,7 @@ describe('StudentNodePage', () => {
     expect(mockGetStudentNode).toHaveBeenCalledWith('student-1', 'c1', 'cl1', 'ln1');
   });
 
-  it('starts a regular node with the intro, and retries its quiz without the video', async () => {
+  it('starts a regular node with the intro, and retries it through the video lesson', async () => {
     mockGetStudentNode.mockResolvedValue(view('INTRO', null, false));
     render(await StudentNodePage({ params }));
     expect(screen.getByText('intro then /student/courses/c1/lessons/cl1/nodes/ln1/video')).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('StudentNodePage', () => {
     mockGetStudentNode.mockResolvedValue(view('RETRY', { correct: 1, total: 5 }, false));
     render(await StudentNodePage({ params }));
     expect(
-      screen.getByText('keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/quiz')
+      screen.getByText('keep moving forward, retry /student/courses/c1/lessons/cl1/nodes/ln1/video')
     ).toBeInTheDocument();
   });
 

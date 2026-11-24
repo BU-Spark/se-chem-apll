@@ -30,7 +30,7 @@ export default async function StudentNodeQuizPage({ params, searchParams }: Page
       (!view.node.canImprove && !view.node.improvementAttemptId)
     )
       redirect(nodeHref);
-  } else if (!canOpenQuiz(view.screen, view.hasVideoQuestions, view.node.isFoundational)) redirect(nodeHref);
+  } else if (!canOpenQuiz(view.screen, view.hasVideoQuestions)) redirect(nodeHref);
 
   return (
     <NodeQuiz

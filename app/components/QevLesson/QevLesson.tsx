@@ -11,7 +11,7 @@ import QevVideo, { END_TOLERANCE_SECONDS, hasEnded, type VideoControls } from '@
 import DevSkipButton from '@/app/components/DevSkipButton/DevSkipButton';
 import QuizQuestionView from '@/app/components/QuizQuestionView/QuizQuestionView';
 import MarkdownPreview from '@/app/components/QuestionBank/MarkdownPreview';
-import FeedbackBanner from '@/app/components/FeedbackBanner/FeedbackBanner';
+import StudentFeedback from '@/app/components/StudentFeedback/StudentFeedback';
 import { isAnswered, type QuizAnswer, type QuizQuestion } from '@/app/components/QuizQuestionView/types';
 import type { TimelineItem } from '@/lib/studentNode';
 import buttons from '@/app/styles/buttons.module.css';
@@ -99,7 +99,7 @@ export default function QevLesson({
   const [answers, setAnswers] = useState<Record<string, QuizAnswer>>({});
   const [stopIndex, setStopIndex] = useState(0);
   const [stopOpen, setStopOpen] = useState(!hasVideo);
-  const [feedback, setFeedback] = useState<boolean | null>(null);
+  const [checked, setChecked] = useState<{ correct: boolean; feedback: string | null } | null>(null);
   // Without a video there's nothing to wait for.
   const [videoEnded, setVideoEnded] = useState(!hasVideo);
   // All answers saved (nothing to save without questions); the student can move on once the
@@ -182,7 +182,6 @@ export default function QevLesson({
       // At the end, every remaining stop opens, even one timed past the video's real length.
       if (ended || (stop.at != null && player.currentTime() >= stop.at)) {
         player.pause();
-        setFeedback(null);
         setStopOpen(true);
       }
     }, POLL_MS);
@@ -203,17 +202,14 @@ export default function QevLesson({
   function nextStop() {
     const next = stopIndex + 1;
     const afterVideo = !hasVideo || videoEnded;
+    setChecked(null);
     setStopIndex(next);
     setStopOpen(afterVideo && next < stops!.length);
     if (!afterVideo) controls.current?.play();
   }
 
-  function continueAfterNote() {
-    setFeedback(null);
-    nextStop();
-  }
-
-  // Save each answer and show Correct/Incorrect.
+  // Save each answer and show Correct/Incorrect with the instructor's feedback. The stop stays
+  // open (video paused) until the student clicks Continue.
   const submitAnswer = (question: QuizQuestion) =>
     run(async () => {
       const result = await post({
@@ -222,9 +218,8 @@ export default function QevLesson({
         answer: { questionId: question.id, ...answers[question.id] },
         videoEnded,
       });
-      setFeedback(result.correct);
+      setChecked({ correct: result.correct, feedback: result.feedback ?? null });
       setSaved(Boolean(result.completedAt));
-      nextStop();
     });
 
   async function goToResult() {
@@ -263,12 +258,14 @@ export default function QevLesson({
               key={openStop.question.id}
               question={openStop.question}
               answer={answers[openStop.question.id]}
+              disabled={busy || checked !== null}
               onSelect={(selectedIndices) =>
                 setAnswers((prev) => ({ ...prev, [openStop.question.id]: { selectedIndices } }))
               }
               onType={(rawAnswer) => setAnswers((prev) => ({ ...prev, [openStop.question.id]: { rawAnswer } }))}
             />
           )}
+          {checked && <StudentFeedback {...checked} />}
           {openStop?.kind === 'NOTE' && (
             <section className={styles.note} aria-label="Note">
               <p className={styles.noteLabel}>Note</p>
@@ -305,19 +302,18 @@ export default function QevLesson({
       )}
 
       <footer className={styles.footer}>
-        {feedback !== null && <FeedbackBanner correct={feedback} />}
         {openStop?.kind === 'QUESTION' && (
           <button
             type="button"
             className={buttons.primary}
-            onClick={() => submitAnswer(openStop.question)}
+            onClick={checked ? nextStop : () => submitAnswer(openStop.question)}
             disabled={busy || !isAnswered(answers[openStop.question.id])}
           >
-            Continue
+            {checked ? 'Continue' : 'Check answer'}
           </button>
         )}
         {openStop?.kind === 'NOTE' && (
-          <button type="button" className={buttons.primary} onClick={continueAfterNote}>
+          <button type="button" className={buttons.primary} onClick={nextStop}>
             Continue
           </button>
         )}
